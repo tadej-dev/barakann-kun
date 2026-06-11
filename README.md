@@ -378,4 +378,8 @@ React等のSPAフレームワークは現時点では利用予定がなく、Thy
 
 現時点では外部APIとの連携経験はありません。
 
+### 10-5.  画面遷移図URL
+
+Figma：https://www.figma.com/design/d1LLrTFUodsXWP0HaqyaAf/barakan-kun?node-id=0-1&p=f&t=YM471mAtPBCiUwp0-0
+
 ```
