@@ -382,4 +382,9 @@ React等のSPAフレームワークは現時点では利用予定がなく、Thy
 
 Figma：https://www.figma.com/design/d1LLrTFUodsXWP0HaqyaAf/barakan-kun?node-id=0-1&p=f&t=YM471mAtPBCiUwp0-0
 
+### 10-6.  ER図のリンク
+
+Gyazo：https://i.gyazo.com/d59ce5806ac6a65f56e53156bf280dde.png
+
+
 ```
