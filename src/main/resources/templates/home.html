@@ -3,17 +3,41 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Spring Boot MVP</title>
+    <title>Barakann | ロードバイクバラ完シミュレータ</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-<main class="shell">
-    <section class="panel">
-        <p class="eyebrow">Spring Boot + Thymeleaf + PostgreSQL</p>
-        <h1>MVP application starter</h1>
-        <p>認証、JPA、PostgreSQL、Docker 開発環境を前提にした最小構成です。</p>
-        <a class="button" th:href="@{/dashboard}">Dashboard</a>
+<header class="site-header">
+    <a class="brand" th:href="@{/}">
+        <span class="brand-mark"></span>
+        <span>Barakann</span>
+    </a>
+    <nav class="site-nav" aria-label="メインナビゲーション">
+        <a href="/terms">利用規約</a>
+        <a href="/privacy">プライバシーポリシー</a>
+    </nav>
+    <a class="header-action" th:href="@{/simulator}">はじめる</a>
+</header>
+
+<main>
+    <section class="hero">
+        <div class="hero-copy">
+            <p class="eyebrow">Road bike build simulator</p>
+            <h1>
+                <span>理想の一台を、</span>
+                <span>パーツから組み上げる。</span>
+            </h1>
+            <p class="lead">
+                フレーム、ホイール、コンポーネントを選びながら、総額・重量・用途バランスを確認できる
+                ロードバイクのバラ完シミュレータです。
+            </p>
+            <div class="hero-actions">
+                <a class="button primary" th:href="@{/simulator}">シミュレーションを始める</a>
+            </div>
+        </div>
     </section>
+
+
 </main>
 </body>
 </html>
