@@ -1,0 +1,13 @@
+target/
+.env
+.env.example
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Logs
+*.log
+
+# Docker / local runtime
+docker-compose.override.yml
