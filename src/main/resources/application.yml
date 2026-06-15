@@ -2,7 +2,7 @@ spring:
   application:
     name: spring-boot-java-db-postgresql-thymeleaf
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/appdb}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db:5432/appdb}
     username: ${SPRING_DATASOURCE_USERNAME:appuser}
     password: ${SPRING_DATASOURCE_PASSWORD:apppassword}
   jpa:
@@ -16,4 +16,5 @@ spring:
     cache: ${THYMELEAF_CACHE:false}
 
 server:
+  address: 0.0.0.0
   port: ${PORT:8080}
