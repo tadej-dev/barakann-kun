@@ -120,14 +120,50 @@
         <section class="col-span-10 rounded-lg border border-slate-200 bg-white p-4">
             <!-- サマリーカード -->
             <div class="mb-4 grid grid-cols-2 gap-4">
+                <!-- 合計金額 -->
                 <div class="rounded-lg border border-slate-200 bg-white p-4">
                     <p class="text-xs text-slate-500">合計金額</p>
                     <p id="total-price" class="mt-1 text-2xl font-bold">¥0</p>
                 </div>
 
+                <!-- 合計金額 -->
                 <div class="rounded-lg border border-slate-200 bg-white p-4">
                     <p class="text-xs text-slate-500">完成重量</p>
                     <p id="total-weight" class="mt-1 text-2xl font-bold">0.00 kg</p>
+                </div>
+
+                <!-- 構成保存エリア -->
+                <div class="col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-bold text-slate-900">構成データ</p>
+                            <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                                選択中の構成をこのブラウザに保存できます。
+                            </p>
+                            <p
+                                    id="config-save-message"
+                                    class="mt-2 min-h-5 text-sm font-medium text-sky-600"
+                            ></p>
+                        </div>
+
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <button
+                                    id="save-config-button"
+                                    type="button"
+                                    class="inline-flex h-10 items-center justify-center rounded-md bg-sky-500 px-4 text-sm font-bold text-white hover:bg-sky-600"
+                            >
+                                構成を保存
+                            </button>
+
+                            <button
+                                    id="delete-saved-config-button"
+                                    type="button"
+                                    class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                            >
+                                この構成をクリア
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -155,7 +191,27 @@
                     <tbody
                             id="selected-parts-table"
                             class="divide-y divide-slate-100 bg-white"
-                    ></tbody>
+                    >
+                    <tr
+                            th:each="category : ${categories}"
+                            class="cursor-pointer hover:bg-slate-50"
+                            th:classappend="${category.key == activeCategory} ? ' bg-sky-50' : ''"
+                    >
+                        <td class="px-4 py-4" th:text="${category.displayName}">フレーム</td>
+                        <td class="px-4 py-4 font-semibold text-slate-400">未選択</td>
+                        <td class="px-4 py-4 whitespace-nowrap">-</td>
+                        <td class="px-4 py-4 whitespace-nowrap">-</td>
+                        <td class="px-4 py-4">
+                            <button
+                                    type="button"
+                                    class="inline-flex h-9 w-20 items-center justify-center rounded-md border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:border-sky-500 hover:bg-sky-50 hover:text-sky-700"
+                                    th:data-table-category="${category.key}"
+                            >
+                                選択
+                            </button>
+                        </td>
+                    </tr>
+                    </tbody>
                 </table>
             </div>
 
@@ -165,8 +221,9 @@
                     <h2
                             id="candidate-title"
                             class="text-2xl font-bold text-slate-900"
+                            th:text="${activeCategoryDisplayName + 'を選択'}"
                     >
-                        ホイールを選択
+                        フレームを選択
                     </h2>
                 </div>
 
@@ -191,7 +248,43 @@
                         <tbody
                                 id="candidate-table-body"
                                 class="divide-y divide-slate-100 bg-white"
-                        ></tbody>
+                        >
+                        <tr
+                                th:each="part : ${initialParts}"
+                                class="cursor-pointer hover:bg-slate-50"
+                        >
+                            <td class="px-4 py-4 font-bold text-slate-900 truncate">
+                                <span class="mr-2 inline-block h-2.5 w-2.5 rounded-full bg-slate-300"></span>
+                                <span th:text="${part.name}">Astra CR Disc 49</span>
+                            </td>
+                            <td
+                                    class="px-4 py-4 whitespace-nowrap"
+                                    th:text="${#numbers.formatInteger(part.weight, 0, 'COMMA') + 'g'}"
+                            >
+                                890g
+                            </td>
+                            <td
+                                    class="px-4 py-4 whitespace-nowrap"
+                                    th:text="${'¥' + #numbers.formatInteger(part.price, 0, 'COMMA')}"
+                            >
+                                ¥148,000
+                            </td>
+                            <td class="px-4 py-4">
+                                <button
+                                        type="button"
+                                        class="inline-flex h-9 w-20 items-center justify-center rounded-md border border-slate-300 bg-white text-xs font-bold text-slate-700 hover:border-sky-500 hover:bg-sky-50 hover:text-sky-700"
+                                >
+                                    選択
+                                </button>
+                            </td>
+                        </tr>
+
+                        <tr th:if="${#lists.isEmpty(initialParts)}">
+                            <td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500">
+                                表示できるパーツデータがありません。
+                            </td>
+                        </tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
