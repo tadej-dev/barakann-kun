@@ -7,6 +7,12 @@ const selectedPartsTable = document.getElementById("selected-parts-table");
 const candidateTitle = document.getElementById("candidate-title");
 const candidateTableBody = document.getElementById("candidate-table-body");
 
+const saveConfigButton = document.getElementById("save-config-button");
+const deleteSavedConfigButton = document.getElementById("delete-saved-config-button");
+const configSaveMessage = document.getElementById("config-save-message");
+
+const STORAGE_KEY = "barakann-simulator-configs-v1";
+
 /**
  * Thymeleafで生成されたカテゴリボタンからカテゴリ情報を作る
  */
@@ -70,7 +76,13 @@ async function initializeSimulator() {
         partCandidates[category] = await fetchPartsByCategory(category);
     }
 
-    selectedParts = configStates[activeConfig];
+    const savedState = loadSavedSimulatorState();
+
+    if (savedState) {
+        restoreSimulatorState(savedState);
+    } else {
+        selectedParts = configStates[activeConfig];
+    }
 
     renderConfigButtons();
     renderPartCategoryButtons();
@@ -121,6 +133,133 @@ function updateSummary() {
 
     totalPrice.textContent = formatPrice(totalPriceValue);
     totalWeight.textContent = formatTotalWeight(totalWeightValue);
+}
+
+function createSerializableConfigStates() {
+    return Object.fromEntries(
+        Object.entries(configStates).map(([configId, parts]) => {
+            return [
+                configId,
+                Object.fromEntries(
+                    categoryOrder.map((category) => {
+                        return [category, parts?.[category]?.id || null];
+                    }),
+                ),
+            ];
+        }),
+    );
+}
+
+function hasUnselectedParts() {
+    return categoryOrder.some((category) => {
+        return !selectedParts[category];
+    });
+}
+
+function saveSimulatorState() {
+    const saveData = {
+        version: 1,
+        activeConfig,
+        configs: createSerializableConfigStates(),
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+
+    if (hasUnselectedParts()) {
+        showSaveMessage("未選択のパーツがありますが、構成を保存しました");
+    } else {
+        showSaveMessage("構成を保存しました");
+    }
+}
+
+function loadSavedSimulatorState() {
+    const savedText = localStorage.getItem(STORAGE_KEY);
+
+    if (!savedText) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(savedText);
+    } catch (error) {
+        console.error(error);
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+    }
+}
+
+function restoreSimulatorState(savedState) {
+    if (!savedState || !savedState.configs) {
+        return;
+    }
+
+    Object.keys(configStates).forEach((configId) => {
+        const savedConfig = savedState.configs[configId] || {};
+
+        configStates[configId] = Object.fromEntries(
+            categoryOrder.map((category) => {
+                const savedPartId = savedConfig[category];
+                return [category, findPartById(category, savedPartId)];
+            }),
+        );
+    });
+
+    if (configStates[savedState.activeConfig]) {
+        activeConfig = savedState.activeConfig;
+    }
+
+    activeCategory = initialActiveCategoryButton?.dataset.category || categoryOrder[0];
+
+    selectedParts = configStates[activeConfig];
+}
+
+function findPartById(category, partId) {
+    if (partId == null) {
+        return null;
+    }
+
+    return (partCandidates[category] || []).find((part) => {
+        return String(part.id) === String(partId);
+    }) || null;
+}
+
+function isCurrentConfigEmpty() {
+    return categoryOrder.every((category) => {
+        return !selectedParts[category];
+    });
+}
+
+function deleteCurrentConfigState() {
+    configStates[activeConfig] = createEmptySelectedParts();
+    selectedParts = configStates[activeConfig];
+
+    const saveData = {
+        version: 1,
+        activeConfig,
+        configs: createSerializableConfigStates(),
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+
+    renderConfigButtons();
+    renderPartCategoryButtons();
+    renderSelectedPartsTable();
+    renderCandidateTable();
+    updateSummary();
+
+    showSaveMessage(`構成${activeConfig}をクリアしました`);
+}
+
+function showSaveMessage(message) {
+    if (!configSaveMessage) {
+        return;
+    }
+
+    configSaveMessage.textContent = message;
+
+    setTimeout(() => {
+        configSaveMessage.textContent = "";
+    }, 3000);
 }
 
 function renderConfigButtons() {
@@ -339,6 +478,25 @@ partCategoryButtons.forEach((button) => {
     button.addEventListener("click", () => {
         setActiveCategory(button.dataset.category);
     });
+});
+
+saveConfigButton?.addEventListener("click", () => {
+    saveSimulatorState();
+});
+
+deleteSavedConfigButton?.addEventListener("click", () => {
+    if (isCurrentConfigEmpty()) {
+        showSaveMessage(`構成${activeConfig}は未選択です`);
+        return;
+    }
+
+    const isConfirmed = window.confirm(`構成${activeConfig}の選択内容をクリアしますか？`);
+
+    if (!isConfirmed) {
+        return;
+    }
+
+    deleteCurrentConfigState();
 });
 
 initializeSimulator().catch((error) => {
