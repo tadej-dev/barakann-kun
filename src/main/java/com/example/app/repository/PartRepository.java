@@ -10,4 +10,6 @@ public interface PartRepository extends JpaRepository<Part, Long> {
     List<Part> findByCategoryId(Long categoryId);
 
     List<Part> findByBrandId(Long brandId);
+
+    List<Part> findByCategory_KeyOrderByIdAsc(String key);
 }

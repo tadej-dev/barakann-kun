@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>barakann-kun | ロードバイクバラ完シミュレータ</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- simulator.js -->
+    <script th:src="@{/js/simulator.js}" defer></script>
+</head>
+
+<body class="bg-slate-100 text-slate-900">
+<div class="overflow-hidden bg-white shadow-sm">
+    <!-- ヘッダー -->
+    <div th:replace="~{fragments/header :: siteHeader}"></div>
+
+    <!-- メインエリア -->
+    <main class="grid min-h-[calc(100vh-64px)] grid-cols-12 gap-4 bg-slate-50 p-4">
+        <!-- 左：構成選択 + パーツ選択 -->
+        <aside class="col-span-2 rounded-lg bg-[#101518] p-4 text-white">
+            <!-- 構成選択 -->
+            <section>
+                <h2 class="mb-4 text-sm font-bold">構成選択</h2>
+
+                <div class="space-y-3">
+                    <button
+                            type="button"
+                            class="group config-button w-full rounded-lg border border-slate-700 bg-slate-800 p-4 text-left text-white hover:border-sky-500 hover:bg-sky-500 aria-selected:border-sky-500 aria-selected:bg-sky-500"
+                            data-config="1"
+                            aria-selected="true"
+                    >
+                        <p class="text-sm font-bold">構成1</p>
+                        <p
+                                class="mt-1 text-xs text-white/70 group-hover:text-white group-aria-selected:text-white"
+                                data-config-price
+                        >
+                            ¥0
+                        </p>
+                    </button>
+
+                    <button
+                            type="button"
+                            class="group config-button w-full rounded-lg border border-slate-700 bg-slate-800 p-4 text-left text-white hover:border-sky-500 hover:bg-sky-500 aria-selected:border-sky-500 aria-selected:bg-sky-500"
+                            data-config="2"
+                            aria-selected="false"
+                    >
+                        <p class="text-sm font-bold">構成2</p>
+                        <p
+                                class="mt-1 text-xs text-white/70 group-hover:text-white group-aria-selected:text-white"
+                                data-config-price
+                        >
+                            ¥0
+                        </p>
+                    </button>
+
+                    <button
+                            type="button"
+                            class="group config-button w-full rounded-lg border border-slate-700 bg-slate-800 p-4 text-left text-white hover:border-sky-500 hover:bg-sky-500 aria-selected:border-sky-500 aria-selected:bg-sky-500"
+                            data-config="3"
+                            aria-selected="false"
+                    >
+                        <p class="text-sm font-bold">構成3</p>
+                        <p
+                                class="mt-1 text-xs text-white/70 group-hover:text-white group-aria-selected:text-white"
+                                data-config-price
+                        >
+                            ¥0
+                        </p>
+                    </button>
+
+                    <button
+                            type="button"
+                            class="group config-button w-full rounded-lg border border-slate-700 bg-slate-800 p-4 text-left text-white hover:border-sky-500 hover:bg-sky-500 aria-selected:border-sky-500 aria-selected:bg-sky-500"
+                            data-config="4"
+                            aria-selected="false"
+                    >
+                        <p class="text-sm font-bold">構成4</p>
+                        <p
+                                class="mt-1 text-xs text-white/70 group-hover:text-white group-aria-selected:text-white"
+                                data-config-price
+                        >
+                            ¥0
+                        </p>
+                    </button>
+                </div>
+            </section>
+
+            <div class="my-6 border-t border-slate-800"></div>
+
+            <!-- パーツ選択 -->
+            <section>
+                <h2 class="mb-2 text-sm font-bold">パーツ選択</h2>
+                <p class="mb-4 text-xs leading-relaxed text-slate-400">
+                    カテゴリを選んで候補パーツを比較します。
+                </p>
+
+                <div class="space-y-2">
+                    <button
+                            th:each="category : ${categories}"
+                            type="button"
+                            class="group part-category-button flex w-full items-center rounded border border-slate-800 bg-[#101518] px-3 py-3 text-left text-xs text-slate-300 hover:border-sky-500 hover:bg-sky-500 hover:text-white aria-selected:border-sky-500 aria-selected:bg-sky-500 aria-selected:text-white"
+                            th:data-category="${category.key}"
+                            th:data-category-label="${category.displayName}"
+                            th:attr="aria-selected=${category.key == activeCategory}"
+                    >
+            <span
+                    class="part-category-dot mr-2 h-2.5 w-2.5 rounded-full"
+                    th:classappend="${category.key == activeCategory} ? ' bg-white ring-2 ring-sky-200' : ' bg-slate-500 group-hover:bg-white'"
+            ></span>
+                        <span th:text="${category.displayName}">フレーム</span>
+                    </button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- 右：詳細エリア -->
+        <section class="col-span-10 rounded-lg border border-slate-200 bg-white p-4">
+            <!-- サマリーカード -->
+            <div class="mb-4 grid grid-cols-2 gap-4">
+                <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <p class="text-xs text-slate-500">合計金額</p>
+                    <p id="total-price" class="mt-1 text-2xl font-bold">¥0</p>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 bg-white p-4">
+                    <p class="text-xs text-slate-500">完成重量</p>
+                    <p id="total-weight" class="mt-1 text-2xl font-bold">0.00 kg</p>
+                </div>
+            </div>
+
+            <!-- 現在の構成表 -->
+            <div class="mb-6 overflow-hidden rounded-lg border border-slate-200">
+                <table class="w-full table-fixed border-collapse text-sm">
+                    <colgroup>
+                        <col class="w-[16%]"/>
+                        <col class="w-[40%]"/>
+                        <col class="w-[14%]"/>
+                        <col class="w-[14%]"/>
+                        <col class="w-[16%]"/>
+                    </colgroup>
+
+                    <thead class="bg-[#101518] text-left text-white">
+                    <tr>
+                        <th class="px-4 py-3 font-semibold">カテゴリ</th>
+                        <th class="px-4 py-3 font-semibold">パーツ</th>
+                        <th class="px-4 py-3 font-semibold">重量</th>
+                        <th class="px-4 py-3 font-semibold">価格</th>
+                        <th class="px-4 py-3 font-semibold">操作</th>
+                    </tr>
+                    </thead>
+
+                    <tbody
+                            id="selected-parts-table"
+                            class="divide-y divide-slate-100 bg-white"
+                    ></tbody>
+                </table>
+            </div>
+
+            <!-- 候補選択エリア -->
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <div class="mb-4">
+                    <h2
+                            id="candidate-title"
+                            class="text-2xl font-bold text-slate-900"
+                    >
+                        ホイールを選択
+                    </h2>
+                </div>
+
+                <div class="overflow-hidden rounded border border-slate-200">
+                    <table class="w-full table-fixed border-collapse text-sm">
+                        <colgroup>
+                            <col class="w-[54%]"/>
+                            <col class="w-[15%]"/>
+                            <col class="w-[15%]"/>
+                            <col class="w-[16%]"/>
+                        </colgroup>
+
+                        <thead class="bg-[#101518] text-left text-white">
+                        <tr>
+                            <th class="px-4 py-3 text-xs font-semibold">製品名</th>
+                            <th class="px-4 py-3 text-xs font-semibold">重量</th>
+                            <th class="px-4 py-3 text-xs font-semibold">価格</th>
+                            <th class="px-4 py-3 text-xs font-semibold">操作</th>
+                        </tr>
+                        </thead>
+
+                        <tbody
+                                id="candidate-table-body"
+                                class="divide-y divide-slate-100 bg-white"
+                        ></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+</body>
+</html>

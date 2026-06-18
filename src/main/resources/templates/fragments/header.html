@@ -1,0 +1,14 @@
+<header
+        th:fragment="siteHeader"
+        class="flex items-center gap-16 bg-[#0b0f12] px-10 py-5 text-white"
+>
+    <a class="flex items-center gap-3 font-bold" th:href="@{/}">
+        <span class="text-sky-400">🚲</span>
+        <span>barakann-kun</span>
+    </a>
+
+    <nav class="flex gap-8 text-sm text-slate-400">
+        <a th:href="@{/terms}" class="hover:text-white">利用規約</a>
+        <a th:href="@{/privacy}" class="hover:text-white">プライバシーポリシー</a>
+    </nav>
+</header>

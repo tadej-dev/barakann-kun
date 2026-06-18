@@ -1,14 +1,12 @@
 package com.example.app.entity;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-import java.time.LocalDateTime;
-
-@Getter
-@NoArgsConstructor
 @Entity
 @Table(name = "categories")
 public class Category {
@@ -17,29 +15,41 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Setter
-    @Column(nullable = false, length = 50, unique = true)
-    private String name;
+    @Column(name = "key", nullable = false, unique = true)
+    private String key;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "display_name", nullable = false)
+    private String displayName;
 
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    public Category(String name) {
-        this.name = name;
+    public Category() {
     }
 
-    @PrePersist
-    public void prePersist() {
-        LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+    public Category(String key, String displayName) {
+        this.key = key;
+        this.displayName = displayName;
     }
 
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = LocalDateTime.now();
+    public Long getId() {
+        return id;
+    }
+
+    public String getKey() {
+        return key;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setKey(String key) {
+        this.key = key;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 }
