@@ -1,7 +1,7 @@
-package com.example.app.service;
+package com.barakann.app.service;
 
-import com.example.app.dto.PartDto;
-import com.example.app.repository.PartRepository;
+import com.barakann.app.dto.PartDto;
+import com.barakann.app.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

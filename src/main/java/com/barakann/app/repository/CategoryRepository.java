@@ -1,6 +1,6 @@
-package com.example.app.repository;
+package com.barakann.app.repository;
 
-import com.example.app.entity.Category;
+import com.barakann.app.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

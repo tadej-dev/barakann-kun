@@ -1,7 +1,7 @@
-package com.example.app.controller;
+package com.barakann.app.controller;
 
-import com.example.app.service.CategoryService;
-import com.example.app.service.PartService;
+import com.barakann.app.service.CategoryService;
+import com.barakann.app.service.PartService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;

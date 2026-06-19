@@ -1,7 +1,7 @@
-package com.example.app.controller;
+package com.barakann.app.controller;
 
-import com.example.app.dto.PartDto;
-import com.example.app.service.PartService;
+import com.barakann.app.dto.PartDto;
+import com.barakann.app.service.PartService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;

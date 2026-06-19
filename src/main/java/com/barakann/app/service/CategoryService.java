@@ -1,7 +1,7 @@
-package com.example.app.service;
+package com.barakann.app.service;
 
-import com.example.app.entity.Category;
-import com.example.app.repository.CategoryRepository;
+import com.barakann.app.entity.Category;
+import com.barakann.app.repository.CategoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

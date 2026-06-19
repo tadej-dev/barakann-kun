@@ -1,6 +1,6 @@
-package com.example.app.dto;
+package com.barakann.app.dto;
 
-import com.example.app.entity.Part;
+import com.barakann.app.entity.Part;
 
 public class PartDto {
 
