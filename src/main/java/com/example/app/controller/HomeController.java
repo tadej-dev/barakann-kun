@@ -37,7 +37,6 @@ public class HomeController {
         return "simulator";
     }
 
-
     @GetMapping("/terms")
     public String terms() {
         return "terms";

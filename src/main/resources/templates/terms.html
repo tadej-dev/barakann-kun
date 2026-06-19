@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>利用規約 | barakann-kun</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+<div class="min-h-screen bg-slate-50">
+    <!-- ヘッダー -->
+    <div th:replace="~{fragments/header :: siteHeader}"></div>
+
+    <main class="mx-auto max-w-4xl px-6 py-12">
+        <div class="mb-8">
+            <p class="mb-3 text-sm font-bold text-sky-600">Terms of Service</p>
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">
+                利用規約
+            </h1>
+            <p class="mt-4 text-sm leading-7 text-slate-600">
+                本利用規約は、barakann-kunの利用条件を定めるものです。
+                本サービスをご利用いただく前に、以下の内容をご確認ください。
+            </p>
+        </div>
+
+        <article class="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div class="mb-8 rounded-lg bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+                <p class="mt-1">
+                    本ページは個人開発サービス向けの利用規約です。サービス内容の変更に応じて、内容を更新する場合があります。
+                </p>
+            </div>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第1条（適用）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    本利用規約は、barakann-kun（以下「本サービス」といいます）の利用条件を定めるものです。
+                    ユーザーは、本サービスを利用することにより、本利用規約に同意したものとみなします。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第2条（サービス内容）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    本サービスは、ロードバイクのフレーム、コンポーネント、ホイール等を選択し、
+                    構成の合計金額や完成重量を確認するためのシミュレーションサービスです。
+                </p>
+                <p class="mt-3 leading-8 text-slate-700">
+                    本サービスで表示される価格、重量、製品情報等は参考情報であり、実際の販売価格、在庫状況、
+                    製品仕様、互換性等を保証するものではありません。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第3条（利用上の注意）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    ユーザーは、自己の責任において本サービスを利用するものとします。
+                    実際にパーツを購入する場合は、メーカー公式情報、販売店情報、製品仕様、互換性等を必ず確認してください。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第4条（保存機能について）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    本サービスでは、選択したパーツ構成をブラウザのlocalStorageに保存する場合があります。
+                    保存されたデータは、ユーザーが利用しているブラウザ内に保存され、ブラウザや端末を変更した場合には引き継がれません。
+                </p>
+                <p class="mt-3 leading-8 text-slate-700">
+                    また、ブラウザの設定変更、キャッシュ削除、ストレージ削除等により、保存された構成データが失われる場合があります。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第5条（禁止事項）
+                </h2>
+                <p class="mb-3 leading-8 text-slate-700">
+                    ユーザーは、本サービスの利用にあたり、以下の行為を行ってはなりません。
+                </p>
+                <ul class="list-disc space-y-2 pl-6 leading-8 text-slate-700">
+                    <li>法令または公序良俗に反する行為</li>
+                    <li>本サービスの運営を妨害する行為</li>
+                    <li>不正アクセス、過度なアクセス、その他本サービスに負荷をかける行為</li>
+                    <li>本サービスの内容を不正に改変、解析、再配布する行為</li>
+                    <li>その他、運営者が不適切と判断する行為</li>
+                </ul>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第6条（免責事項）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    本サービスの利用により生じた損害、トラブル、購入判断の誤り、製品の不適合、データの消失等について、
+                    運営者は責任を負わないものとします。
+                </p>
+                <p class="mt-3 leading-8 text-slate-700">
+                    本サービスは、予告なく内容の変更、中断、終了を行う場合があります。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第7条（知的財産権）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    本サービスに含まれる文章、画面デザイン、プログラム、その他のコンテンツに関する権利は、
+                    運営者または正当な権利を有する第三者に帰属します。
+                </p>
+            </section>
+
+            <section class="mb-10">
+                <h2 class="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
+                    第8条（利用規約の変更）
+                </h2>
+                <p class="leading-8 text-slate-700">
+                    運営者は、必要に応じて本利用規約を変更できるものとします。
+                    変更後の利用規約は、本サービス上に掲載された時点で効力を生じるものとします。
+                </p>
+            </section>
+        </article>
+    </main>
+</div>
+</body>
+</html>
