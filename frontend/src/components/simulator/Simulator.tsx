@@ -1,10 +1,20 @@
-import {useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useReducer, useState} from "react"
 
 import {fetchParts} from "@/api/parts"
 import {CandidatePartsTable} from "@/components/simulator/CandidatePartsTable"
 import {CategoryList} from "@/components/simulator/CategoryList"
+import {ConfigList} from "@/components/simulator/ConfigList"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
+import {
+    createInitialSimulatorState,
+    simulatorReducer,
+} from "@/features/simulator/simulatorReducer"
+import type {ConfigId} from "@/features/simulator/simulatorTypes"
+import {
+    loadSimulatorState,
+    saveSimulatorState,
+} from "@/lib/simulator-storage"
 import type {Category} from "@/types/category"
 import type {Part} from "@/types/part"
 
@@ -17,20 +27,58 @@ type SimulatorProps = {
 export function Simulator({
                               categories,
                           }: SimulatorProps) {
-    // 選択中のカテゴリー
-    const [activeCategory, setActiveCategory] = useState(
-        categories[0]?.key ?? "", // 最初のカテゴリーキー
+    // シミュレーターの状態管理
+    const [simulatorState, dispatch] = useReducer(
+        simulatorReducer, // 状態更新処理
+        categories[0]?.key ?? "", // 初期カテゴリーキー
+        (initialCategory) => {
+            // 初期状態
+            const initialState = createInitialSimulatorState(
+                initialCategory, // 初期カテゴリーキー
+            )
+
+            // 保存済み状態
+            const savedState = loadSimulatorState()
+
+            if (!savedState) {
+                return initialState
+            }
+
+            return {
+                ...initialState, // 初期状態の引き継ぎ
+                activeConfigId: savedState.activeConfigId, // 保存済み構成ID
+                configs: savedState.configs, // 保存済み構成状態
+            }
+        },
     )
+
+    // 選択中の構成ID
+    const {activeConfigId} = simulatorState
+
+    // 選択中のカテゴリー
+    const {activeCategory} = simulatorState
+
+    // 構成別の選択状態
+    const {configs} = simulatorState
+
+    // 構成変更時の保存
+    useEffect(() => {
+        saveSimulatorState({
+            activeConfigId, // 現在の構成ID
+            configs, // 現在の構成状態
+        })
+    }, [
+        activeConfigId, // 構成切り替え時の保存
+        configs, // パーツ選択時の保存
+    ])
+
+    // 現在構成の選択済みパーツ
+    const selectedParts = configs[activeConfigId]
 
     // カテゴリー別の候補パーツ
     const [partsByCategory, setPartsByCategory] = useState<
         Record<string, Part[]> // カテゴリーキーと候補パーツ一覧の対応
     >({}) // 初期状態（未取得）
-
-    // カテゴリー別の選択済みパーツ
-    const [selectedParts, setSelectedParts] = useState<
-        Record<string, Part> // カテゴリーキーと選択パーツの対応
-    >({}) // 初期状態（未選択）
 
     // カテゴリー別のエラーメッセージ
     const [
@@ -139,21 +187,52 @@ export function Simulator({
         )
     }, [selectedParts]) // 選択済みパーツ変更時の再計算
 
+    // 構成変更処理
+    function changeConfig(configId: ConfigId) {
+        dispatch({
+            type: "changeConfig", // 構成変更
+            configId, // 変更先の構成ID
+        })
+    }
+
+    // カテゴリー変更処理
+    function changeCategory(category: string) {
+        dispatch({
+            type: "changeCategory", // カテゴリー変更
+            category, // 変更先のカテゴリーキー
+        })
+    }
+
     // パーツ選択処理
     function selectPart(part: Part) {
-        setSelectedParts((current) => ({
-            ...current, // 現在の選択内容を引き継ぐ
-            [activeCategory]: part, // 現在カテゴリーのパーツを更新
-        }))
+        dispatch({
+            type: "selectPart", // パーツ選択
+            part, // 選択対象のパーツ
+        })
+    }
+
+    // 現在構成の初期化処理
+    function clearActiveConfig() {
+        dispatch({
+            type: "clearActiveConfig", // 現在構成の初期化
+        })
     }
 
     return (
-        <div className="grid min-h-screen gap-4 bg-muted/30 p-4 lg:grid-cols-[240px_1fr]">
-            <CategoryList
-                categories={categories}
-                activeCategory={activeCategory}
-                onCategoryChange={setActiveCategory}
-            />
+        <div className="grid min-h-screen gap-4 bg-muted/30 p-4 lg:grid-cols-[260px_1fr]">
+            <aside className="space-y-4 rounded-xl bg-zinc-950 p-4 text-white">
+                <ConfigList
+                    activeConfigId={activeConfigId}
+                    onConfigChange={changeConfig}
+                    onClearActiveConfig={clearActiveConfig}
+                />
+
+                <CategoryList
+                    categories={categories}
+                    activeCategory={activeCategory}
+                    onCategoryChange={changeCategory}
+                />
+            </aside>
 
             <section className="space-y-4">
                 <SummaryCards
@@ -166,7 +245,7 @@ export function Simulator({
                         categories={categories}
                         activeCategory={activeCategory}
                         selectedParts={selectedParts}
-                        onCategoryChange={setActiveCategory}
+                        onCategoryChange={changeCategory}
                     />
 
                     <CandidatePartsTable
