@@ -1,4 +1,3 @@
-import {Button} from "@/components/ui/button"
 import {
     CONFIG_IDS,
     type ConfigId,
@@ -18,38 +17,42 @@ export function ConfigList({
                                onClearActiveConfig,
                            }: ConfigListProps) {
     return (
-        <section className="space-y-3">
-            <h2 className="text-sm font-semibold">
-                構成
+        <section>
+            <h2 className="mb-4 text-sm font-bold">
+                構成選択
             </h2>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
                 {CONFIG_IDS.map((configId) => {
-                    // 構成の選択状態
                     const isActive = configId === activeConfigId
 
                     return (
-                        <Button
+                        <button
                             key={configId}
                             type="button"
-                            variant={isActive ? "default" : "outline"}
-                            aria-pressed={isActive}
+                            aria-selected={isActive}
+                            className="group w-full rounded-lg border border-slate-700 bg-slate-800 p-4 text-left text-white hover:border-sky-500 hover:bg-sky-500 aria-selected:border-sky-500 aria-selected:bg-sky-500"
                             onClick={() => onConfigChange(configId)}
                         >
-                            構成{configId}
-                        </Button>
+                            <p className="text-sm font-bold">
+                                構成{configId}
+                            </p>
+
+                            <p className="mt-1 text-xs text-white/70 group-hover:text-white group-aria-selected:text-white">
+                                保存済み構成
+                            </p>
+                        </button>
                     )
                 })}
             </div>
 
-            <Button
+            <button
                 type="button"
-                variant="secondary"
-                className="w-full"
+                className="mt-4 w-full rounded-md border border-slate-700 px-3 py-2 text-sm font-bold text-slate-200 hover:border-red-400 hover:bg-red-500 hover:text-white"
                 onClick={onClearActiveConfig}
             >
-                現在の構成をクリア
-            </Button>
+                この構成をクリア
+            </button>
         </section>
     )
 }

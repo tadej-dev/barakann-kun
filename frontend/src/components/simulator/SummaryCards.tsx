@@ -1,9 +1,4 @@
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
+import { Card } from "@heroui/react"
 
 // サマリー表示用のプロパティ
 type SummaryCardsProps = {
@@ -28,34 +23,32 @@ export function SummaryCards({
                              }: SummaryCardsProps) {
     return (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* 合計金額 */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-muted-foreground">
+            <Card variant="default" className={"border border-b-0"}>
+                <Card.Header className="pb-1">
+                    <Card.Title className="text-sm text-zinc-500 font-bold">
                         合計金額
-                    </CardTitle>
-                </CardHeader>
+                    </Card.Title>
+                </Card.Header>
 
-                <CardContent>
-                    <p className="text-2xl font-bold">
+                <Card.Content>
+                    <p className="text-3xl font-bold">
                         {priceFormatter.format(totalPrice)}
                     </p>
-                </CardContent>
+                </Card.Content>
             </Card>
 
-            {/* 合計重量 */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-muted-foreground">
+            <Card variant="default" className={"border border-b-0"}>
+                <Card.Header className="pb-1">
+                    <Card.Title className="text-sm text-zinc-500">
                         完成重量
-                    </CardTitle>
-                </CardHeader>
+                    </Card.Title>
+                </Card.Header>
 
-                <CardContent>
-                    <p className="text-2xl font-bold">
+                <Card.Content>
+                    <p className="text-3xl font-bold">
                         {(totalWeight / 1000).toFixed(2)} kg
                     </p>
-                </CardContent>
+                </Card.Content>
             </Card>
         </div>
     )

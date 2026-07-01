@@ -1,14 +1,9 @@
-import {Button} from "@/components/ui/button"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
-import type {Category} from "@/types/category"
-import type {Part} from "@/types/part"
+import type { Selection } from "@heroui/react"
+
+import { Table } from "@heroui/react"
+
+import type { Category } from "@/types/category"
+import type { Part } from "@/types/part"
 
 // 選択済みパーツ表のプロパティ
 type SelectedPartsTableProps = {
@@ -35,71 +30,98 @@ export function SelectedPartsTable({
                                        selectedParts,
                                        onCategoryChange,
                                    }: SelectedPartsTableProps) {
+    // 行選択時のカテゴリー変更
+    function handleSelectionChange(keys: Selection) {
+        if (keys === "all") {
+            return
+        }
+
+        const selectedKey = Array.from(keys)[0]
+
+        if (typeof selectedKey === "string") {
+            onCategoryChange(selectedKey)
+        }
+    }
+
     return (
-        <div className="overflow-hidden rounded-xl border bg-card">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>カテゴリ</TableHead>
-                        <TableHead>パーツ</TableHead>
-                        <TableHead>重量</TableHead>
-                        <TableHead>価格</TableHead>
-                        <TableHead>操作</TableHead>
-                    </TableRow>
-                </TableHeader>
+        <Table
+            variant="secondary"
+            className="overflow-hidden"
+        >
+            <Table.ScrollContainer>
+                <Table.Content
+                    aria-label="選択済みパーツ一覧"
+                    selectionMode="single"
+                    selectedKeys={
+                        activeCategory
+                            ? new Set([activeCategory])
+                            : new Set()
+                    }
+                    onSelectionChange={handleSelectionChange}
+                >
+                    <Table.Header>
+                        <Table.Column>カテゴリ</Table.Column>
+                        <Table.Column>パーツ</Table.Column>
+                        <Table.Column>重量</Table.Column>
+                        <Table.Column>価格</Table.Column>
+                    </Table.Header>
 
-                <TableBody>
-                    {categories.map((category) => {
-                        // カテゴリーに対応する選択済みパーツ
-                        const part = selectedParts[category.key]
+                    <Table.Body className={"font-bold"}>
+                        {categories.map((category) => {
+                            // カテゴリーに対応する選択済みパーツ
+                            const part = selectedParts[category.key]
 
-                        // カテゴリーの選択状態
-                        const isActive =
-                            category.key === activeCategory
+                            // カテゴリーの選択状態
+                            const isActive =
+                                category.key === activeCategory
 
-                        return (
-                            <TableRow key={category.id}>
-                                <TableCell>
-                                    {category.displayName}
-                                </TableCell>
+                            return (
+                                <Table.Row
+                                    key={category.key}
+                                    id={category.key}
+                                    className={
+                                        isActive
+                                            ? "cursor-pointer border-l-4 border-sky-900 bg-sky-100 text-slate-900"
+                                            : "cursor-pointer border-l-4 border-transparent bg-white hover:bg-slate-50"
+                                    }
+                                >
+                                    <Table.Cell>
+                                        {category.displayName}
+                                    </Table.Cell>
 
-                                <TableCell className="font-medium">
-                                    {part?.name ?? "未選択"}
-                                </TableCell>
+                                    <Table.Cell>
+                                        <span
+                                            className={
+                                                part
+                                                    ? "font-medium text-slate-900"
+                                                    : "font-medium text-slate-400"
+                                            }
+                                        >
+                                            {part?.name ?? "未選択"}
+                                        </span>
+                                    </Table.Cell>
 
-                                <TableCell>
-                                    {part
-                                        ? `${part.weight.toLocaleString(
-                                            "ja-JP",
-                                        )}g`
-                                        : "-"}
-                                </TableCell>
+                                    <Table.Cell>
+                                        {part
+                                            ? `${part.weight.toLocaleString(
+                                                "ja-JP",
+                                            )}g`
+                                            : "-"}
+                                    </Table.Cell>
 
-                                <TableCell>
-                                    {part
-                                        ? priceFormatter.format(part.price)
-                                        : "-"}
-                                </TableCell>
-
-                                <TableCell>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={
-                                            isActive ? "default" : "outline"
-                                        }
-                                        onClick={() =>
-                                            onCategoryChange(category.key)
-                                        }
-                                    >
-                                        {isActive ? "選択中" : "選択"}
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        )
-                    })}
-                </TableBody>
-            </Table>
-        </div>
+                                    <Table.Cell>
+                                        {part
+                                            ? priceFormatter.format(
+                                                part.price,
+                                            )
+                                            : "-"}
+                                    </Table.Cell>
+                                </Table.Row>
+                            )
+                        })}
+                    </Table.Body>
+                </Table.Content>
+            </Table.ScrollContainer>
+        </Table>
     )
 }

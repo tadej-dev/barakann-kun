@@ -10,7 +10,10 @@ import {
     createInitialSimulatorState,
     simulatorReducer,
 } from "@/features/simulator/simulatorReducer"
-import type {ConfigId} from "@/features/simulator/simulatorTypes"
+import {
+    CONFIG_IDS,
+    type ConfigId,
+} from "@/features/simulator/simulatorTypes"
 import {
     loadSimulatorState,
     saveSimulatorState,
@@ -21,6 +24,17 @@ import type {Part} from "@/types/part"
 // シミュレーターのプロパティ
 type SimulatorProps = {
     categories: Category[] // カテゴリー一覧
+}
+
+// 空の選択済みパーツ
+const EMPTY_SELECTED_PARTS: Record<string, Part> = {}
+
+// 構成IDの判定
+function isConfigId(value: unknown): value is ConfigId {
+    return (
+        typeof value === "string" &&
+        CONFIG_IDS.includes(value as ConfigId)
+    )
 }
 
 // シミュレーター本体
@@ -40,14 +54,21 @@ export function Simulator({
             // 保存済み状態
             const savedState = loadSimulatorState()
 
-            if (!savedState) {
+            if (
+                !savedState ||
+                !savedState.configs ||
+                !isConfigId(savedState.activeConfigId)
+            ) {
                 return initialState
             }
 
             return {
                 ...initialState, // 初期状態の引き継ぎ
                 activeConfigId: savedState.activeConfigId, // 保存済み構成ID
-                configs: savedState.configs, // 保存済み構成状態
+                configs: {
+                    ...initialState.configs, // 空の構成状態
+                    ...savedState.configs, // 保存済み構成状態
+                },
             }
         },
     )
@@ -73,7 +94,8 @@ export function Simulator({
     ])
 
     // 現在構成の選択済みパーツ
-    const selectedParts = configs[activeConfigId]
+    const selectedParts =
+        configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
 
     // カテゴリー別の候補パーツ
     const [partsByCategory, setPartsByCategory] = useState<
@@ -219,46 +241,50 @@ export function Simulator({
     }
 
     return (
-        <div className="grid min-h-screen gap-4 bg-muted/30 p-4 lg:grid-cols-[260px_1fr]">
-            <aside className="space-y-4 rounded-xl bg-zinc-950 p-4 text-white">
-                <ConfigList
-                    activeConfigId={activeConfigId}
-                    onConfigChange={changeConfig}
-                    onClearActiveConfig={clearActiveConfig}
-                />
+        <div className="bg-slate-50 p-4">
+            <main className="grid min-h-[calc(100vh-64px)] grid-cols-1 gap-4 lg:grid-cols-[230px_1fr]">
+                <aside className="rounded-lg bg-[#101518] p-4 text-white">
+                    <ConfigList
+                        activeConfigId={activeConfigId}
+                        onConfigChange={changeConfig}
+                        onClearActiveConfig={clearActiveConfig}
+                    />
 
-                <CategoryList
-                    categories={categories}
-                    activeCategory={activeCategory}
-                    onCategoryChange={changeCategory}
-                />
-            </aside>
+                    <div className="my-6 border-t border-slate-800" />
 
-            <section className="space-y-4">
-                <SummaryCards
-                    totalPrice={totalPrice}
-                    totalWeight={totalWeight}
-                />
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                    <SelectedPartsTable
+                    <CategoryList
                         categories={categories}
                         activeCategory={activeCategory}
-                        selectedParts={selectedParts}
                         onCategoryChange={changeCategory}
                     />
+                </aside>
 
-                    <CandidatePartsTable
-                        parts={activeParts}
-                        selectedPart={
-                            selectedParts[activeCategory]
-                        }
-                        isLoading={isLoadingParts}
-                        errorMessage={partsError}
-                        onSelect={selectPart}
+                <section className="rounded-lg border border-slate-200 bg-white p-4">
+                    <SummaryCards
+                        totalPrice={totalPrice}
+                        totalWeight={totalWeight}
                     />
-                </div>
-            </section>
+
+                    <div className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">
+                        <SelectedPartsTable
+                            categories={categories}
+                            activeCategory={activeCategory}
+                            selectedParts={selectedParts}
+                            onCategoryChange={changeCategory}
+                        />
+
+                        <CandidatePartsTable
+                            parts={activeParts}
+                            selectedPart={
+                                selectedParts[activeCategory]
+                            }
+                            isLoading={isLoadingParts}
+                            errorMessage={partsError}
+                            onSelect={selectPart}
+                        />
+                    </div>
+                </section>
+            </main>
         </div>
     )
 }
