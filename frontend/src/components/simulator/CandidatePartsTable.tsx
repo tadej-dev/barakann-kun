@@ -5,6 +5,7 @@ import type {
 
 import {
     Card,
+    Input,
     Table,
 } from "@heroui/react"
 import { useMemo, useState } from "react"
@@ -48,9 +49,29 @@ export function CandidatePartsTable({
             direction: "ascending", // 初期並び替え方向
         })
 
-    // 並び替え済みパーツ一覧
-    const sortedParts = useMemo(() => {
-        return [...parts].sort((a, b) => {
+    // 検索文字列
+    const [searchQuery, setSearchQuery] = useState("")
+
+    // 検索・並び替え済みパーツ一覧
+    const filteredAndSortedParts = useMemo(() => {
+        // 検索用文字列
+        const normalizedQuery = searchQuery
+            .trim() // 前後の空白を削除
+            .normalize("NFKC") // 全角・半角表記を統一
+            .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
+
+        // 製品名による絞り込み
+        const filteredParts = normalizedQuery
+            ? parts.filter((part) =>
+                part.name
+                    .normalize("NFKC") // 全角・半角表記を統一
+                    .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
+                    .includes(normalizedQuery), // 部分一致の判定
+            )
+            : parts
+
+        // 絞り込み結果の並び替え
+        return [...filteredParts].sort((a, b) => {
             // 並び替え対象
             const column = sortDescriptor.column as SortKey
 
@@ -78,6 +99,7 @@ export function CandidatePartsTable({
         })
     }, [
         parts, // 候補パーツ変更時の再計算
+        searchQuery, // 検索文字列変更時の再計算
         sortDescriptor, // 並び替え状態変更時の再計算
     ])
 
@@ -89,7 +111,7 @@ export function CandidatePartsTable({
 
         const selectedKey = Array.from(keys)[0]
 
-        const nextPart = sortedParts.find(
+        const nextPart = filteredAndSortedParts.find(
             (part) => String(part.id) === String(selectedKey),
         )
 
@@ -121,11 +143,30 @@ export function CandidatePartsTable({
     }
 
     return (
-        <Table
-            variant="secondary"
-            className="overflow-hidden rounded-none"
-        >
-            <Table.ScrollContainer>
+        <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Input
+                    type="search"
+                    aria-label="製品名で検索"
+                    placeholder="製品名で検索"
+                    className="w-full sm:max-w-sm"
+                    variant="secondary"
+                    value={searchQuery}
+                    onChange={(event) =>
+                        setSearchQuery(event.target.value)
+                    }
+                />
+
+                <p className="shrink-0 text-sm text-slate-500">
+                    {filteredAndSortedParts.length}件
+                </p>
+            </div>
+
+            <Table
+                variant="secondary"
+                className="overflow-hidden rounded-none"
+            >
+                <Table.ScrollContainer>
                 <Table.Content
                     aria-label="候補パーツ一覧"
                     className="min-w-[640px]"
@@ -176,18 +217,20 @@ export function CandidatePartsTable({
                     </Table.Header>
 
                     <Table.Body>
-                        {sortedParts.length === 0 ? (
+                        {filteredAndSortedParts.length === 0 ? (
                             // 候補パーツが存在しない場合
                             <Table.Row id="empty">
                                 <Table.Cell colSpan={3}>
                                     <div className="py-8 text-center text-zinc-500">
-                                        表示できるパーツがありません
+                                        {searchQuery.trim()
+                                            ? "検索条件に一致するパーツがありません"
+                                            : "表示できるパーツがありません"}
                                     </div>
                                 </Table.Cell>
                             </Table.Row>
                         ) : (
                             // 候補パーツが存在する場合
-                            sortedParts.map((part) => {
+                            filteredAndSortedParts.map((part) => {
                                 // パーツの選択状態
                                 const isSelected =
                                     selectedPart?.id === part.id
@@ -226,7 +269,8 @@ export function CandidatePartsTable({
                         )}
                     </Table.Body>
                 </Table.Content>
-            </Table.ScrollContainer>
-        </Table>
+                </Table.ScrollContainer>
+            </Table>
+        </div>
     )
 }

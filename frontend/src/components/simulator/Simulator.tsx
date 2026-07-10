@@ -274,6 +274,7 @@ export function Simulator({
                         />
 
                         <CandidatePartsTable
+                            key={activeCategory}
                             parts={activeParts}
                             selectedPart={
                                 selectedParts[activeCategory]
