@@ -6,15 +6,23 @@ public class PartDto {
 
     private Long id;
     private String name;
+    private String brandName;
     private Integer weight;
     private Integer price;
 
     public PartDto() {
     }
 
-    public PartDto(Long id, String name, Integer weight, Integer price) {
+    public PartDto(
+            Long id,
+            String name,
+            String brandName,
+            Integer weight,
+            Integer price
+    ) {
         this.id = id;
         this.name = name;
+        this.brandName = brandName;
         this.weight = weight;
         this.price = price;
     }
@@ -23,6 +31,7 @@ public class PartDto {
         return new PartDto(
                 part.getId(),
                 part.getName(),
+                part.getBrand().getName(),
                 part.getWeight(),
                 part.getPrice()
         );
@@ -34,6 +43,10 @@ public class PartDto {
 
     public String getName() {
         return name;
+    }
+
+    public String getBrandName() {
+        return brandName;
     }
 
     public Integer getWeight() {
@@ -50,6 +63,10 @@ public class PartDto {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public void setBrandName(String brandName) {
+        this.brandName = brandName;
     }
 
     public void setWeight(Integer weight) {

@@ -6,6 +6,8 @@ import type {
 import {
     Card,
     Input,
+    ListBox,
+    Select,
     Table,
 } from "@heroui/react"
 import { useMemo, useState } from "react"
@@ -52,6 +54,20 @@ export function CandidatePartsTable({
     // 検索文字列
     const [searchQuery, setSearchQuery] = useState("")
 
+    // 選択中のブランド名（allはすべてのブランド）
+    const [selectedBrand, setSelectedBrand] = useState("all")
+
+    // 現在のカテゴリーに含まれるブランド一覧
+    const brands = useMemo(() => {
+        return [...new Set(
+            parts
+                .map((part) => part.brandName)
+                .filter((brand): brand is string =>
+                    typeof brand === "string" && brand.trim() !== "",
+                ),
+        )].sort((a, b) => a.localeCompare(b, "ja-JP"))
+    }, [parts])
+
     // 検索・並び替え済みパーツ一覧
     const filteredAndSortedParts = useMemo(() => {
         // 検索用文字列
@@ -60,15 +76,18 @@ export function CandidatePartsTable({
             .normalize("NFKC") // 全角・半角表記を統一
             .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
 
-        // 製品名による絞り込み
-        const filteredParts = normalizedQuery
-            ? parts.filter((part) =>
-                part.name
-                    .normalize("NFKC") // 全角・半角表記を統一
-                    .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
-                    .includes(normalizedQuery), // 部分一致の判定
-            )
-            : parts
+        // 製品名・ブランド名による絞り込み
+        const filteredParts = parts.filter((part) => {
+            const matchesName = !normalizedQuery || part.name
+                .normalize("NFKC") // 全角・半角表記を統一
+                .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
+                .includes(normalizedQuery) // 部分一致の判定
+
+            const matchesBrand = selectedBrand === "all" ||
+                part.brandName === selectedBrand
+
+            return matchesName && matchesBrand
+        })
 
         // 絞り込み結果の並び替え
         return [...filteredParts].sort((a, b) => {
@@ -100,6 +119,7 @@ export function CandidatePartsTable({
     }, [
         parts, // 候補パーツ変更時の再計算
         searchQuery, // 検索文字列変更時の再計算
+        selectedBrand, // 選択ブランド変更時の再計算
         sortDescriptor, // 並び替え状態変更時の再計算
     ])
 
@@ -156,6 +176,34 @@ export function CandidatePartsTable({
                         setSearchQuery(event.target.value)
                     }
                 />
+
+                <Select
+                    aria-label="ブランドで絞り込み"
+                    className="w-full sm:max-w-xs"
+                    selectedKey={selectedBrand}
+                    onSelectionChange={(key) =>
+                        setSelectedBrand(String(key))
+                    }
+                >
+                    <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                    </Select.Trigger>
+
+                    <Select.Popover>
+                        <ListBox>
+                            <ListBox.Item id="all">
+                                すべてのブランド
+                            </ListBox.Item>
+
+                            {brands.map((brand) => (
+                                <ListBox.Item id={brand} key={brand}>
+                                    {brand}
+                                </ListBox.Item>
+                            ))}
+                        </ListBox>
+                    </Select.Popover>
+                </Select>
 
                 <p className="shrink-0 text-sm text-slate-500">
                     {filteredAndSortedParts.length}件
@@ -222,7 +270,8 @@ export function CandidatePartsTable({
                             <Table.Row id="empty">
                                 <Table.Cell colSpan={3}>
                                     <div className="py-8 text-center text-zinc-500">
-                                        {searchQuery.trim()
+                                        {searchQuery.trim() ||
+                                        selectedBrand !== "all"
                                             ? "検索条件に一致するパーツがありません"
                                             : "表示できるパーツがありません"}
                                     </div>
