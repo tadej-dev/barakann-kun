@@ -4,4 +4,5 @@ export type Part = {
     brandName: string
     weight: number
     price: number
+    blockedCategoryKeys: string[]
 }

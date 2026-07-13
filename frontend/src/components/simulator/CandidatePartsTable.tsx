@@ -5,6 +5,8 @@ import type {
 
 import {
     Card,
+    Checkbox,
+    Chip,
     Input,
     ListBox,
     Select,
@@ -23,6 +25,7 @@ type CandidatePartsTableProps = {
     selectedPart?: Part // 選択済みパーツ
     isLoading: boolean // API通信中の状態
     errorMessage: string // API取得失敗時のメッセージ
+    blockedMessage?: string // 選択済みパーツによる選択不可メッセージ
     onSelect: (part: Part) => void // パーツ選択処理
 }
 
@@ -42,6 +45,7 @@ export function CandidatePartsTable({
                                         selectedPart,
                                         isLoading,
                                         errorMessage,
+                                        blockedMessage,
                                         onSelect,
                                     }: CandidatePartsTableProps) {
     // 並び替え状態
@@ -56,6 +60,17 @@ export function CandidatePartsTable({
 
     // 選択中のブランド名（allはすべてのブランド）
     const [selectedBrand, setSelectedBrand] = useState("all")
+
+    // ステム一体型だけを表示するか
+    const [integratedHandlebarOnly, setIntegratedHandlebarOnly] =
+        useState(false)
+
+    // 現在カテゴリーにステム一体型パーツが含まれているか
+    const hasIntegratedHandlebars = useMemo(() => {
+        return parts.some((part) =>
+            (part.blockedCategoryKeys ?? []).includes("stem"),
+        )
+    }, [parts])
 
     // 現在のカテゴリーに含まれるブランド一覧
     const brands = useMemo(() => {
@@ -86,7 +101,14 @@ export function CandidatePartsTable({
             const matchesBrand = selectedBrand === "all" ||
                 part.brandName === selectedBrand
 
-            return matchesName && matchesBrand
+            const matchesIntegratedHandlebar =
+                !integratedHandlebarOnly ||
+                !hasIntegratedHandlebars ||
+                (part.blockedCategoryKeys ?? []).includes("stem")
+
+            return matchesName &&
+                matchesBrand &&
+                matchesIntegratedHandlebar
         })
 
         // 絞り込み結果の並び替え
@@ -118,6 +140,8 @@ export function CandidatePartsTable({
         })
     }, [
         parts, // 候補パーツ変更時の再計算
+        hasIntegratedHandlebars, // 一体型パーツ有無の変更時の再計算
+        integratedHandlebarOnly, // 一体型だけ表示する設定変更時の再計算
         searchQuery, // 検索文字列変更時の再計算
         selectedBrand, // 選択ブランド変更時の再計算
         sortDescriptor, // 並び替え状態変更時の再計算
@@ -138,6 +162,17 @@ export function CandidatePartsTable({
         if (nextPart) {
             onSelect(nextPart)
         }
+    }
+
+    // 選択済みパーツに含まれるカテゴリーの表示
+    if (blockedMessage) {
+        return (
+            <Card>
+                <Card.Content className="p-8 text-center text-slate-500">
+                    {blockedMessage}
+                </Card.Content>
+            </Card>
+        )
     }
 
     // API通信中の表示
@@ -205,6 +240,22 @@ export function CandidatePartsTable({
                     </Select.Popover>
                 </Select>
 
+                {hasIntegratedHandlebars && (
+                    <Checkbox
+                        className="shrink-0"
+                        isSelected={integratedHandlebarOnly}
+                        onChange={setIntegratedHandlebarOnly}
+                    >
+                        <Checkbox.Content>
+                            <Checkbox.Control>
+                                <Checkbox.Indicator />
+                            </Checkbox.Control>
+
+                            ステム一体型のみ
+                        </Checkbox.Content>
+                    </Checkbox>
+                )}
+
                 <p className="shrink-0 text-sm text-slate-500">
                     {filteredAndSortedParts.length}件
                 </p>
@@ -271,7 +322,9 @@ export function CandidatePartsTable({
                                 <Table.Cell colSpan={3}>
                                     <div className="py-8 text-center text-zinc-500">
                                         {searchQuery.trim() ||
-                                        selectedBrand !== "all"
+                                        selectedBrand !== "all" ||
+                                        (hasIntegratedHandlebars &&
+                                            integratedHandlebarOnly)
                                             ? "検索条件に一致するパーツがありません"
                                             : "表示できるパーツがありません"}
                                     </div>
@@ -295,9 +348,24 @@ export function CandidatePartsTable({
                                         }
                                     >
                                         <Table.Cell>
-                                            <span className="font-medium">
-                                                {part.name}
-                                            </span>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="font-medium">
+                                                    {part.name}
+                                                </span>
+
+                                                {(part.blockedCategoryKeys ?? [])
+                                                    .includes("stem") && (
+                                                    <Chip
+                                                        color="accent"
+                                                        size="sm"
+                                                        variant="soft"
+                                                    >
+                                                        <Chip.Label>
+                                                            ステム一体型
+                                                        </Chip.Label>
+                                                    </Chip>
+                                                )}
+                                            </div>
                                         </Table.Cell>
 
                                         <Table.Cell>

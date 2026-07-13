@@ -97,6 +97,30 @@ export function Simulator({
     const selectedParts =
         configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
 
+    // 選択済みパーツが占有しているカテゴリー
+    const blockedCategoryKeys = useMemo(() => {
+        return new Set(
+            Object.values(selectedParts).flatMap(
+                (part) => part.blockedCategoryKeys ?? [],
+            ),
+        )
+    }, [selectedParts])
+
+    // 現在カテゴリーを占有しているパーツ
+    const blockingParts = useMemo(() => {
+        return Object.values(selectedParts).filter((part) =>
+            (part.blockedCategoryKeys ?? []).includes(activeCategory),
+        )
+    }, [activeCategory, selectedParts])
+
+    // 現在カテゴリーの選択不可メッセージ
+    const blockedMessage = blockingParts.length > 0
+        ? `${blockingParts.map((part) => part.name).join("、")}に含まれるため、${
+            categories.find((category) => category.key === activeCategory)
+                ?.displayName ?? "このカテゴリー"
+        }の選択は不要です。`
+        : undefined
+
     // カテゴリー別の候補パーツ
     const [partsByCategory, setPartsByCategory] = useState<
         Record<string, Part[]> // カテゴリーキーと候補パーツ一覧の対応
@@ -111,8 +135,11 @@ export function Simulator({
     >({}) // 初期状態（エラーなし）
 
     useEffect(() => {
-        // カテゴリー未選択時の終了処理
-        if (!activeCategory) {
+        // カテゴリー未選択・一体型パーツに含まれる場合の終了処理
+        if (
+            !activeCategory ||
+            blockedCategoryKeys.has(activeCategory)
+        ) {
             return
         }
 
@@ -172,6 +199,7 @@ export function Simulator({
         return () => controller.abort()
     }, [
         activeCategory, // 選択中カテゴリーの変更監視
+        blockedCategoryKeys, // 選択不可カテゴリーの変更監視
         partsByCategory, // 取得済みパーツの変更監視
     ])
 
@@ -219,6 +247,11 @@ export function Simulator({
 
     // カテゴリー変更処理
     function changeCategory(category: string) {
+        // 選択済みパーツが占有しているカテゴリーには移動しない
+        if (blockedCategoryKeys.has(category)) {
+            return
+        }
+
         dispatch({
             type: "changeCategory", // カテゴリー変更
             category, // 変更先のカテゴリーキー
@@ -255,6 +288,7 @@ export function Simulator({
                     <CategoryList
                         categories={categories}
                         activeCategory={activeCategory}
+                        blockedCategoryKeys={blockedCategoryKeys}
                         onCategoryChange={changeCategory}
                     />
                 </aside>
@@ -270,6 +304,7 @@ export function Simulator({
                             categories={categories}
                             activeCategory={activeCategory}
                             selectedParts={selectedParts}
+                            blockedCategoryKeys={blockedCategoryKeys}
                             onCategoryChange={changeCategory}
                         />
 
@@ -281,6 +316,7 @@ export function Simulator({
                             }
                             isLoading={isLoadingParts}
                             errorMessage={partsError}
+                            blockedMessage={blockedMessage}
                             onSelect={selectPart}
                         />
                     </div>

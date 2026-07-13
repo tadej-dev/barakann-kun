@@ -2,6 +2,8 @@ package com.barakann.app.dto;
 
 import com.barakann.app.entity.Part;
 
+import java.util.List;
+
 public class PartDto {
 
     private Long id;
@@ -9,6 +11,7 @@ public class PartDto {
     private String brandName;
     private Integer weight;
     private Integer price;
+    private List<String> blockedCategoryKeys;
 
     public PartDto() {
     }
@@ -18,13 +21,15 @@ public class PartDto {
             String name,
             String brandName,
             Integer weight,
-            Integer price
+            Integer price,
+            List<String> blockedCategoryKeys
     ) {
         this.id = id;
         this.name = name;
         this.brandName = brandName;
         this.weight = weight;
         this.price = price;
+        this.blockedCategoryKeys = blockedCategoryKeys;
     }
 
     public static PartDto from(Part part) {
@@ -33,7 +38,12 @@ public class PartDto {
                 part.getName(),
                 part.getBrand().getName(),
                 part.getWeight(),
-                part.getPrice()
+                part.getPrice(),
+                part.getBlockedCategories()
+                        .stream()
+                        .map(category -> category.getKey())
+                        .sorted()
+                        .toList()
         );
     }
 
@@ -57,6 +67,10 @@ public class PartDto {
         return price;
     }
 
+    public List<String> getBlockedCategoryKeys() {
+        return blockedCategoryKeys;
+    }
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -75,5 +89,9 @@ public class PartDto {
 
     public void setPrice(Integer price) {
         this.price = price;
+    }
+
+    public void setBlockedCategoryKeys(List<String> blockedCategoryKeys) {
+        this.blockedCategoryKeys = blockedCategoryKeys;
     }
 }

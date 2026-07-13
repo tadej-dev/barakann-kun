@@ -7,25 +7,25 @@ TRUNCATE TABLE categories RESTART IDENTITY CASCADE;
 INSERT INTO categories (key, display_name)
 VALUES ('frame', 'フレーム'),
        ('groupset', 'コンポセット'),
-       ('handlebar', 'ハンドル'),
-       ('wheel', 'ホイール'),
-       ('tire', 'タイヤ'),
+       ('shift_brake_lever', 'シフトブレーキレバー'),
+       ('front_derailleur', 'フロントディレイラー'),
+       ('rear_derailleur', 'リアディレイラー'),
        ('crankset', 'クランクセット'),
-       ('pedal', 'ペダル'),
+       ('cassette', 'カセットスプロケット'),
+       ('chain', 'チェーン'),
+       ('bottom_bracket', 'ボトムブラケット'),
        ('brake_caliper', 'ブレーキキャリパー'),
        ('brake_pad', 'ブレーキパッド'),
        ('disc_rotor', 'ディスクローター'),
-       ('saddle', 'サドル'),
+       ('wheel', 'ホイール'),
+       ('tire', 'タイヤ'),
+       ('inner_tube', 'チューブ'),
+       ('handlebar', 'ハンドル'),
        ('stem', 'ステム'),
-       ('seatpost', 'シートポスト'),
-       ('bottom_bracket', 'ボトムブラケット'),
-       ('cassette', 'カセットスプロケット'),
-       ('chain', 'チェーン'),
-       ('front_derailleur', 'フロントディレイラー'),
-       ('rear_derailleur', 'リアディレイラー'),
-       ('shift_brake_lever', 'シフトブレーキレバー'),
        ('bar_tape', 'バーテープ'),
-       ('inner_tube', 'チューブ');
+       ('seatpost', 'シートポスト'),
+       ('saddle', 'サドル'),
+       ('pedal', 'ペダル');
 
 INSERT INTO brands (name, created_at, updated_at)
 SELECT name,
@@ -183,6 +183,14 @@ VALUES
     ('Bontrager Pro IsoCore VR-CF Handlebar 42cm', 249, 44000, 50, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('Roval Rapide Carbon Handlebar 42cm', 225, 49500, 49, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('CADEX Race Carbon Handlebar 420mm', 160, 49500, 47, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Deda Alanera RS Integrated Handlebar 42x100mm', 350, 132000, 19, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('PRO Vibe Evo Integrated Handlebar 42x105mm', 390, 88000, 20, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Vision Metron 5D ACR EVO Integrated Handlebar 42x100mm', 320, 132000, 42, 3, CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP),
+    ('Giant Contact SLR Aero Integrated Handlebar 42x100mm', 325, 99000, 7, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Roval Rapide Cockpit 420x100mm', 310, 99000, 49, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Bontrager RSL Aero Road Integrated Handlebar Stem 42x100mm', 325, 104900, 50, 3, CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP),
 
     -- ホイール
     ('Shimano WH-RS710-C46-TL Wheelset', 1612, 129000, 14, 4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -272,7 +280,8 @@ VALUES
     ('SRAM RED AXS Power Meter Crankset 48-35T 172.5mm', 745, 198000, 33, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('SRAM Force AXS D2 DUB Crankset 48-35T 172.5mm', 717, 68200, 33, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('SRAM Apex DUB Wide Crankset 40T 172.5mm', 703, 24200, 33, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('Campagnolo Super Record Wireless Crankset 50-34T 172.5mm', 585, 198000, 28, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Campagnolo Super Record Wireless Crankset 50-34T 172.5mm', 585, 198000, 28, 6, CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP),
     ('Campagnolo Record 12-Speed Crankset 50-34T 172.5mm', 710, 99000, 28, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('Rotor ALDHU Carbon Crankset 50-34T 172.5mm', 607, 132000, 52, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('Rotor VEGAST Crankset 50-34T 172.5mm', 738, 66000, 52, 6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -470,7 +479,8 @@ VALUES
     ('SRAM RED AXS E1 HRD Shift Brake Lever Set', 345, 121000, 33, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('SRAM Force AXS D2 HRD Shift Brake Lever Set', 400, 63800, 33, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('SRAM Rival AXS HRD Shift Brake Lever Set', 430, 44000, 33, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('Campagnolo Super Record Wireless Shift Brake Lever Set', 340, 143000, 28, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('Campagnolo Super Record Wireless Shift Brake Lever Set', 340, 143000, 28, 19, CURRENT_TIMESTAMP,
+     CURRENT_TIMESTAMP),
 
     -- バーテープ（左右セット）
     ('Deda Loop Bar Tape', 90, 3300, 19, 20, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -490,6 +500,22 @@ VALUES
     ('Schwalbe Aerothan Tube 700x23-32C', 41, 4950, 30, 21, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('Michelin A1 700x25-32C Inner Tube', 110, 1320, 31, 21, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('Panaracer R-AIR 700x23-28C Inner Tube', 77, 1760, 32, 21, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+-- 一体型ハンドルに含まれるため、別途選択しないカテゴリー
+INSERT INTO part_blocked_categories (part_id, category_id)
+SELECT parts.id,
+       categories.id
+FROM parts
+         CROSS JOIN categories
+WHERE categories.key = 'stem'
+  AND parts.name IN (
+                     'Deda Alanera RS Integrated Handlebar 42x100mm',
+                     'PRO Vibe Evo Integrated Handlebar 42x105mm',
+                     'Vision Metron 5D ACR EVO Integrated Handlebar 42x100mm',
+                     'Giant Contact SLR Aero Integrated Handlebar 42x100mm',
+                     'Roval Rapide Cockpit 420x100mm',
+                     'Bontrager RSL Aero Road Integrated Handlebar Stem 42x100mm'
+    );
 
 SELECT setval('categories_id_seq', (SELECT MAX(id) FROM categories));
 SELECT setval('brands_id_seq', (SELECT MAX(id) FROM brands));

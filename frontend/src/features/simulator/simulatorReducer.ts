@@ -67,17 +67,44 @@ export function simulatorReducer(
                 activeCategory: action.category, // 選択中カテゴリーの更新
             }
 
-        case "selectPart":
+        case "selectPart": {
+            // 現在構成の選択済みパーツ
+            const currentSelectedParts =
+                state.configs[state.activeConfigId]
+
+            // ほかの選択済みパーツが現在カテゴリーを占有している場合は変更しない
+            const isActiveCategoryBlocked = Object.values(
+                currentSelectedParts,
+            ).some((part) =>
+                (part.blockedCategoryKeys ?? []).includes(
+                    state.activeCategory,
+                ),
+            )
+
+            if (isActiveCategoryBlocked) {
+                return state
+            }
+
+            // 選択するパーツが占有するカテゴリーの既存選択を解除
+            const nextSelectedParts = {
+                ...currentSelectedParts,
+            }
+
+            for (const categoryKey of
+                action.part.blockedCategoryKeys ?? []) {
+                delete nextSelectedParts[categoryKey]
+            }
+
+            nextSelectedParts[state.activeCategory] = action.part
+
             return {
                 ...state, // 現在状態の引き継ぎ
                 configs: {
                     ...state.configs, // 他構成の選択状態
-                    [state.activeConfigId]: {
-                        ...state.configs[state.activeConfigId], // 現在構成の選択状態
-                        [state.activeCategory]: action.part, // 現在カテゴリーの選択パーツ
-                    },
+                    [state.activeConfigId]: nextSelectedParts,
                 },
             }
+        }
 
         case "clearActiveConfig":
             return {

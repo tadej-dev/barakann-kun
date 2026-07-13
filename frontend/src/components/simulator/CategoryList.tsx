@@ -4,6 +4,7 @@ import type { Category } from "@/types/category"
 type CategoryListProps = {
     categories: Category[] // APIから取得したカテゴリー一覧
     activeCategory: string // 選択中のカテゴリーキー
+    blockedCategoryKeys: ReadonlySet<string> // 選択済みパーツが占有するカテゴリー
     onCategoryChange: (category: string) => void // カテゴリー変更処理
 }
 
@@ -11,6 +12,7 @@ type CategoryListProps = {
 export function CategoryList({
                                  categories,
                                  activeCategory,
+                                 blockedCategoryKeys,
                                  onCategoryChange,
                              }: CategoryListProps) {
     return (
@@ -22,13 +24,20 @@ export function CategoryList({
             <div className="space-y-2">
                 {categories.map((category) => {
                     const isActive = category.key === activeCategory
+                    const isBlocked = blockedCategoryKeys.has(category.key)
 
                     return (
                         <button
                             key={category.id}
                             type="button"
                             aria-selected={isActive}
-                            className="group flex w-full items-center rounded border border-slate-800 bg-[#101518] px-3 py-3 text-left text-xs text-slate-300 hover:border-sky-500 hover:bg-sky-500 hover:text-white aria-selected:border-sky-500 aria-selected:bg-sky-500 aria-selected:text-white"
+                            disabled={isBlocked}
+                            title={
+                                isBlocked
+                                    ? "選択済みの一体型パーツに含まれています"
+                                    : undefined
+                            }
+                            className="group flex w-full items-center rounded border border-slate-800 bg-[#101518] px-3 py-3 text-left text-xs text-slate-300 hover:border-sky-500 hover:bg-sky-500 hover:text-white aria-selected:border-sky-500 aria-selected:bg-sky-500 aria-selected:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-500 disabled:hover:border-slate-800 disabled:hover:bg-slate-900 disabled:hover:text-slate-500"
                             onClick={() =>
                                 onCategoryChange(category.key)
                             }
@@ -41,8 +50,14 @@ export function CategoryList({
                                 }
                             />
 
-                            <span>
+                            <span className="flex flex-col gap-0.5">
                                 {category.displayName}
+
+                                {isBlocked && (
+                                    <span className="text-[10px] font-normal">
+                                        一体型パーツに含まれます
+                                    </span>
+                                )}
                             </span>
                         </button>
                     )

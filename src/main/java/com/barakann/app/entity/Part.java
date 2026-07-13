@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Getter
 @Entity
@@ -23,6 +25,16 @@ public class Part {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "brand_id", nullable = false)
     private Brand brand;
+
+    // このパーツを選択したときに選択不可となるカテゴリー
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "part_blocked_categories",
+            joinColumns = @JoinColumn(name = "part_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
+    @OrderBy("id ASC")
+    private Set<Category> blockedCategories = new LinkedHashSet<>();
 
     @Column(nullable = false, length = 150)
     private String name;

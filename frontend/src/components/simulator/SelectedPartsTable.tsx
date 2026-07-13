@@ -1,6 +1,6 @@
 import type { Selection } from "@heroui/react"
 
-import { Table } from "@heroui/react"
+import { Chip, Table } from "@heroui/react"
 
 import type { Category } from "@/types/category"
 import type { Part } from "@/types/part"
@@ -10,6 +10,7 @@ type SelectedPartsTableProps = {
     categories: Category[] // カテゴリー一覧
     activeCategory: string // 選択中のカテゴリーキー
     selectedParts: Record<string, Part> // カテゴリー別の選択済みパーツ
+    blockedCategoryKeys: ReadonlySet<string> // 選択済みパーツが占有するカテゴリー
     onCategoryChange: (category: string) => void // カテゴリー変更処理
 }
 
@@ -28,6 +29,7 @@ export function SelectedPartsTable({
                                        categories,
                                        activeCategory,
                                        selectedParts,
+                                       blockedCategoryKeys,
                                        onCategoryChange,
                                    }: SelectedPartsTableProps) {
     // 行選択時のカテゴリー変更
@@ -38,7 +40,10 @@ export function SelectedPartsTable({
 
         const selectedKey = Array.from(keys)[0]
 
-        if (typeof selectedKey === "string") {
+        if (
+            typeof selectedKey === "string" &&
+            !blockedCategoryKeys.has(selectedKey)
+        ) {
             onCategoryChange(selectedKey)
         }
     }
@@ -74,13 +79,18 @@ export function SelectedPartsTable({
                             // カテゴリーの選択状態
                             const isActive =
                                 category.key === activeCategory
+                            const isBlocked =
+                                blockedCategoryKeys.has(category.key)
 
                             return (
                                 <Table.Row
                                     key={category.key}
                                     id={category.key}
+                                    aria-disabled={isBlocked}
                                     className={
-                                        isActive
+                                        isBlocked
+                                            ? "cursor-not-allowed border-l-4 border-slate-300 bg-slate-100 text-slate-400"
+                                            : isActive
                                             ? "cursor-pointer border-l-4 border-sky-900 bg-sky-100 text-slate-900"
                                             : "cursor-pointer border-l-4 border-transparent bg-white hover:bg-slate-50"
                                     }
@@ -90,19 +100,38 @@ export function SelectedPartsTable({
                                     </Table.Cell>
 
                                     <Table.Cell>
-                                        <span
-                                            className={
-                                                part
-                                                    ? "font-medium text-slate-900"
-                                                    : "font-medium text-slate-400"
-                                            }
-                                        >
-                                            {part?.name ?? "未選択"}
-                                        </span>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span
+                                                className={
+                                                    part && !isBlocked
+                                                        ? "font-medium text-slate-900"
+                                                        : "font-medium text-slate-400"
+                                                }
+                                            >
+                                                {isBlocked
+                                                    ? "一体型パーツに含まれます"
+                                                    : part?.name ?? "未選択"}
+                                            </span>
+
+                                            {part &&
+                                                !isBlocked &&
+                                                (part.blockedCategoryKeys ?? [])
+                                                    .includes("stem") && (
+                                                <Chip
+                                                    color="accent"
+                                                    size="sm"
+                                                    variant="soft"
+                                                >
+                                                    <Chip.Label>
+                                                        ステム一体型
+                                                    </Chip.Label>
+                                                </Chip>
+                                            )}
+                                        </div>
                                     </Table.Cell>
 
                                     <Table.Cell>
-                                        {part
+                                        {part && !isBlocked
                                             ? `${part.weight.toLocaleString(
                                                 "ja-JP",
                                             )}g`
@@ -110,7 +139,7 @@ export function SelectedPartsTable({
                                     </Table.Cell>
 
                                     <Table.Cell>
-                                        {part
+                                        {part && !isBlocked
                                             ? priceFormatter.format(
                                                 part.price,
                                             )
