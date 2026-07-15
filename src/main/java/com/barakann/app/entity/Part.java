@@ -5,6 +5,7 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Getter
@@ -36,11 +37,28 @@ public class Part {
     @OrderBy("id ASC")
     private Set<Category> blockedCategories = new LinkedHashSet<>();
 
+    // 製品に同梱される付属品・構成品
+    @OneToMany(mappedBy = "part", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private Set<PartIncludedItem> includedItems = new LinkedHashSet<>();
+
     @Column(nullable = false, length = 150)
     private String name;
 
+    // サイズや色などを除いた製品モデル名
+    @Column(name = "model_name", length = 150)
+    private String modelName;
+
+    // サイズ・色・歯数など、購入可能なバリエーション名
+    @Column(name = "variant_name", length = 150)
+    private String variantName;
+
     @Column(nullable = false)
     private Integer price;
+
+    // 商品情報の更新日時とは分けて、価格を確認・変更した日時を保持する
+    @Column(name = "price_updated_at")
+    private LocalDateTime priceUpdatedAt;
 
     @Column(nullable = false)
     private Integer weight;
@@ -78,8 +96,24 @@ public class Part {
         this.name = name;
     }
 
+    public void setModelName(String modelName) {
+        this.modelName = modelName;
+    }
+
+    public void setVariantName(String variantName) {
+        this.variantName = variantName;
+    }
+
     public void setPrice(Integer price) {
+        if (!Objects.equals(this.price, price)) {
+            this.priceUpdatedAt = LocalDateTime.now();
+        }
+
         this.price = price;
+    }
+
+    public void setPriceUpdatedAt(LocalDateTime priceUpdatedAt) {
+        this.priceUpdatedAt = priceUpdatedAt;
     }
 
     public void setWeight(Integer weight) {
@@ -95,6 +129,14 @@ public class Part {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+
+        if (this.modelName == null || this.modelName.isBlank()) {
+            this.modelName = this.name;
+        }
+
+        if (this.priceUpdatedAt == null) {
+            this.priceUpdatedAt = now;
+        }
     }
 
     @PreUpdate

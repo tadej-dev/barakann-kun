@@ -91,12 +91,16 @@ export function CandidatePartsTable({
             .normalize("NFKC") // 全角・半角表記を統一
             .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
 
-        // 製品名・ブランド名による絞り込み
+        // 製品名・バリエーション名・ブランド名による絞り込み
         const filteredParts = parts.filter((part) => {
-            const matchesName = !normalizedQuery || part.name
-                .normalize("NFKC") // 全角・半角表記を統一
+            const matchesName = !normalizedQuery || [
+                part.name,
+                part.modelName,
+                part.variantName,
+            ].some((value) => value
+                ?.normalize("NFKC") // 全角・半角表記を統一
                 .toLocaleLowerCase("ja-JP") // 大文字・小文字を統一
-                .includes(normalizedQuery) // 部分一致の判定
+                .includes(normalizedQuery)) // 部分一致の判定
 
             const matchesBrand = selectedBrand === "all" ||
                 part.brandName === selectedBrand
@@ -336,6 +340,8 @@ export function CandidatePartsTable({
                                 // パーツの選択状態
                                 const isSelected =
                                     selectedPart?.id === part.id
+                                const includedItems =
+                                    part.includedItems ?? []
 
                                 return (
                                     <Table.Row
@@ -348,22 +354,46 @@ export function CandidatePartsTable({
                                         }
                                     >
                                         <Table.Cell>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="font-medium">
-                                                    {part.name}
-                                                </span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="font-medium">
+                                                        {part.modelName?.trim() ||
+                                                            part.name}
+                                                    </span>
 
-                                                {(part.blockedCategoryKeys ?? [])
-                                                    .includes("stem") && (
-                                                    <Chip
-                                                        color="accent"
-                                                        size="sm"
-                                                        variant="soft"
-                                                    >
-                                                        <Chip.Label>
-                                                            ステム一体型
-                                                        </Chip.Label>
-                                                    </Chip>
+                                                    {part.variantName && (
+                                                        <Chip
+                                                            size="sm"
+                                                            variant="secondary"
+                                                        >
+                                                            <Chip.Label>
+                                                                {part.variantName}
+                                                            </Chip.Label>
+                                                        </Chip>
+                                                    )}
+
+                                                    {(part.blockedCategoryKeys ?? [])
+                                                        .includes("stem") && (
+                                                        <Chip
+                                                            color="accent"
+                                                            size="sm"
+                                                            variant="soft"
+                                                        >
+                                                            <Chip.Label>
+                                                                ステム一体型
+                                                            </Chip.Label>
+                                                        </Chip>
+                                                    )}
+                                                </div>
+
+                                                {includedItems.length > 0 && (
+                                                    <span className="text-xs font-normal text-slate-500">
+                                                        付属品・構成品: {includedItems
+                                                            .map((item) =>
+                                                                `${item.name} ×${item.quantity}`,
+                                                            )
+                                                            .join("、")}
+                                                    </span>
                                                 )}
                                             </div>
                                         </Table.Cell>

@@ -12,6 +12,11 @@ public interface PartRepository extends JpaRepository<Part, Long> {
 
     List<Part> findByBrandId(Long brandId);
 
-    @EntityGraph(attributePaths = {"brand", "blockedCategories"})
+    @EntityGraph(attributePaths = {
+            "brand",
+            "blockedCategories",
+            "includedItems",
+            "includedItems.includedCategory"
+    })
     List<Part> findByCategory_KeyOrderByIdAsc(String key);
 }
