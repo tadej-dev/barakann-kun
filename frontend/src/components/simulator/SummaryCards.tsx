@@ -1,55 +1,133 @@
-import { Card } from "@heroui/react"
+import {useState} from "react"
+import {GripVertical} from "lucide-react"
+import NumberFlow from "@number-flow/react"
+import type {Format} from "@number-flow/react"
 
-// サマリー表示用のプロパティ
+import {ConfigList} from "@/components/simulator/ConfigList"
+import {
+    Sortable,
+    SortableItem,
+    SortableItemHandle,
+} from "@/components/reui/sortable"
+import {
+    Card,
+    CardAction,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card"
+import type {ConfigId} from "@/features/simulator/simulatorTypes"
+
 type SummaryCardsProps = {
-    totalPrice: number // 選択済みパーツの合計金額
-    totalWeight: number // 選択済みパーツの合計重量
+    totalPrice: number
+    totalWeight: number
+    activeConfigId: ConfigId
+    onConfigChange: (configId: ConfigId) => void
+    onClearActiveConfig: () => void
 }
 
-// 日本円の表示形式
-const priceFormatter = new Intl.NumberFormat(
-    "ja-JP", // 日本語の数値表記用
-    {
-        style: "currency", // 通貨形式
-        currency: "JPY", // 通貨単位（日本円）
-        maximumFractionDigits: 0, // 小数部分の最大桁数（小数点以下を表示しない）
-    },
-)
+type SummaryCardId = "price" | "weight" | "config"
 
-// 合計金額・重量の表示欄
+const initialCardOrder: SummaryCardId[] = ["price", "weight", "config"]
+
+type SummaryCard = {
+    title: string
+    value: number
+    format: Format
+    suffix?: string
+}
+
 export function SummaryCards({
                                  totalPrice,
                                  totalWeight,
+                                 activeConfigId,
+                                 onConfigChange,
+                                 onClearActiveConfig,
                              }: SummaryCardsProps) {
+    const [cardOrder, setCardOrder] =
+        useState<SummaryCardId[]>(initialCardOrder)
+
+    const cards: Record<Exclude<SummaryCardId, "config">, SummaryCard> = {
+        price: {
+            title: "合計金額",
+            value: totalPrice,
+            format: {
+                style: "currency",
+                currency: "JPY",
+                maximumFractionDigits: 0,
+            },
+        },
+        weight: {
+            title: "完成重量",
+            value: totalWeight / 1000,
+            format: {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            },
+            suffix: " kg",
+        },
+    }
+
     return (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card variant="default" className={"border border-b-0"}>
-                <Card.Header className="pb-1">
-                    <Card.Title className="text-sm text-zinc-500 font-bold">
-                        合計金額
-                    </Card.Title>
-                </Card.Header>
+        <Sortable
+            value={cardOrder}
+            onValueChange={setCardOrder}
+            getItemValue={(cardId) => cardId}
+            strategy="grid"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,1fr))_minmax(260px,1fr)]"
+        >
+            {cardOrder.map((cardId) => {
+                if (cardId === "config") {
+                    return (
+                        <SortableItem key={cardId} value={cardId}>
+                            <ConfigList
+                                activeConfigId={activeConfigId}
+                                onConfigChange={onConfigChange}
+                                onClearActiveConfig={onClearActiveConfig}
+                            />
+                        </SortableItem>
+                    )
+                }
 
-                <Card.Content>
-                    <p className="text-3xl font-bold">
-                        {priceFormatter.format(totalPrice)}
-                    </p>
-                </Card.Content>
-            </Card>
+                const card = cards[cardId]
 
-            <Card variant="default" className={"border border-b-0"}>
-                <Card.Header className="pb-1">
-                    <Card.Title className="text-sm text-zinc-500">
-                        完成重量
-                    </Card.Title>
-                </Card.Header>
+                return (
+                    <SortableItem key={cardId} value={cardId}>
+                        <Card className="h-full border border-b-0">
+                            <CardHeader>
+                                <CardTitle className="text-lg font-bold text-zinc-500">
+                                    {card.title}
+                                </CardTitle>
 
-                <Card.Content>
-                    <p className="text-3xl font-bold">
-                        {(totalWeight / 1000).toFixed(2)} kg
-                    </p>
-                </Card.Content>
-            </Card>
-        </div>
+                                <CardAction>
+                                    <SortableItemHandle
+                                        render={
+                                            <button
+                                                type="button"
+                                                aria-label={`${card.title}カードを移動`}
+                                            />
+                                        }
+                                        className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    >
+                                        <GripVertical className="size-4"/>
+                                    </SortableItemHandle>
+                                </CardAction>
+                            </CardHeader>
+
+                            <CardContent>
+                                <NumberFlow
+                                    value={card.value}
+                                    locales="ja-JP"
+                                    format={card.format}
+                                    suffix={card.suffix}
+                                    isolate
+                                    className="text-4xl font-bold tabular-nums"
+                                />
+                            </CardContent>
+                        </Card>
+                    </SortableItem>
+                )
+            })}
+        </Sortable>
     )
 }

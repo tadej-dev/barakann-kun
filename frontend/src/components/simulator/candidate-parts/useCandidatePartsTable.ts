@@ -1,0 +1,148 @@
+import { useMemo, useState } from "react"
+
+import type { Part } from "@/types/part"
+
+// 並び替え対象
+export type CandidatePartsSortKey = "brand" | "name" | "weight" | "price"
+
+// 並び替え条件
+export type CandidatePartsSortDescriptor = {
+    column: CandidatePartsSortKey
+    direction: "ascending" | "descending"
+}
+
+const ALL_BRANDS = "all"
+
+// 候補パーツ表の状態管理
+export function useCandidatePartsTable(parts: Part[]) {
+    // 並び替え状態
+    const [sortDescriptor, setSortDescriptor] =
+        useState<CandidatePartsSortDescriptor>({
+            column: "name",
+            direction: "ascending",
+        })
+    // 製品名の検索文字列
+    const [searchQuery, setSearchQuery] = useState("")
+
+    // 選択中のブランド
+    const [selectedBrand, setSelectedBrand] = useState(ALL_BRANDS)
+
+    // ステム一体型フィルター
+    const [integratedHandlebarOnly, setIntegratedHandlebarOnly] =
+        useState(false)
+
+    // 一体型ハンドルの有無
+    const hasIntegratedHandlebars = useMemo(() => {
+        return parts.some((part) =>
+            (part.blockedCategoryKeys ?? []).includes("stem"),
+        )
+    }, [parts])
+
+    // 重複・空文字を除外したブランド一覧
+    const brands = useMemo(() => {
+        return [...new Set(
+            parts
+                .map((part) => part.brandName)
+                .filter((brand): brand is string =>
+                    typeof brand === "string" && brand.trim() !== "",
+                ),
+        )].sort((a, b) => a.localeCompare(b, "ja-JP"))
+    }, [parts])
+
+    // 絞り込み・並び替え後の候補パーツ
+    const filteredAndSortedParts = useMemo(() => {
+        // 全角・半角、大文字・小文字を統一した検索文字列
+        const normalizedQuery = searchQuery
+            .trim()
+            .normalize("NFKC")
+            .toLocaleLowerCase("ja-JP")
+
+        // 製品名・ブランド・一体型による絞り込み
+        const filteredParts = parts.filter((part) => {
+            const matchesName = !normalizedQuery || [
+                part.name,
+                part.modelName,
+                part.variantName,
+            ].some((value) => value
+                ?.normalize("NFKC")
+                .toLocaleLowerCase("ja-JP")
+                .includes(normalizedQuery))
+
+            const matchesBrand = selectedBrand === ALL_BRANDS ||
+                part.brandName === selectedBrand
+
+            const matchesIntegratedHandlebar =
+                !integratedHandlebarOnly ||
+                !hasIntegratedHandlebars ||
+                (part.blockedCategoryKeys ?? []).includes("stem")
+
+            return matchesName &&
+                matchesBrand &&
+                matchesIntegratedHandlebar
+        })
+
+        // 選択中の列と方向による並び替え
+        return [...filteredParts].sort((a, b) => {
+            const { column, direction } = sortDescriptor
+
+            if (column === "brand" || column === "name") {
+                const aValue = column === "brand"
+                    ? a.brandName ?? ""
+                    : a.name
+                const bValue = column === "brand"
+                    ? b.brandName ?? ""
+                    : b.name
+                const result = aValue.localeCompare(
+                    bValue,
+                    "ja-JP",
+                    { numeric: true },
+                )
+
+                return direction === "ascending" ? result : -result
+            }
+
+            const result = a[column] - b[column]
+
+            return direction === "ascending" ? result : -result
+        })
+    }, [
+        parts,
+        hasIntegratedHandlebars,
+        integratedHandlebarOnly,
+        searchQuery,
+        selectedBrand,
+        sortDescriptor,
+    ])
+
+    // 並び順の変更処理
+    function changeSort(column: CandidatePartsSortKey) {
+        setSortDescriptor((current) => ({
+            column,
+            direction:
+                current.column === column &&
+                current.direction === "ascending"
+                    ? "descending"
+                    : "ascending",
+        }))
+    }
+
+    // 検索条件の有無
+    const hasActiveFilters = searchQuery.trim() !== "" ||
+        selectedBrand !== ALL_BRANDS ||
+        (hasIntegratedHandlebars && integratedHandlebarOnly)
+
+    return {
+        brands,
+        changeSort,
+        filteredAndSortedParts,
+        hasActiveFilters,
+        hasIntegratedHandlebars,
+        integratedHandlebarOnly,
+        searchQuery,
+        selectedBrand,
+        setIntegratedHandlebarOnly,
+        setSearchQuery,
+        setSelectedBrand,
+        sortDescriptor,
+    }
+}

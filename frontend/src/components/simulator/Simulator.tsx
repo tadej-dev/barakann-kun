@@ -1,9 +1,8 @@
 import {useEffect, useMemo, useReducer, useState} from "react"
 
 import {fetchParts} from "@/api/parts"
-import {CandidatePartsTable} from "@/components/simulator/CandidatePartsTable"
+import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
 import {CategoryList} from "@/components/simulator/CategoryList"
-import {ConfigList} from "@/components/simulator/ConfigList"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
@@ -274,17 +273,9 @@ export function Simulator({
     }
 
     return (
-        <div className="bg-slate-50 p-4">
+        <div className="bg-slate-100 p-4">
             <main className="grid min-h-[calc(100vh-64px)] grid-cols-1 gap-4 lg:grid-cols-[230px_1fr]">
                 <aside className="rounded-lg bg-[#101518] p-4 text-white">
-                    <ConfigList
-                        activeConfigId={activeConfigId}
-                        onConfigChange={changeConfig}
-                        onClearActiveConfig={clearActiveConfig}
-                    />
-
-                    <div className="my-6 border-t border-slate-800" />
-
                     <CategoryList
                         categories={categories}
                         activeCategory={activeCategory}
@@ -293,13 +284,17 @@ export function Simulator({
                     />
                 </aside>
 
-                <section className="rounded-lg border border-slate-200 bg-white p-4">
+                <section className="rounded-lg border border-slate-300 bg-white p-4">
                     <SummaryCards
                         totalPrice={totalPrice}
                         totalWeight={totalWeight}
+                        activeConfigId={activeConfigId}
+                        onConfigChange={changeConfig}
+                        onClearActiveConfig={clearActiveConfig}
                     />
 
-                    <div className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">
+                    <div
+                        className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">
                         <SelectedPartsTable
                             categories={categories}
                             activeCategory={activeCategory}
