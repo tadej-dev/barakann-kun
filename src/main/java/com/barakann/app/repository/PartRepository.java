@@ -16,7 +16,8 @@ public interface PartRepository extends JpaRepository<Part, Long> {
             "brand",
             "blockedCategories",
             "includedItems",
-            "includedItems.includedCategory"
+            "includedItems.includedCategory",
+            "specifications"
     })
     List<Part> findByCategory_KeyOrderByIdAsc(String key);
 }

@@ -496,6 +496,147 @@ VALUES
     ('Michelin A1 700x25-32C Inner Tube', 110, 1320, 31, 15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'Michelin A1 700x25-32C Inner Tube', NULL, TIMESTAMP '2026-07-15 00:00:00'),
     ('Panaracer R-AIR 700x23-28C Inner Tube', 77, 1760, 32, 15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'Panaracer R-AIR 700x23-28C Inner Tube', NULL, TIMESTAMP '2026-07-15 00:00:00');
 
+-- タイヤのホイール径・幅
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at)
+SELECT parts.id,
+       specifications.spec_key,
+       specifications.spec_value,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM (VALUES
+          ('Continental Grand Prix 5000 700x25C', '25'),
+          ('Continental Grand Prix 5000 700x28C', '28'),
+          ('Vittoria Corsa N.EXT TLR 700x28C', '28'),
+          ('Pirelli P ZERO Race TLR 700x28C', '28'),
+          ('Schwalbe Pro One TLE 700x28C', '28'),
+          ('Michelin Power Cup TLR 700x28C Black', '28'),
+          ('Michelin Power Cup TLR 700x28C Classic', '28'),
+          ('Panaracer AGILEST TLR 700x28C', '28'),
+          ('Continental Grand Prix 5000 S TR 700x25C', '25'),
+          ('Continental Grand Prix 5000 S TR 700x28C', '28'),
+          ('Continental Grand Prix 5000 S TR 700x30C', '30'),
+          ('Continental Grand Prix 5000 S TR 700x32C', '32'),
+          ('Continental Grand Prix 5000 AS TR 700x28C', '28'),
+          ('Continental AERO 111 700x29C', '29'),
+          ('Vittoria Corsa PRO TLR 700x26C', '26'),
+          ('Vittoria Corsa PRO TLR 700x28C', '28'),
+          ('Vittoria Corsa PRO TLR 700x30C', '30'),
+          ('Vittoria Corsa PRO Speed TLR 700x28C', '28'),
+          ('Vittoria Rubino Pro 700x28C', '28'),
+          ('Pirelli P ZERO Race TLR SpeedCORE 700x28C', '28'),
+          ('Pirelli P ZERO Race TLR SpeedCORE 700x30C', '30'),
+          ('Pirelli P ZERO Race Tube Type 700x28C', '28'),
+          ('Schwalbe Pro One TLE 700x25C', '25'),
+          ('Schwalbe Pro One TLE 700x30C', '30'),
+          ('Schwalbe Pro One TLE 700x32C', '32'),
+          ('Schwalbe Pro One Aero Front TLR 700x28C', '28'),
+          ('Schwalbe Pro One Aero Rear TLR 700x28C', '28'),
+          ('Michelin Power Cup Competition Line 700x25C', '25'),
+          ('Michelin Power Cup Competition Line 700x28C', '28'),
+          ('Panaracer AGILEST FAST TLR 700x28C', '28'),
+          ('Panaracer GravelKing Slick TLR 700x35C', '35')
+     ) AS tire_specifications(part_name, tire_width_mm)
+         JOIN parts ON parts.name = tire_specifications.part_name
+         CROSS JOIN LATERAL (VALUES
+                                 ('wheel_diameter', '700C'),
+                                 ('tire_width_mm', tire_specifications.tire_width_mm)
+     ) AS specifications(spec_key, spec_value);
+
+-- チューブのホイール径・対応タイヤ幅
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at)
+SELECT parts.id,
+       specifications.spec_key,
+       specifications.spec_value,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM (VALUES
+          ('Continental Race 28 700x20-25C Inner Tube', '20', '25'),
+          ('Continental Race 28 Wide 700x25-32C Inner Tube', '25', '32'),
+          ('Continental TPU 700x25-35C Inner Tube', '25', '35'),
+          ('Vittoria Latex 700x25-28C Inner Tube', '25', '28'),
+          ('Schwalbe Aerothan Tube 700x23-32C', '23', '32'),
+          ('Michelin A1 700x25-32C Inner Tube', '25', '32'),
+          ('Panaracer R-AIR 700x23-28C Inner Tube', '23', '28')
+     ) AS tube_specifications(part_name, min_tire_width_mm, max_tire_width_mm)
+         JOIN parts ON parts.name = tube_specifications.part_name
+         CROSS JOIN LATERAL (VALUES
+                                 ('wheel_diameter', '700C'),
+                                 ('min_tire_width_mm', tube_specifications.min_tire_width_mm),
+                                 ('max_tire_width_mm', tube_specifications.max_tire_width_mm)
+     ) AS specifications(spec_key, spec_value);
+
+-- ディスクローターの取付方式・径
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at)
+SELECT parts.id,
+       specifications.spec_key,
+       specifications.spec_value,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM (VALUES
+          ('Shimano SM-RT70 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Shimano RT-MT800 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Shimano SM-RT64 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SRAM Paceline Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SRAM CenterLine XR Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Campagnolo AFS Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SwissStop Catalyst Pro Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Shimano RT-CL900 Center Lock Disc Rotor 140mm', 'center_lock', '140'),
+          ('Shimano RT-CL900 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Shimano RT-CL800 Center Lock Disc Rotor 140mm', 'center_lock', '140'),
+          ('Shimano RT-CL800 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('Shimano RT-CL700 Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SRAM Paceline X Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SRAM HS2 6-Bolt Disc Rotor 160mm', '6_bolt', '160'),
+          ('Campagnolo AFS Center Lock Disc Rotor 140mm', 'center_lock', '140'),
+          ('Campagnolo Ekar AFS Center Lock Disc Rotor 160mm', 'center_lock', '160'),
+          ('SwissStop Catalyst Race Center Lock Disc Rotor 140mm', 'center_lock', '140'),
+          ('SwissStop Catalyst Race Center Lock Disc Rotor 160mm', 'center_lock', '160')
+     ) AS rotor_specifications(part_name, rotor_mount, rotor_diameter_mm)
+         JOIN parts ON parts.name = rotor_specifications.part_name
+         CROSS JOIN LATERAL (VALUES
+                                 ('rotor_mount', rotor_specifications.rotor_mount),
+                                 ('rotor_diameter_mm', rotor_specifications.rotor_diameter_mm)
+     ) AS specifications(spec_key, spec_value);
+
+-- 前後専用タイヤ
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at)
+SELECT parts.id,
+       specification_keys.spec_key,
+       position_specifications.spec_value,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM (VALUES
+          ('Schwalbe Pro One Aero Front TLR 700x28C', 'front'),
+          ('Schwalbe Pro One Aero Rear TLR 700x28C', 'rear')
+     ) AS position_specifications(part_name, spec_value)
+         JOIN parts ON parts.name = position_specifications.part_name
+         CROSS JOIN LATERAL (VALUES ('allowed_position')) AS specification_keys(spec_key);
+
+-- ブレーキキャリパーとパッドの対応形状
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at)
+SELECT parts.id,
+       'pad_family',
+       brake_specifications.pad_family,
+       CURRENT_TIMESTAMP,
+       CURRENT_TIMESTAMP
+FROM (VALUES
+          ('Shimano 105 BR-R7170 Disc Brake Caliper', 'shimano_road_flat_mount'),
+          ('Shimano Ultegra BR-R8170 Disc Brake Caliper', 'shimano_road_flat_mount'),
+          ('Shimano Dura-Ace BR-R9270 Disc Brake Caliper', 'shimano_road_flat_mount'),
+          ('Shimano GRX BR-RX820 Flat Mount Disc Brake Caliper', 'shimano_road_flat_mount'),
+          ('Shimano L05A-RF Resin Disc Brake Pads', 'shimano_road_flat_mount'),
+          ('Shimano K05S-RX Resin Disc Brake Pads', 'shimano_road_flat_mount'),
+          ('Shimano L04C-MF Metal Disc Brake Pads', 'shimano_road_flat_mount'),
+          ('SRAM Force AXS Flat Mount Brake Caliper', 'sram_road_axs'),
+          ('SRAM AXS Road Organic Disc Brake Pads', 'sram_road_axs'),
+          ('SRAM AXS Road Sintered Disc Brake Pads', 'sram_road_axs'),
+          ('Campagnolo Flat Mount Disc Brake Caliper', 'campagnolo_db310'),
+          ('Campagnolo Super Record Wireless Brake Caliper', 'campagnolo_db310'),
+          ('Campagnolo Ekar Flat Mount Brake Caliper', 'campagnolo_db310'),
+          ('Campagnolo DB-310 Organic Disc Brake Pads', 'campagnolo_db310')
+     ) AS brake_specifications(part_name, pad_family)
+         JOIN parts ON parts.name = brake_specifications.part_name;
+
 -- 一体型ハンドルの構成品。カテゴリー付きの構成品は将来の排他判定にも利用する。
 INSERT INTO part_included_items (
     part_id,
@@ -577,9 +718,42 @@ WHERE categories.key = 'stem'
                      'Bontrager RSL Aero Road Integrated Handlebar Stem 42x100mm'
     );
 
+-- コンポセットに含まれるため、別途選択しない単品カテゴリー
+INSERT INTO part_blocked_categories (part_id, category_id)
+SELECT parts.id,
+       categories.id
+FROM parts
+         CROSS JOIN categories
+WHERE parts.category_id = (
+    SELECT id
+    FROM categories
+    WHERE key = 'groupset'
+)
+  AND categories.key IN (
+                         'shift_brake_lever',
+                         'front_derailleur',
+                         'rear_derailleur',
+                         'crankset',
+                         'cassette',
+                         'chain',
+                         'bottom_bracket',
+                         'brake_caliper',
+                         'brake_pad',
+                         'disc_rotor'
+    )
+  -- 1Xコンポセットにはフロントディレイラーが含まれない
+  AND NOT (
+    categories.key = 'front_derailleur'
+        AND parts.name IN (
+                           'SRAM Apex AXS XPLR 1X HRD Groupset',
+                           'Campagnolo Ekar 1X13 Disc Groupset'
+        )
+    );
+
 SELECT setval('categories_id_seq', (SELECT MAX(id) FROM categories));
 SELECT setval('brands_id_seq', (SELECT MAX(id) FROM brands));
 SELECT setval('parts_id_seq', (SELECT MAX(id) FROM parts));
 SELECT setval('part_included_items_id_seq', (SELECT MAX(id) FROM part_included_items));
+SELECT setval('part_specifications_id_seq', (SELECT MAX(id) FROM part_specifications));
 
 COMMIT;

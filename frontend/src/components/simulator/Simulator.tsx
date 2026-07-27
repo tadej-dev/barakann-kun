@@ -9,9 +9,17 @@ import {
     createInitialSimulatorState,
     simulatorReducer,
 } from "@/features/simulator/simulatorReducer"
+import {calculateSelectedPartsTotals} from "@/features/simulator/partCompatibility"
+import {
+    getPartSlotCategoryKey,
+    getPartSlotPositionLabel,
+    getPartSlots,
+    type PartSlot,
+} from "@/features/simulator/partSlots"
 import {
     CONFIG_IDS,
     type ConfigId,
+    type SelectedParts,
 } from "@/features/simulator/simulatorTypes"
 import {
     loadSimulatorState,
@@ -26,7 +34,7 @@ type SimulatorProps = {
 }
 
 // 空の選択済みパーツ
-const EMPTY_SELECTED_PARTS: Record<string, Part> = {}
+const EMPTY_SELECTED_PARTS: SelectedParts = {}
 
 // 構成IDの判定
 function isConfigId(value: unknown): value is ConfigId {
@@ -75,8 +83,11 @@ export function Simulator({
     // 選択中の構成ID
     const {activeConfigId} = simulatorState
 
+    // 選択中のパーツ選択枠
+    const {activeSlot} = simulatorState
+
     // 選択中のカテゴリー
-    const {activeCategory} = simulatorState
+    const {categoryKey: activeCategory} = activeSlot
 
     // 構成別の選択状態
     const {configs} = simulatorState
@@ -105,19 +116,32 @@ export function Simulator({
         )
     }, [selectedParts])
 
-    // 現在カテゴリーを占有しているパーツ
-    const blockingParts = useMemo(() => {
-        return Object.values(selectedParts).filter((part) =>
+    // 現在カテゴリーを占有している選択内容
+    const blockingSelections = useMemo(() => {
+        return Object.entries(selectedParts).filter(([, part]) =>
             (part.blockedCategoryKeys ?? []).includes(activeCategory),
         )
     }, [activeCategory, selectedParts])
 
+    // 占有中パーツのカテゴリー名
+    const blockingCategoryNames = useMemo(() => {
+        return Array.from(new Set(
+            blockingSelections.map(([slotKey]) => {
+                const categoryKey = getPartSlotCategoryKey(slotKey)
+
+                return categories.find(
+                    (category) => category.key === categoryKey,
+                )?.displayName ?? "選択済みパーツ"
+            }),
+        ))
+    }, [blockingSelections, categories])
+
     // 現在カテゴリーの選択不可メッセージ
-    const blockedMessage = blockingParts.length > 0
-        ? `${blockingParts.map((part) => part.name).join("、")}に含まれるため、${
+    const blockedMessage = blockingSelections.length > 0
+        ? `${blockingSelections.map(([, part]) => part.name).join("、")}に含まれるため、${
             categories.find((category) => category.key === activeCategory)
                 ?.displayName ?? "このカテゴリー"
-        }の選択は不要です。`
+        }は選択できません。`
         : undefined
 
     // カテゴリー別の候補パーツ
@@ -134,7 +158,7 @@ export function Simulator({
     >({}) // 初期状態（エラーなし）
 
     useEffect(() => {
-        // カテゴリー未選択・一体型パーツに含まれる場合の終了処理
+        // カテゴリー未選択・他パーツに含まれる場合の終了処理
         if (
             !activeCategory ||
             blockedCategoryKeys.has(activeCategory)
@@ -220,21 +244,11 @@ export function Simulator({
         !hasLoadedActiveCategory &&
         !partsError
 
-    // 選択済みパーツの合計金額
-    const totalPrice = useMemo(() => {
-        return Object.values(selectedParts).reduce(
-            (total, part) => total + part.price, // 各パーツ価格の加算
-            0, // 合計金額の初期値
-        )
-    }, [selectedParts]) // 選択済みパーツ変更時の再計算
-
-    // 選択済みパーツの合計重量
-    const totalWeight = useMemo(() => {
-        return Object.values(selectedParts).reduce(
-            (total, part) => total + part.weight, // 各パーツ重量の加算
-            0, // 合計重量の初期値
-        )
-    }, [selectedParts]) // 選択済みパーツ変更時の再計算
+    // 選択済みパーツの合計
+    const {price: totalPrice, weight: totalWeight} = useMemo(
+        () => calculateSelectedPartsTotals(selectedParts),
+        [selectedParts],
+    )
 
     // 構成変更処理
     function changeConfig(configId: ConfigId) {
@@ -246,22 +260,40 @@ export function Simulator({
 
     // カテゴリー変更処理
     function changeCategory(category: string) {
-        // 選択済みパーツが占有しているカテゴリーには移動しない
-        if (blockedCategoryKeys.has(category)) {
-            return
-        }
+        const nextSlot = activeCategory === category
+            ? activeSlot
+            : getPartSlots(category)[0]
 
+        changeSlot(nextSlot)
+    }
+
+    // 選択枠変更処理
+    function changeSlot(slot: PartSlot) {
         dispatch({
-            type: "changeCategory", // カテゴリー変更
-            category, // 変更先のカテゴリーキー
+            type: "changeSlot", // 選択枠変更
+            slot, // 変更先の選択枠
         })
     }
 
     // パーツ選択処理
-    function selectPart(part: Part) {
+    function selectPart(
+        part: Part,
+        slotKeys?: string[],
+        removeSlotKeys?: string[],
+    ) {
         dispatch({
             type: "selectPart", // パーツ選択
             part, // 選択対象のパーツ
+            slotKeys, // 選択先の選択枠
+            removeSlotKeys, // 非互換パーツの解除対象
+        })
+    }
+
+    // 現在カテゴリーを占有するパーツの解除処理
+    function removeBlockingParts() {
+        dispatch({
+            type: "removeParts", // パーツ解除
+            slotKeys: blockingSelections.map(([slotKey]) => slotKey),
         })
     }
 
@@ -297,22 +329,32 @@ export function Simulator({
                         className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">
                         <SelectedPartsTable
                             categories={categories}
-                            activeCategory={activeCategory}
+                            activeSlotKey={activeSlot.key}
                             selectedParts={selectedParts}
                             blockedCategoryKeys={blockedCategoryKeys}
-                            onCategoryChange={changeCategory}
+                            onSlotChange={changeSlot}
                         />
 
                         <CandidatePartsTable
-                            key={activeCategory}
+                            key={activeSlot.key}
                             parts={activeParts}
+                            activeSlot={activeSlot}
+                            selectedParts={selectedParts}
                             selectedPart={
-                                selectedParts[activeCategory]
+                                selectedParts[activeSlot.key]
                             }
                             isLoading={isLoadingParts}
                             errorMessage={partsError}
                             blockedMessage={blockedMessage}
+                            blockingCategoryNames={blockingCategoryNames}
+                            blockingPartNames={blockingSelections.map(
+                                ([, part]) => part.name,
+                            )}
+                            slotPositionLabel={getPartSlotPositionLabel(
+                                activeSlot.position,
+                            )}
                             onSelect={selectPart}
+                            onRemoveBlockingParts={removeBlockingParts}
                         />
                     </div>
                 </section>

@@ -6,16 +6,19 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import type {ReactNode} from "react"
 
 type CandidatePartsTableMessageProps = {
     message: string
     className?: string
+    children?: ReactNode
 }
 
 // 候補パーツ表の状態メッセージ
 export function CandidatePartsTableMessage({
     message,
     className = "text-muted-foreground",
+    children,
 }: CandidatePartsTableMessageProps) {
     return (
         <div className="overflow-hidden rounded-lg border bg-background">
@@ -38,7 +41,10 @@ export function CandidatePartsTableMessage({
                             colSpan={5}
                             className={`h-24 text-center ${className}`}
                         >
-                            {message}
+                            <div className="flex flex-col items-center gap-3">
+                                <p>{message}</p>
+                                {children}
+                            </div>
                         </TableCell>
                     </TableRow>
                 </TableBody>

@@ -10,9 +10,11 @@ export type Part = {
     modelName?: string | null
     variantName?: string | null
     brandName: string
+    categoryKey?: string
     weight: number
     price: number
     priceUpdatedAt?: string | null
     includedItems?: PartIncludedItem[]
     blockedCategoryKeys: string[]
+    specifications?: Record<string, string>
 }

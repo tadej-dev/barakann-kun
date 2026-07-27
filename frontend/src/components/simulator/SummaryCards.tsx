@@ -59,12 +59,11 @@ export function SummaryCards({
         },
         weight: {
             title: "完成重量",
-            value: totalWeight / 1000,
+            value: totalWeight,
             format: {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
+                maximumFractionDigits: 0,
             },
-            suffix: " kg",
+            suffix: " g",
         },
     }
 

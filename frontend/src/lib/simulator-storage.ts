@@ -1,7 +1,9 @@
-import type {
-    ConfigId,
-    ConfigStates,
+import {
+    CONFIG_IDS,
+    type ConfigId,
+    type ConfigStates,
 } from "@/features/simulator/simulatorTypes"
+import {migrateLegacyPartSlotSelections} from "@/features/simulator/partSlots"
 
 // 保存キー
 const STORAGE_KEY = "barakann-simulator-configs-v1"
@@ -25,7 +27,25 @@ export function loadSimulatorState(): StoredSimulatorState | null {
     }
 
     try {
-        return JSON.parse(value) as StoredSimulatorState
+        const storedState = JSON.parse(value) as StoredSimulatorState
+
+        if (!storedState.configs) {
+            return null
+        }
+
+        const configs = Object.fromEntries(
+            CONFIG_IDS.map((configId) => [
+                configId,
+                migrateLegacyPartSlotSelections(
+                    storedState.configs[configId] ?? {},
+                ),
+            ]),
+        ) as ConfigStates
+
+        return {
+            ...storedState,
+            configs,
+        }
     } catch {
         return null
     }

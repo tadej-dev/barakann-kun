@@ -31,13 +31,16 @@ export function CategoryList({
                             key={category.id}
                             type="button"
                             aria-selected={isActive}
-                            disabled={isBlocked}
                             title={
                                 isBlocked
-                                    ? "選択済みの一体型パーツに含まれています"
+                                    ? "クリックして解除方法を確認"
                                     : undefined
                             }
-                            className="group flex w-full items-center rounded border border-slate-800 bg-[#101518] px-3 py-3 text-left text-xs text-slate-300 hover:border-sky-500 hover:bg-sky-500 hover:text-white aria-selected:border-sky-500 aria-selected:bg-sky-500 aria-selected:text-white disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-500 disabled:hover:border-slate-800 disabled:hover:bg-slate-900 disabled:hover:text-slate-500"
+                            className={`group flex w-full items-center rounded border px-3 py-3 text-left text-xs transition-colors aria-selected:border-sky-500 aria-selected:bg-sky-500 aria-selected:text-white ${
+                                isBlocked
+                                    ? "border-slate-800 bg-slate-900 text-slate-500 hover:border-sky-700 hover:bg-slate-800 hover:text-slate-300"
+                                    : "border-slate-800 bg-[#101518] text-slate-300 hover:border-sky-500 hover:bg-sky-500 hover:text-white"
+                            }`}
                             onClick={() =>
                                 onCategoryChange(category.key)
                             }
@@ -55,7 +58,7 @@ export function CategoryList({
 
                                 {isBlocked && (
                                     <span className="text-[10px] font-normal">
-                                        一体型パーツに含まれます
+                                        解除して選択できます
                                     </span>
                                 )}
                             </span>

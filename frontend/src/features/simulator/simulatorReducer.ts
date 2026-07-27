@@ -3,6 +3,11 @@ import type {
     ConfigStates,
     SimulatorState,
 } from "@/features/simulator/simulatorTypes"
+import {
+    getPartSlots,
+    getPartSlotCategoryKey,
+    type PartSlot,
+} from "@/features/simulator/partSlots"
 import type {Part} from "@/types/part"
 
 // シミュレーター操作の種類
@@ -12,12 +17,18 @@ type SimulatorAction =
     configId: ConfigId
 }
     | {
-    type: "changeCategory"
-    category: string
+    type: "changeSlot"
+    slot: PartSlot
 }
     | {
     type: "selectPart"
     part: Part
+    slotKeys?: string[]
+    removeSlotKeys?: string[]
+}
+    | {
+    type: "removeParts"
+    slotKeys: string[]
 }
     | {
     type: "clearActiveConfig"
@@ -44,7 +55,7 @@ export function createInitialSimulatorState(
 ): SimulatorState {
     return {
         activeConfigId: "1", // 初期表示の構成
-        activeCategory: initialCategory, // 初期表示のカテゴリー
+        activeSlot: getPartSlots(initialCategory)[0], // 初期表示の選択枠
         configs: createEmptyConfigs(), // 未選択状態の構成一覧
     }
 }
@@ -61,27 +72,30 @@ export function simulatorReducer(
                 activeConfigId: action.configId, // 選択中構成の更新
             }
 
-        case "changeCategory":
+        case "changeSlot":
             return {
                 ...state, // 現在状態の引き継ぎ
-                activeCategory: action.category, // 選択中カテゴリーの更新
+                activeSlot: action.slot, // 選択中の選択枠更新
             }
 
         case "selectPart": {
             // 現在構成の選択済みパーツ
             const currentSelectedParts =
                 state.configs[state.activeConfigId]
+            const targetSlotKeys = action.slotKeys ?? [state.activeSlot.key]
+            const removeSlotKeys = new Set(action.removeSlotKeys ?? [])
 
-            // ほかの選択済みパーツが現在カテゴリーを占有している場合は変更しない
-            const isActiveCategoryBlocked = Object.values(
+            // ほかの選択済みパーツが選択先カテゴリーを占有している場合は変更しない
+            const isTargetCategoryBlocked = Object.entries(
                 currentSelectedParts,
-            ).some((part) =>
+            ).some(([slotKey, part]) =>
+                !removeSlotKeys.has(slotKey) &&
                 (part.blockedCategoryKeys ?? []).includes(
-                    state.activeCategory,
+                    state.activeSlot.categoryKey,
                 ),
             )
 
-            if (isActiveCategoryBlocked) {
+            if (isTargetCategoryBlocked) {
                 return state
             }
 
@@ -90,12 +104,43 @@ export function simulatorReducer(
                 ...currentSelectedParts,
             }
 
-            for (const categoryKey of
-                action.part.blockedCategoryKeys ?? []) {
-                delete nextSelectedParts[categoryKey]
+            for (const slotKey of removeSlotKeys) {
+                delete nextSelectedParts[slotKey]
             }
 
-            nextSelectedParts[state.activeCategory] = action.part
+            for (const categoryKey of
+                action.part.blockedCategoryKeys ?? []) {
+                for (const slotKey of Object.keys(nextSelectedParts)) {
+                    if (
+                        getPartSlotCategoryKey(slotKey) === categoryKey
+                    ) {
+                        delete nextSelectedParts[slotKey]
+                    }
+                }
+            }
+
+            for (const slotKey of targetSlotKeys) {
+                nextSelectedParts[slotKey] = action.part
+            }
+
+            return {
+                ...state, // 現在状態の引き継ぎ
+                configs: {
+                    ...state.configs, // 他構成の選択状態
+                    [state.activeConfigId]: nextSelectedParts,
+                },
+            }
+        }
+
+        case "removeParts": {
+            // 現在構成の選択済みパーツ
+            const nextSelectedParts = {
+                ...state.configs[state.activeConfigId],
+            }
+
+            for (const slotKey of action.slotKeys) {
+                delete nextSelectedParts[slotKey]
+            }
 
             return {
                 ...state, // 現在状態の引き継ぎ
@@ -109,6 +154,7 @@ export function simulatorReducer(
         case "clearActiveConfig":
             return {
                 ...state, // 現在状態の引き継ぎ
+                activeSlot: getPartSlots("frame")[0], // フレーム選択へ戻す
                 configs: {
                     ...state.configs, // 他構成の選択状態
                     [state.activeConfigId]: {}, // 現在構成の初期化

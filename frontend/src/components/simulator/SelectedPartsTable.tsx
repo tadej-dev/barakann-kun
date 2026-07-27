@@ -9,15 +9,20 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import {
+    getPartSlotPositionLabel,
+    getPartSlots,
+    type PartSlot,
+} from "@/features/simulator/partSlots"
+import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Category} from "@/types/category"
-import type {Part} from "@/types/part"
 
 type SelectedPartsTableProps = {
     categories: Category[]
-    activeCategory: string
-    selectedParts: Record<string, Part>
+    activeSlotKey: string
+    selectedParts: SelectedParts
     blockedCategoryKeys: ReadonlySet<string>
-    onCategoryChange: (category: string) => void
+    onSlotChange: (slot: PartSlot) => void
 }
 
 const priceFormatter = new Intl.NumberFormat("ja-JP", {
@@ -28,24 +33,22 @@ const priceFormatter = new Intl.NumberFormat("ja-JP", {
 
 export function SelectedPartsTable({
                                        categories,
-                                       activeCategory,
+                                       activeSlotKey,
                                        selectedParts,
                                        blockedCategoryKeys,
-                                       onCategoryChange,
+                                       onSlotChange,
                                    }: SelectedPartsTableProps) {
-    function selectCategory(categoryKey: string) {
-        if (!blockedCategoryKeys.has(categoryKey)) {
-            onCategoryChange(categoryKey)
-        }
+    function selectSlot(slot: PartSlot) {
+        onSlotChange(slot)
     }
 
     function handleRowKeyDown(
         event: KeyboardEvent<HTMLTableRowElement>,
-        categoryKey: string,
+        slot: PartSlot,
     ) {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
-            selectCategory(categoryKey)
+            selectSlot(slot)
         }
     }
 
@@ -73,79 +76,93 @@ export function SelectedPartsTable({
                 </TableHeader>
 
                 <TableBody className="font-bold">
-                    {categories.map((category) => {
-                        const part = selectedParts[category.key]
-                        const isActive = category.key === activeCategory
-                        const isBlocked = blockedCategoryKeys.has(category.key)
+                    {categories.flatMap((category) => {
+                        return getPartSlots(category.key).map((slot) => {
+                            const part = selectedParts[slot.key]
+                            const positionLabel = getPartSlotPositionLabel(
+                                slot.position,
+                            )
+                            const isActive = slot.key === activeSlotKey
+                            const isBlocked = blockedCategoryKeys.has(
+                                category.key,
+                            )
 
-                        return (
-                            <TableRow
-                                key={category.key}
-                                tabIndex={isBlocked ? -1 : 0}
-                                aria-disabled={isBlocked}
-                                aria-selected={isActive}
-                                data-state={
-                                    isActive ? "selected" : undefined
-                                }
-                                className={
-                                    isBlocked
-                                        ? "cursor-not-allowed bg-muted/40 text-muted-foreground opacity-70 hover:bg-muted/40"
-                                        : isActive
-                                            ? "cursor-pointer bg-muted hover:bg-muted"
-                                            : "cursor-pointer"
-                                }
-                                onClick={() => selectCategory(category.key)}
-                                onKeyDown={(event) =>
-                                    handleRowKeyDown(event, category.key)
-                                }
-                            >
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-semibold">
-                                            {category.displayName}
-                                        </span>
-                                    </div>
-                                </TableCell>
+                            return (
+                                <TableRow
+                                    key={slot.key}
+                                    tabIndex={0}
+                                    aria-selected={isActive}
+                                    data-state={
+                                        isActive ? "selected" : undefined
+                                    }
+                                    className={
+                                        isBlocked
+                                            ? isActive
+                                                ? "cursor-pointer bg-muted text-muted-foreground hover:bg-muted"
+                                                : "cursor-pointer bg-muted/40 text-muted-foreground opacity-70 hover:bg-muted/70"
+                                            : isActive
+                                                ? "cursor-pointer bg-muted hover:bg-muted"
+                                                : "cursor-pointer"
+                                    }
+                                    onClick={() => selectSlot(slot)}
+                                    onKeyDown={(event) =>
+                                        handleRowKeyDown(event, slot)
+                                    }
+                                >
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold">
+                                                {category.displayName}
+                                            </span>
 
-                                <TableCell className="whitespace-normal">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span
-                                            className={`min-w-0 break-words [overflow-wrap:anywhere] ${
-                                                part && !isBlocked
-                                                    ? "font-medium text-slate-900"
-                                                    : "font-medium text-slate-400"
-                                            }`}
-                                        >
-                                            {isBlocked
-                                                ? "一体型パーツに含まれます"
-                                                : part?.name ?? "未選択"}
-                                        </span>
-
-                                        {part &&
-                                            !isBlocked &&
-                                            (part.blockedCategoryKeys ?? []).includes(
-                                                "stem",
-                                            ) && (
-                                                <Badge className="bg-sky-100 text-sky-800">
-                                                    ステム一体型
+                                            {positionLabel && (
+                                                <Badge variant="outline">
+                                                    {positionLabel}
                                                 </Badge>
                                             )}
-                                    </div>
-                                </TableCell>
+                                        </div>
+                                    </TableCell>
 
-                                <TableCell className="text-left tabular-nums">
-                                    {part && !isBlocked
-                                        ? `${part.weight.toLocaleString("ja-JP")}g`
-                                        : "-"}
-                                </TableCell>
+                                    <TableCell className="whitespace-normal">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span
+                                                className={`min-w-0 break-words [overflow-wrap:anywhere] ${
+                                                    part && !isBlocked
+                                                        ? "font-medium text-slate-900"
+                                                        : "font-medium text-slate-400"
+                                                }`}
+                                            >
+                                                {isBlocked
+                                                    ? "解除して選択できます"
+                                                    : part?.name ?? "未選択"}
+                                            </span>
 
-                                <TableCell>
-                                    {part && !isBlocked
-                                        ? priceFormatter.format(part.price)
-                                        : "-"}
-                                </TableCell>
-                            </TableRow>
-                        )
+                                            {part &&
+                                                !isBlocked &&
+                                                (part.blockedCategoryKeys ?? []).includes(
+                                                    "stem",
+                                                ) && (
+                                                    <Badge className="bg-sky-100 text-sky-800">
+                                                        ステム一体型
+                                                    </Badge>
+                                                )}
+                                        </div>
+                                    </TableCell>
+
+                                    <TableCell className="text-left tabular-nums">
+                                        {part && !isBlocked
+                                            ? `${part.weight.toLocaleString("ja-JP")}g`
+                                            : "-"}
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {part && !isBlocked
+                                            ? priceFormatter.format(part.price)
+                                            : "-"}
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        })
                     })}
                 </TableBody>
             </Table>

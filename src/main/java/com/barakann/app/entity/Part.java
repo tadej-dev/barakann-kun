@@ -42,6 +42,11 @@ public class Part {
     @OrderBy("id ASC")
     private Set<PartIncludedItem> includedItems = new LinkedHashSet<>();
 
+    // 適合判定と表示に利用する規格情報
+    @OneToMany(mappedBy = "part", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private Set<PartSpecification> specifications = new LinkedHashSet<>();
+
     @Column(nullable = false, length = 150)
     private String name;
 

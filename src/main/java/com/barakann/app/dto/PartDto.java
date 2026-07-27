@@ -4,6 +4,8 @@ import com.barakann.app.entity.Part;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PartDto {
@@ -13,11 +15,13 @@ public class PartDto {
     private String modelName;
     private String variantName;
     private String brandName;
+    private String categoryKey;
     private Integer weight;
     private Integer price;
     private LocalDateTime priceUpdatedAt;
     private List<PartIncludedItemDto> includedItems;
     private List<String> blockedCategoryKeys;
+    private Map<String, String> specifications;
 
     public PartDto() {
     }
@@ -28,22 +32,26 @@ public class PartDto {
             String modelName,
             String variantName,
             String brandName,
+            String categoryKey,
             Integer weight,
             Integer price,
             LocalDateTime priceUpdatedAt,
             List<PartIncludedItemDto> includedItems,
-            List<String> blockedCategoryKeys
+            List<String> blockedCategoryKeys,
+            Map<String, String> specifications
     ) {
         this.id = id;
         this.name = name;
         this.modelName = modelName;
         this.variantName = variantName;
         this.brandName = brandName;
+        this.categoryKey = categoryKey;
         this.weight = weight;
         this.price = price;
         this.priceUpdatedAt = priceUpdatedAt;
         this.includedItems = includedItems;
         this.blockedCategoryKeys = blockedCategoryKeys;
+        this.specifications = specifications;
     }
 
     public static PartDto from(Part part) {
@@ -65,6 +73,13 @@ public class PartDto {
                 .sorted()
                 .toList();
 
+        Map<String, String> specifications = part.getSpecifications()
+                .stream()
+                .collect(Collectors.toMap(
+                        specification -> specification.getKey(),
+                        specification -> specification.getValue()
+                ));
+
         return new PartDto(
                 part.getId(),
                 part.getName(),
@@ -73,13 +88,15 @@ public class PartDto {
                         : part.getModelName(),
                 part.getVariantName(),
                 part.getBrand().getName(),
+                part.getCategory().getKey(),
                 part.getWeight(),
                 part.getPrice(),
                 part.getPriceUpdatedAt() == null
                         ? part.getUpdatedAt()
                         : part.getPriceUpdatedAt(),
                 includedItems,
-                blockedCategoryKeys
+                blockedCategoryKeys,
+                specifications
         );
     }
 
@@ -103,6 +120,10 @@ public class PartDto {
         return brandName;
     }
 
+    public String getCategoryKey() {
+        return categoryKey;
+    }
+
     public Integer getWeight() {
         return weight;
     }
@@ -121,6 +142,10 @@ public class PartDto {
 
     public List<String> getBlockedCategoryKeys() {
         return blockedCategoryKeys;
+    }
+
+    public Map<String, String> getSpecifications() {
+        return specifications;
     }
 
     public void setId(Long id) {
@@ -143,6 +168,10 @@ public class PartDto {
         this.brandName = brandName;
     }
 
+    public void setCategoryKey(String categoryKey) {
+        this.categoryKey = categoryKey;
+    }
+
     public void setWeight(Integer weight) {
         this.weight = weight;
     }
@@ -161,5 +190,9 @@ public class PartDto {
 
     public void setBlockedCategoryKeys(List<String> blockedCategoryKeys) {
         this.blockedCategoryKeys = blockedCategoryKeys;
+    }
+
+    public void setSpecifications(Map<String, String> specifications) {
+        this.specifications = specifications;
     }
 }
