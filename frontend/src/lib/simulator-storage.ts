@@ -5,45 +5,84 @@ import {
 } from "@/features/simulator/simulatorTypes"
 import {migrateLegacyPartSlotSelections} from "@/features/simulator/partSlots"
 
-// 保存キー
-const STORAGE_KEY = "barakann-simulator-configs-v1"
+const STORAGE_KEY = "barakann-simulator-configs-v2"
+const LEGACY_STORAGE_KEY = "barakann-simulator-configs-v1"
 
-// 保存対象の状態
-type StoredSimulatorState = {
-    activeConfigId: ConfigId // 最後に選択していた構成ID
-    configs: ConfigStates // 構成別の選択状態
+type StoredSelections = Record<string, number>
+type StoredConfigStates = Record<ConfigId, StoredSelections>
+
+export type StoredSimulatorState = {
+    activeConfigId: ConfigId
+    configs: StoredConfigStates
 }
 
-// localStorageから状態を取得
-export function loadSimulatorState(): StoredSimulatorState | null {
-    if (typeof window === "undefined") {
-        return null
+type SimulatorStorageSource = {
+    activeConfigId: ConfigId
+    configs: ConfigStates
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function isConfigId(value: unknown): value is ConfigId {
+    return typeof value === "string" && CONFIG_IDS.includes(value as ConfigId)
+}
+
+function getStoredPartId(value: unknown) {
+    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+        return value
     }
 
-    const value = window.localStorage.getItem(STORAGE_KEY)
-
-    if (!value) {
-        return null
+    if (
+        isRecord(value) &&
+        typeof value.id === "number" &&
+        Number.isSafeInteger(value.id) &&
+        value.id > 0
+    ) {
+        return value.id
     }
 
+    return null
+}
+
+function parseStoredState(value: string): StoredSimulatorState | null {
     try {
-        const storedState = JSON.parse(value) as StoredSimulatorState
+        const storedState: unknown = JSON.parse(value)
 
-        if (!storedState.configs) {
+        if (
+            !isRecord(storedState) ||
+            !isConfigId(storedState.activeConfigId) ||
+            !isRecord(storedState.configs)
+        ) {
             return null
         }
 
         const configs = Object.fromEntries(
-            CONFIG_IDS.map((configId) => [
-                configId,
-                migrateLegacyPartSlotSelections(
-                    storedState.configs[configId] ?? {},
-                ),
-            ]),
-        ) as ConfigStates
+            CONFIG_IDS.map((configId) => {
+                const rawSelections = isRecord(storedState.configs)
+                    && isRecord(storedState.configs[configId])
+                    ? storedState.configs[configId]
+                    : {}
+                const migratedSelections = migrateLegacyPartSlotSelections(
+                    rawSelections,
+                )
+                const selections = Object.fromEntries(
+                    Object.entries(migratedSelections).flatMap(
+                        ([slotKey, storedPart]) => {
+                            const partId = getStoredPartId(storedPart)
+
+                            return partId === null ? [] : [[slotKey, partId]]
+                        },
+                    ),
+                ) as StoredSelections
+
+                return [configId, selections]
+            }),
+        ) as StoredConfigStates
 
         return {
-            ...storedState,
+            activeConfigId: storedState.activeConfigId,
             configs,
         }
     } catch {
@@ -51,17 +90,51 @@ export function loadSimulatorState(): StoredSimulatorState | null {
     }
 }
 
-// localStorageへ状態を保存
-export function saveSimulatorState(
-    state: StoredSimulatorState,
-) {
-    window.localStorage.setItem(
-        STORAGE_KEY, // 保存キー
-        JSON.stringify(state), // JSON文字列化した保存内容
-    )
+export function loadSimulatorState(): StoredSimulatorState | null {
+    if (typeof window === "undefined") {
+        return null
+    }
+
+    for (const storageKey of [STORAGE_KEY, LEGACY_STORAGE_KEY]) {
+        const value = window.localStorage.getItem(storageKey)
+
+        if (!value) {
+            continue
+        }
+
+        const storedState = parseStoredState(value)
+
+        if (storedState) {
+            return storedState
+        }
+    }
+
+    return null
 }
 
-// localStorageの状態を削除
+export function saveSimulatorState(state: SimulatorStorageSource) {
+    const configs = Object.fromEntries(
+        CONFIG_IDS.map((configId) => [
+            configId,
+            Object.fromEntries(
+                Object.entries(state.configs[configId]).map(
+                    ([slotKey, part]) => [slotKey, part.id],
+                ),
+            ),
+        ]),
+    ) as StoredConfigStates
+
+    window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+            activeConfigId: state.activeConfigId,
+            configs,
+        } satisfies StoredSimulatorState),
+    )
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+}
+
 export function clearSimulatorState() {
     window.localStorage.removeItem(STORAGE_KEY)
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
 }

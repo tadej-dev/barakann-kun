@@ -28,14 +28,12 @@ const priceFormatter = new Intl.NumberFormat("ja-JP", {
 
 const compatibilityBadgeStyles = {
     compatible: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    recommended: "border-sky-300 bg-sky-50 text-sky-700",
     unknown: "border-amber-300 bg-amber-50 text-amber-700",
     incompatible: "border-red-300 bg-red-50 text-red-700",
 }
 
 const compatibilityLabels = {
     compatible: "適合",
-    recommended: "推奨",
     unknown: "規格未確認",
     incompatible: "非互換",
 }
@@ -51,13 +49,13 @@ export function CandidatePartsTableRow({
 }: CandidatePartsTableRowProps) {
     const includedItems = part.includedItems ?? []
     const specifications = Object.entries(part.specifications ?? {})
-    const isPositionMismatch = compatibility?.positionMismatch ?? false
+    const isSelectionBlocked = compatibility?.selectionBlocked ?? false
 
     // キーボードによるパーツ選択処理
     function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
-            if (!isPositionMismatch) {
+            if (!isSelectionBlocked) {
                 onSelect()
             }
         }
@@ -69,15 +67,15 @@ export function CandidatePartsTableRow({
             aria-selected={isSelected}
             data-state={isSelected ? "selected" : undefined}
             className={
-                isPositionMismatch
+                isSelectionBlocked
                     ? "cursor-not-allowed bg-muted/30 text-muted-foreground"
                     : isSelected
                     ? "cursor-pointer bg-muted hover:bg-muted"
                     : "cursor-pointer"
             }
-            aria-disabled={isPositionMismatch}
+            aria-disabled={isSelectionBlocked}
             onClick={() => {
-                if (!isPositionMismatch) {
+                if (!isSelectionBlocked) {
                     onSelect()
                 }
             }}

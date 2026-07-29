@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useReducer, useState} from "react"
 
-import {fetchParts} from "@/api/parts"
+import {fetchParts, fetchPartsByIds} from "@/api/parts"
 import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
 import {CategoryList} from "@/components/simulator/CategoryList"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
@@ -19,6 +19,7 @@ import {
 import {
     CONFIG_IDS,
     type ConfigId,
+    type ConfigStates,
     type SelectedParts,
 } from "@/features/simulator/simulatorTypes"
 import {
@@ -36,18 +37,26 @@ type SimulatorProps = {
 // 空の選択済みパーツ
 const EMPTY_SELECTED_PARTS: SelectedParts = {}
 
-// 構成IDの判定
-function isConfigId(value: unknown): value is ConfigId {
-    return (
-        typeof value === "string" &&
-        CONFIG_IDS.includes(value as ConfigId)
-    )
-}
-
 // シミュレーター本体
 export function Simulator({
                               categories,
                           }: SimulatorProps) {
+    const [storedState] = useState(loadSimulatorState)
+    const storedPartIds = useMemo(
+        () => Array.from(new Set(
+            storedState
+                ? Object.values(storedState.configs).flatMap((selections) =>
+                    Object.values(selections),
+                )
+                : [],
+        )),
+        [storedState],
+    )
+    const [hasRestoredStoredParts, setHasRestoredStoredParts] = useState(
+        storedPartIds.length === 0,
+    )
+    const [restoreError, setRestoreError] = useState("")
+
     // シミュレーターの状態管理
     const [simulatorState, dispatch] = useReducer(
         simulatorReducer, // 状態更新処理
@@ -58,24 +67,13 @@ export function Simulator({
                 initialCategory, // 初期カテゴリーキー
             )
 
-            // 保存済み状態
-            const savedState = loadSimulatorState()
-
-            if (
-                !savedState ||
-                !savedState.configs ||
-                !isConfigId(savedState.activeConfigId)
-            ) {
+            if (!storedState) {
                 return initialState
             }
 
             return {
                 ...initialState, // 初期状態の引き継ぎ
-                activeConfigId: savedState.activeConfigId, // 保存済み構成ID
-                configs: {
-                    ...initialState.configs, // 空の構成状態
-                    ...savedState.configs, // 保存済み構成状態
-                },
+                activeConfigId: storedState.activeConfigId, // 保存済み構成ID
             }
         },
     )
@@ -92,8 +90,71 @@ export function Simulator({
     // 構成別の選択状態
     const {configs} = simulatorState
 
+    // 保存済みIDから最新のパーツ情報を復元
+    useEffect(() => {
+        if (!storedState || storedPartIds.length === 0) {
+            return
+        }
+
+        const controller = new AbortController()
+        const stateToRestore = storedState
+
+        async function restoreStoredParts() {
+            try {
+                const parts = await fetchPartsByIds(
+                    storedPartIds,
+                    controller.signal,
+                )
+                const partsById = new Map(
+                    parts.map((part) => [part.id, part]),
+                )
+                const restoredConfigs = Object.fromEntries(
+                    CONFIG_IDS.map((configId) => [
+                        configId,
+                        Object.fromEntries(
+                            Object.entries(stateToRestore.configs[configId]).flatMap(
+                                ([slotKey, partId]) => {
+                                    const part = partsById.get(partId)
+
+                                    return part?.categoryKey ===
+                                        getPartSlotCategoryKey(slotKey)
+                                        ? [[slotKey, part]]
+                                        : []
+                                },
+                            ),
+                        ),
+                    ]),
+                ) as ConfigStates
+
+                dispatch({
+                    type: "restore",
+                    activeConfigId: stateToRestore.activeConfigId,
+                    configs: restoredConfigs,
+                })
+                setRestoreError("")
+                setHasRestoredStoredParts(true)
+            } catch (error) {
+                if (!controller.signal.aborted) {
+                    setRestoreError(
+                        error instanceof Error
+                            ? error.message
+                            : "保存済み構成の復元に失敗しました",
+                    )
+                }
+            }
+        }
+
+        void restoreStoredParts()
+
+        return () => controller.abort()
+    }, [storedPartIds, storedState])
+
     // 構成変更時の保存
     useEffect(() => {
+        if (!hasRestoredStoredParts) {
+            return
+        }
+
         saveSimulatorState({
             activeConfigId, // 現在の構成ID
             configs, // 現在の構成状態
@@ -101,6 +162,7 @@ export function Simulator({
     }, [
         activeConfigId, // 構成切り替え時の保存
         configs, // パーツ選択時の保存
+        hasRestoredStoredParts, // 保存済み構成復元後の保存
     ])
 
     // 現在構成の選択済みパーツ
@@ -324,6 +386,12 @@ export function Simulator({
                         onConfigChange={changeConfig}
                         onClearActiveConfig={clearActiveConfig}
                     />
+
+                    {restoreError && (
+                        <p className="mt-3 text-sm font-medium text-destructive">
+                            {restoreError}。ページを再読み込みしてください。
+                        </p>
+                    )}
 
                     <div
                         className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">

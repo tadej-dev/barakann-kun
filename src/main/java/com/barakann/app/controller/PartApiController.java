@@ -21,4 +21,9 @@ public class PartApiController {
     public List<PartDto> getParts(@RequestParam String category) {
         return partService.findPartsByCategory(category);
     }
+
+    @GetMapping("/api/parts/by-ids")
+    public List<PartDto> getPartsByIds(@RequestParam List<Long> ids) {
+        return partService.findPartsByIds(ids);
+    }
 }

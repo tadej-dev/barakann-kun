@@ -5,6 +5,7 @@ import com.barakann.app.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 
 @Service
@@ -19,6 +20,14 @@ public class PartService {
     @Transactional(readOnly = true)
     public List<PartDto> findPartsByCategory(String key) {
         return partRepository.findByCategory_KeyOrderByIdAsc(key)
+                .stream()
+                .map(PartDto::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PartDto> findPartsByIds(Collection<Long> ids) {
+        return partRepository.findByIdInOrderByIdAsc(ids)
                 .stream()
                 .map(PartDto::from)
                 .toList();

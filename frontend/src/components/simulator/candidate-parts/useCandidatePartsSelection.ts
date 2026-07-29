@@ -37,7 +37,7 @@ export function useCandidatePartsSelection(
             evaluatePartCompatibility(part, slot, selectedParts),
         )
 
-        if (compatibilityResults.some((result) => result?.positionMismatch)) {
+        if (compatibilityResults.some((result) => result?.selectionBlocked)) {
             return
         }
 

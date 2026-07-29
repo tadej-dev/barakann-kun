@@ -8,7 +8,6 @@ import type {Part} from "@/types/part"
 
 export type CompatibilityStatus =
     | "compatible"
-    | "recommended"
     | "unknown"
     | "incompatible"
 
@@ -16,25 +15,40 @@ export type CompatibilityResult = {
     status: CompatibilityStatus
     reasons: string[]
     conflictingSlotKeys: string[]
-    positionMismatch: boolean
+    selectionBlocked: boolean
 }
 
 type EqualityRule = {
     categories: readonly [string, string]
     specificationKey: string
     label: string
+    protectedCategory?: string
+    protectedCategoryLabel?: string
 }
 
 const EQUALITY_RULES: EqualityRule[] = [
-    {categories: ["wheel", "tire"], specificationKey: "wheel_diameter", label: "ホイール径"},
-    {categories: ["wheel", "inner_tube"], specificationKey: "wheel_diameter", label: "ホイール径"},
-    {categories: ["wheel", "disc_rotor"], specificationKey: "rotor_mount", label: "ローター取付方式"},
     {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
-    {categories: ["frame", "handlebar"], specificationKey: "cockpit_interface", label: "コックピット規格"},
-    {categories: ["frame", "seatpost"], specificationKey: "seatpost_diameter_mm", label: "シートポスト径"},
-    {categories: ["frame", "bottom_bracket"], specificationKey: "bb_standard", label: "BB規格"},
-    {categories: ["bottom_bracket", "crankset"], specificationKey: "crank_spindle", label: "クランク軸規格"},
-    {categories: ["wheel", "cassette"], specificationKey: "freehub_body", label: "フリーボディ"},
+    {
+        categories: ["frame", "handlebar"],
+        specificationKey: "cockpit_interface",
+        label: "コックピット規格",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+    },
+    {
+        categories: ["frame", "seatpost"],
+        specificationKey: "seatpost_diameter_mm",
+        label: "シートポスト径",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+    },
+    {
+        categories: ["frame", "bottom_bracket"],
+        specificationKey: "bb_standard",
+        label: "BB規格",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+    },
 ]
 
 const SPECIFICATION_LABELS: Record<string, string> = {
@@ -57,10 +71,13 @@ const SPECIFICATION_LABELS: Record<string, string> = {
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "6_bolt": "6ボルト",
     center_lock: "センターロック",
+    campagnolo_db310: "Campagnolo DB-310形状",
     front: "前輪専用",
     pair: "前後セット",
     rear: "後輪専用",
+    shimano_road_flat_mount: "Shimano ロード用フラットマウント形状",
     single: "1個単位",
+    sram_road_axs: "SRAM Road AXS形状",
 }
 
 function getCategoryKey(part: Part, slotKey: string) {
@@ -178,6 +195,7 @@ export function evaluatePartCompatibility(
     let hasRelevantSelection = false
     let hasUnknown = false
     let hasCompatible = false
+    let selectionBlocked = false
     const allowedPosition = getSpecification(candidate, "allowed_position")
 
     if (
@@ -189,7 +207,7 @@ export function evaluatePartCompatibility(
             status: "incompatible",
             reasons: [`${getSpecificationValueLabel("allowed_position", allowedPosition)}の製品です`],
             conflictingSlotKeys: [],
-            positionMismatch: true,
+            selectionBlocked: true,
         }
     }
 
@@ -225,16 +243,28 @@ export function evaluatePartCompatibility(
                 continue
             }
 
-            hasRelevantSelection = true
             const candidateValue = getSpecification(candidate, rule.specificationKey)
             const selectedValue = getSpecification(selectedPart, rule.specificationKey)
+
+            if (!candidateValue && !selectedValue) {
+                continue
+            }
+
+            hasRelevantSelection = true
 
             if (!candidateValue || !selectedValue) {
                 hasUnknown = true
                 reasons.push(`${rule.label}が未確認です`)
             } else if (candidateValue !== selectedValue) {
-                conflictingSlotKeys.add(selectedSlotKey)
-                reasons.push(`${rule.label}が一致しません`)
+                if (selectedCategory === rule.protectedCategory) {
+                    selectionBlocked = true
+                    reasons.push(
+                        `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,
+                    )
+                } else {
+                    conflictingSlotKeys.add(selectedSlotKey)
+                    reasons.push(`${rule.label}が一致しません`)
+                }
             } else {
                 hasCompatible = true
                 reasons.push(`${rule.label}が適合します`)
@@ -242,12 +272,12 @@ export function evaluatePartCompatibility(
         }
     }
 
-    if (conflictingSlotKeys.size > 0) {
+    if (selectionBlocked || conflictingSlotKeys.size > 0) {
         return {
             status: "incompatible",
             reasons,
             conflictingSlotKeys: Array.from(conflictingSlotKeys),
-            positionMismatch: false,
+            selectionBlocked,
         }
     }
 
@@ -259,6 +289,6 @@ export function evaluatePartCompatibility(
         status: hasUnknown ? "unknown" : hasCompatible ? "compatible" : "unknown",
         reasons,
         conflictingSlotKeys: [],
-        positionMismatch: false,
+        selectionBlocked: false,
     }
 }
