@@ -1,6 +1,6 @@
-target/
 .env
-.env.example
+.env.*
+!.env.example
 .idea/
 .vscode/
 *.iml
@@ -9,5 +9,5 @@ target/
 # Logs
 *.log
 
-# Docker / local runtime
-docker-compose.override.yml
+# Local runtime
+node_modules/

@@ -1,0 +1,18 @@
+{
+  "name": "barakann-kun",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm ci --prefix api && npm ci --prefix frontend && npm run db:migrate:local",
+    "dev": "concurrently --kill-others --names api,frontend --prefix-colors cyan,magenta \"npm --prefix api run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix api run build",
+    "test": "npm --prefix api test && npm --prefix frontend test",
+    "lint": "npm --prefix api run typecheck && npm --prefix frontend run lint",
+    "db:migrate:local": "npm --prefix api run db:migrate:local",
+    "db:migrate:remote": "npm --prefix api run db:migrate:remote",
+    "deploy": "npm --prefix api run deploy"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
+  }
+}
