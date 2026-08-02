@@ -9,6 +9,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
     getPartSlotPositionLabel,
     getPartSlots,
@@ -134,7 +135,9 @@ export function SelectedPartsTable({
                                             >
                                                 {isBlocked
                                                     ? "解除して選択できます"
-                                                    : part?.name ?? "未選択"}
+                                                    : part
+                                                    ? getPartDisplayName(part)
+                                                    : "未選択"}
                                             </span>
 
                                             {part &&

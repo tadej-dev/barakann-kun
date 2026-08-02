@@ -4,12 +4,14 @@ import {createApp} from "../src/app"
 import type {CatalogRepository} from "../src/db/catalog-repository"
 import type {Category, Part} from "../src/types"
 
+// APIレスポンスに使用するテスト用カテゴリー
 const category: Category = {
     id: 1,
     key: "frame",
     displayName: "フレーム",
 }
 
+// APIレスポンスに使用するテスト用パーツ
 const part: Part = {
     id: 1,
     name: "Test Frame",
@@ -25,6 +27,7 @@ const part: Part = {
     specifications: {},
 }
 
+// D1を使わずにルートの振る舞いを検証するRepositoryモック
 function createRepository(): CatalogRepository {
     return {
         findCategories: async () => [category],
@@ -37,6 +40,7 @@ function createRepository(): CatalogRepository {
     }
 }
 
+// カタログAPIのルートテスト
 describe("catalog API", () => {
     const app = createApp({catalogRepository: createRepository()})
 

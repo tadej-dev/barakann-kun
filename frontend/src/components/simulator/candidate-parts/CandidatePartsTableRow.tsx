@@ -9,11 +9,13 @@ import {
     getSpecificationValueLabel,
     type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type { Part } from "@/types/part"
 
 type CandidatePartsTableRowProps = {
     part: Part
     isSelected: boolean
+    showVariantColumn: boolean
     compatibility: CompatibilityResult | null
     canSelectBoth: boolean
     onSelect: () => void
@@ -42,6 +44,7 @@ const compatibilityLabels = {
 export function CandidatePartsTableRow({
     part,
     isSelected,
+    showVariantColumn,
     compatibility,
     canSelectBoth,
     onSelect,
@@ -89,7 +92,7 @@ export function CandidatePartsTableRow({
                 <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">
-                            {part.modelName?.trim() || part.name}
+                            {getPartDisplayName(part)}
                         </span>
 
                         {(part.blockedCategoryKeys ?? []).includes("stem") && (
@@ -144,23 +147,25 @@ export function CandidatePartsTableRow({
                 </div>
             </TableCell>
 
-            <TableCell>
-                {part.variantName ? (
-                    <Badge variant="secondary">{part.variantName}</Badge>
-                ) : (
-                    <span className="text-muted-foreground">-</span>
-                )}
+            {showVariantColumn && (
+                <TableCell>
+                    {part.variantName ? (
+                        <Badge variant="secondary">{part.variantName}</Badge>
+                    ) : (
+                        <span className="text-muted-foreground">-</span>
+                    )}
 
-                {specifications.length > 0 && (
-                    <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-normal text-muted-foreground">
-                        {specifications.map(([key, value]) => (
-                            <span key={key}>
-                                {getSpecificationLabel(key)}: {getSpecificationValueLabel(key, value)}
-                            </span>
-                        ))}
-                    </div>
-                )}
-            </TableCell>
+                    {specifications.length > 0 && (
+                        <div className="mt-1 flex flex-col gap-0.5 text-[10px] font-normal text-muted-foreground">
+                            {specifications.map(([key, value]) => (
+                                <span key={key}>
+                                    {getSpecificationLabel(key)}: {getSpecificationValueLabel(key, value)}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </TableCell>
+            )}
 
             <TableCell className="text-right tabular-nums">
                 {part.weight.toLocaleString("ja-JP")}g

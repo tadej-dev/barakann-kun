@@ -10,6 +10,7 @@ import type {ReactNode} from "react"
 
 type CandidatePartsTableMessageProps = {
     message: string
+    showVariantColumn?: boolean
     className?: string
     children?: ReactNode
 }
@@ -17,6 +18,7 @@ type CandidatePartsTableMessageProps = {
 // 候補パーツ表の状態メッセージ
 export function CandidatePartsTableMessage({
     message,
+    showVariantColumn = true,
     className = "text-muted-foreground",
     children,
 }: CandidatePartsTableMessageProps) {
@@ -28,9 +30,11 @@ export function CandidatePartsTableMessage({
             >
                 <TableHeader className="bg-muted/70">
                     <TableRow className="hover:bg-transparent">
-                        <TableHead className="h-11 w-[15%] text-xs font-semibold tracking-wide text-muted-foreground">ブランド</TableHead>
-                        <TableHead className="h-11 w-[35%] text-xs font-semibold tracking-wide text-muted-foreground">製品名</TableHead>
-                        <TableHead className="h-11 w-[20%] text-xs font-semibold tracking-wide text-muted-foreground">バリエーション</TableHead>
+                        <TableHead className="h-11 w-[15%] text-xs font-semibold tracking-wide text-muted-foreground">メーカー</TableHead>
+                        <TableHead className={`h-11 text-xs font-semibold tracking-wide text-muted-foreground ${showVariantColumn ? "w-[35%]" : "w-[55%]"}`}>製品名</TableHead>
+                        {showVariantColumn && (
+                            <TableHead className="h-11 w-[20%] text-xs font-semibold tracking-wide text-muted-foreground">バリエーション</TableHead>
+                        )}
                         <TableHead className="h-11 w-[12%] text-right text-xs font-semibold tracking-wide text-muted-foreground">重量</TableHead>
                         <TableHead className="h-11 w-[18%] text-right text-xs font-semibold tracking-wide text-muted-foreground">価格</TableHead>
                     </TableRow>
@@ -38,7 +42,7 @@ export function CandidatePartsTableMessage({
                 <TableBody>
                     <TableRow className="hover:bg-transparent">
                         <TableCell
-                            colSpan={5}
+                            colSpan={showVariantColumn ? 5 : 4}
                             className={`h-24 text-center ${className}`}
                         >
                             <div className="flex flex-col items-center gap-3">

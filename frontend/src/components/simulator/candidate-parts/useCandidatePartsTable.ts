@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type { Part } from "@/types/part"
 
 // 並び替え対象
@@ -18,7 +19,7 @@ export function useCandidatePartsTable(parts: Part[]) {
     // 並び替え状態
     const [sortDescriptor, setSortDescriptor] =
         useState<CandidatePartsSortDescriptor>({
-            column: "name",
+            column: "brand",
             direction: "ascending",
         })
     // 製品名の検索文字列
@@ -88,15 +89,24 @@ export function useCandidatePartsTable(parts: Part[]) {
             if (column === "brand" || column === "name") {
                 const aValue = column === "brand"
                     ? a.brandName ?? ""
-                    : a.name
+                    : getPartDisplayName(a)
                 const bValue = column === "brand"
                     ? b.brandName ?? ""
-                    : b.name
-                const result = aValue.localeCompare(
+                    : getPartDisplayName(b)
+                let result = aValue.localeCompare(
                     bValue,
                     "ja-JP",
                     { numeric: true },
                 )
+
+                // 同じメーカー内では製品名で比較
+                if (result === 0 && column === "brand") {
+                    result = getPartDisplayName(a).localeCompare(
+                        getPartDisplayName(b),
+                        "ja-JP",
+                        { numeric: true },
+                    )
+                }
 
                 return direction === "ascending" ? result : -result
             }

@@ -38,12 +38,15 @@ type SpecificationRow = {
     spec_value: string
 }
 
+// D1のバインド変数上限を考慮した関連データ取得単位
 const RELATED_QUERY_BATCH_SIZE = 100
 
+// IN句用のプレースホルダー一覧
 function placeholders(length: number): string {
     return Array.from({length}, () => "?").join(", ")
 }
 
+// 配列を指定サイズで分割
 function chunk<T>(values: T[], size: number): T[][] {
     const chunks: T[][] = []
 
@@ -54,10 +57,12 @@ function chunk<T>(values: T[], size: number): T[][] {
     return chunks
 }
 
+// D1の日時表記をAPI向けの日時表記へ変換
 function toLocalDateTime(value: string): string {
     return value.replace(" ", "T")
 }
 
+// D1のクエリ結果を型付き配列として取得
 async function queryRows<T>(
     database: D1Database,
     sql: string,
@@ -69,10 +74,12 @@ async function queryRows<T>(
     return result.results
 }
 
+// D1を利用したカタログリポジトリ
 export class D1CatalogRepository implements CatalogRepository {
     constructor(private readonly database: D1Database) {}
 
     async findCategories(): Promise<Category[]> {
+        // 表示順をマスターデータのID順に統一
         const rows = await queryRows<CategoryRow>(
             this.database,
             `SELECT id, key, display_name
@@ -88,6 +95,7 @@ export class D1CatalogRepository implements CatalogRepository {
     }
 
     async findPartsByCategory(categoryKey: string): Promise<Part[]> {
+        // パーツ本体をカテゴリーキーで絞り込み
         const rows = await queryRows<PartRow>(
             this.database,
             `${this.basePartQuery()}
@@ -100,10 +108,12 @@ export class D1CatalogRepository implements CatalogRepository {
     }
 
     async findPartsByIds(ids: number[]): Promise<Part[]> {
+        // 空のID一覧ではD1クエリを発行しない
         if (ids.length === 0) {
             return []
         }
 
+        // IN句のプレースホルダーをID数に合わせて生成
         const rows = await queryRows<PartRow>(
             this.database,
             `${this.basePartQuery()}
@@ -115,6 +125,7 @@ export class D1CatalogRepository implements CatalogRepository {
         return this.attachRelations(rows)
     }
 
+    // パーツ本体とブランド・カテゴリーを結合する共通クエリ
     private basePartQuery(): string {
         return `SELECT parts.id,
                        parts.name,
@@ -131,13 +142,17 @@ export class D1CatalogRepository implements CatalogRepository {
                 JOIN categories ON categories.id = parts.category_id`
     }
 
+    // 含有品・選択不可カテゴリー・規格情報をパーツへ付加
     private async attachRelations(rows: PartRow[]): Promise<Part[]> {
         const partIds = rows.map((row) => row.id)
+
+        // 関連データをパーツID単位でまとめるための一時マップ
         const includedItems = new Map<number, PartIncludedItem[]>()
         const blockedCategoryKeys = new Map<number, Set<string>>()
         const specifications = new Map<number, Record<string, string>>()
 
         for (const partIdBatch of chunk(partIds, RELATED_QUERY_BATCH_SIZE)) {
+            // 関連テーブルは同じID群を使って並列取得
             const parameters = placeholders(partIdBatch.length)
             const [itemRows, blockedRows, specificationRows] = await Promise.all([
                 queryRows<IncludedItemRow>(
@@ -172,6 +187,7 @@ export class D1CatalogRepository implements CatalogRepository {
                 ),
             ])
 
+            // 含有品をパーツごとの一覧へ集約
             for (const row of itemRows) {
                 const items = includedItems.get(row.part_id) ?? []
                 items.push({
@@ -188,12 +204,14 @@ export class D1CatalogRepository implements CatalogRepository {
                 }
             }
 
+            // 選択不可カテゴリーをパーツごとの集合へ集約
             for (const row of blockedRows) {
                 const keys = blockedCategoryKeys.get(row.part_id) ?? new Set()
                 keys.add(row.category_key)
                 blockedCategoryKeys.set(row.part_id, keys)
             }
 
+            // 規格情報をキー・値のオブジェクトへ変換
             for (const row of specificationRows) {
                 const partSpecifications = specifications.get(row.part_id) ?? {}
                 partSpecifications[row.spec_key] = row.spec_value
@@ -201,6 +219,7 @@ export class D1CatalogRepository implements CatalogRepository {
             }
         }
 
+        // DBのスネークケースをAPIのキャメルケースへ変換
         return rows.map((row) => ({
             id: row.id,
             name: row.name,

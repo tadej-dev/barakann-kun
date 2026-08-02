@@ -4,6 +4,7 @@ import {
     evaluatePartCompatibility,
     getPartPackageUnit,
 } from "@/features/simulator/partCompatibility"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {getPartSlots, type PartSlot} from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
@@ -69,7 +70,13 @@ export function useCandidatePartsSelection(
             removeSlotKeys,
             removedPartNames: Array.from(new Set(
                 removeSlotKeys
-                    .map((slotKey) => selectedParts[slotKey]?.name)
+                    .map((slotKey) => {
+                        const selectedPart = selectedParts[slotKey]
+
+                        return selectedPart
+                            ? getPartDisplayName(selectedPart)
+                            : undefined
+                    })
                     .filter((name): name is string => Boolean(name)),
             )),
         })

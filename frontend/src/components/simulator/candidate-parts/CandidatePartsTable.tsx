@@ -17,6 +17,7 @@ import {
     evaluatePartCompatibility,
     getPartPackageUnit,
 } from "@/features/simulator/partCompatibility"
+import {hasPartVariantColumn} from "@/features/simulator/partDisplay"
 import type {PartSlot} from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
@@ -71,6 +72,7 @@ export function CandidatePartsTable({
         setSelectedBrand,
         sortDescriptor,
     } = useCandidatePartsTable(parts)
+    const showVariantColumn = hasPartVariantColumn(parts)
 
     const {
         cancelPendingSelection,
@@ -90,6 +92,7 @@ export function CandidatePartsTable({
         return (
             <CandidatePartsBlockedMessage
                 message={blockedMessage}
+                showVariantColumn={showVariantColumn}
                 blockingCategoryNames={blockingCategoryNames}
                 blockingPartNames={blockingPartNames}
                 onRemove={onRemoveBlockingParts}
@@ -99,7 +102,12 @@ export function CandidatePartsTable({
 
     // 読み込み状態
     if (isLoading) {
-        return <CandidatePartsTableMessage message="パーツを読み込んでいます..."/>
+        return (
+            <CandidatePartsTableMessage
+                message="パーツを読み込んでいます..."
+                showVariantColumn={showVariantColumn}
+            />
+        )
     }
 
     // API取得エラー
@@ -107,6 +115,7 @@ export function CandidatePartsTable({
         return (
             <CandidatePartsTableMessage
                 message={errorMessage}
+                showVariantColumn={showVariantColumn}
                 className="text-destructive"
             />
         )
@@ -142,13 +151,14 @@ export function CandidatePartsTable({
                 >
                     <CandidatePartsTableHeader
                         sortDescriptor={sortDescriptor}
+                        showVariantColumn={showVariantColumn}
                         onSort={changeSort}
                     />
 
                     <TableBody className={"font-bold"}>
                         {filteredAndSortedParts.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5}>
+                                <TableCell colSpan={showVariantColumn ? 5 : 4}>
                                     <div className="py-8 text-center text-zinc-500">
                                         {hasActiveFilters
                                             ? "検索条件に一致するパーツがありません"
@@ -162,6 +172,7 @@ export function CandidatePartsTable({
                                     key={part.id}
                                     part={part}
                                     isSelected={selectedPart?.id === part.id}
+                                    showVariantColumn={showVariantColumn}
                                     compatibility={evaluatePartCompatibility(
                                         part,
                                         activeSlot,

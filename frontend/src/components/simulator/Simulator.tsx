@@ -10,6 +10,7 @@ import {
     simulatorReducer,
 } from "@/features/simulator/simulatorReducer"
 import {calculateSelectedPartsTotals} from "@/features/simulator/partCompatibility"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
     getPartSlotCategoryKey,
     getPartSlotPositionLabel,
@@ -200,7 +201,7 @@ export function Simulator({
 
     // 現在カテゴリーの選択不可メッセージ
     const blockedMessage = blockingSelections.length > 0
-        ? `${blockingSelections.map(([, part]) => part.name).join("、")}に含まれるため、${
+        ? `${blockingSelections.map(([, part]) => getPartDisplayName(part)).join("、")}に含まれるため、${
             categories.find((category) => category.key === activeCategory)
                 ?.displayName ?? "このカテゴリー"
         }は選択できません。`
@@ -416,7 +417,7 @@ export function Simulator({
                             blockedMessage={blockedMessage}
                             blockingCategoryNames={blockingCategoryNames}
                             blockingPartNames={blockingSelections.map(
-                                ([, part]) => part.name,
+                                ([, part]) => getPartDisplayName(part),
                             )}
                             slotPositionLabel={getPartSlotPositionLabel(
                                 activeSlot.position,

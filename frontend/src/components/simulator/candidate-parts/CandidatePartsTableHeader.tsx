@@ -8,12 +8,14 @@ import type {
 
 type CandidatePartsTableHeaderProps = {
     sortDescriptor: CandidatePartsSortDescriptor
+    showVariantColumn: boolean
     onSort: (column: CandidatePartsSortKey) => void
 }
 
 // 候補パーツ表のヘッダー
 export function CandidatePartsTableHeader({
     sortDescriptor,
+    showVariantColumn,
     onSort,
 }: CandidatePartsTableHeaderProps) {
     // 並び順アイコン
@@ -41,7 +43,7 @@ export function CandidatePartsTableHeader({
                     </button>
                 </TableHead>
 
-                <TableHead className="h-11 w-[35%] text-xs font-semibold tracking-wide text-muted-foreground">
+                <TableHead className={`h-11 text-xs font-semibold tracking-wide text-muted-foreground ${showVariantColumn ? "w-[35%]" : "w-[55%]"}`}>
                     <button
                         type="button"
                         className="flex items-center gap-1.5 hover:text-foreground"
@@ -52,9 +54,11 @@ export function CandidatePartsTableHeader({
                     </button>
                 </TableHead>
 
-                <TableHead className="h-11 w-[20%] text-xs font-semibold tracking-wide text-muted-foreground">
-                    バリエーション
-                </TableHead>
+                {showVariantColumn && (
+                    <TableHead className="h-11 w-[20%] text-xs font-semibold tracking-wide text-muted-foreground">
+                        バリエーション
+                    </TableHead>
+                )}
 
                 {([
                     ["weight", "重量", "w-[12%]"],

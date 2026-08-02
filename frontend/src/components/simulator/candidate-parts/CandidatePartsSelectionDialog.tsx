@@ -1,6 +1,7 @@
 import {AlertDialog} from "@base-ui/react/alert-dialog"
 
 import {buttonVariants} from "@/components/ui/button"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type {Part} from "@/types/part"
 
 type PendingSelection = {
@@ -37,7 +38,7 @@ export function CandidatePartsSelectionDialog({
                     </AlertDialog.Title>
                     <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
                         {selection?.removedPartNames.join("、")}を解除して、
-                        {selection?.part.name}を選択します。
+                        {selection && getPartDisplayName(selection.part)}を選択します。
                     </AlertDialog.Description>
 
                     <div className="mt-5 flex justify-center gap-2">
