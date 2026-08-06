@@ -8,12 +8,15 @@
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:production": "node scripts/check-production-config.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "predeploy": "npm run build",
+    "predeploy": "npm run check:production && npm run build",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@auth/core": "^0.41.3",
+    "@hono/auth-js": "^1.1.1",
     "hono": "^4.12.32",
     "zod": "^4.4.3"
   },
