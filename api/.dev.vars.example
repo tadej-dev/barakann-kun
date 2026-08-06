@@ -1,0 +1,10 @@
+# Auth.jsのセッション署名に使うランダムな値
+# 例: openssl rand -hex 32
+AUTH_SECRET=replace-with-a-random-secret
+
+# フロントエンドの開発サーバーを経由するローカルURL
+AUTH_URL=http://localhost:5173
+
+# Google Cloud Consoleで発行したOAuthクライアント情報
+GOOGLE_CLIENT_ID=replace-with-google-client-id
+GOOGLE_CLIENT_SECRET=replace-with-google-client-secret

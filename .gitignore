@@ -1,6 +1,12 @@
 .env
 .env.*
 !.env.example
+
+# Local secrets used by Cloudflare/Wrangler development
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
 .idea/
 .vscode/
 *.iml
@@ -11,3 +17,22 @@
 
 # Local runtime
 node_modules/
+.wrangler/
+
+# Local database files and journals
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Private key material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Generated build and test output
+dist/
+coverage/

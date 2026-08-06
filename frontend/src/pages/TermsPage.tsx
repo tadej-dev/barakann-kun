@@ -77,6 +77,16 @@ export function TermsPage() {
                         <p className="mt-3 leading-8 text-slate-700">
                             また、ブラウザの設定変更、キャッシュ削除、ストレージ削除等により、保存された構成データが失われる場合があります。
                         </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            ログイン後、ユーザーが確認して移行を選択した場合は、localStorageの構成を
+                            アカウントに紐づく保存構成としてサーバーへ保存できます。
+                        </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            アカウントを削除した場合、アカウントに紐づく保存構成およびログイン情報は削除されます。
+                            localStorageに保存された構成は、ブラウザ側に残ります。
+                        </p>
                     </section>
 
                     <section className="mb-10">
