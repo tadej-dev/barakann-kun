@@ -54,7 +54,7 @@ export function SelectedPartsTable({
     }
 
     return (
-        <div className="overflow-hidden rounded-lg border bg-background">
+        <div className="overflow-x-auto rounded-lg border bg-background">
             <Table
                 aria-label="選択済みパーツ一覧"
                 className="min-w-[720px] table-fixed"

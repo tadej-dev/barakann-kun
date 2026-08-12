@@ -119,6 +119,43 @@ describe("saved-build-migration", () => {
         })
     })
 
+    it("移行時に利用者が指定した構成名を使用する", async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(createCsrfResponse())
+            .mockResolvedValueOnce(createSavedBuildResponse(
+                "build-1",
+                "通勤用",
+            ))
+            .mockResolvedValueOnce(createCsrfResponse())
+            .mockResolvedValueOnce(createSavedBuildResponse(
+                "build-3",
+                "ヒルクライム用",
+            ))
+        vi.stubGlobal("fetch", fetchMock)
+
+        await migrateLocalSimulatorState(
+            "user-1",
+            createState(),
+            undefined,
+            {"1": "通勤用", "3": "ヒルクライム用"},
+        )
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            "/api/builds",
+            expect.objectContaining({
+                body: expect.stringContaining('"name":"通勤用"'),
+            }),
+        )
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            4,
+            "/api/builds",
+            expect.objectContaining({
+                body: expect.stringContaining('"name":"ヒルクライム用"'),
+            }),
+        )
+    })
+
     it("同じユーザーの移行済み構成を二重登録しない", async () => {
         vi.stubGlobal("fetch", vi.fn(async (input: string) => (
             input === "/api/auth/csrf"

@@ -144,7 +144,7 @@ export function CandidatePartsTable({
                 onIntegratedHandlebarOnlyChange={setIntegratedHandlebarOnly}
             />
 
-            <div className="overflow-hidden rounded-lg border bg-background">
+            <div className="overflow-x-auto rounded-lg border bg-background">
                 <Table
                     aria-label="候補パーツ一覧"
                     className="min-w-[760px] table-fixed"

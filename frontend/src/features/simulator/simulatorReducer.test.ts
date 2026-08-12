@@ -235,6 +235,25 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({})
     })
 
+    it("保存構成を現在の作業枠だけへ復元する", () => {
+        const frame = createPart(1, "Saved Frame")
+        let state = createInitialSimulatorState("groupset")
+
+        state = simulatorReducer(state, {
+            type: "changeConfig",
+            configId: "2",
+        })
+        state = simulatorReducer(state, {
+            type: "restoreActiveConfig",
+            selectedParts: {frame},
+        })
+
+        expect(state.activeConfigId).toBe("2")
+        expect(state.activeSlot).toEqual(createPartSlot("frame"))
+        expect(state.configs["1"]).toEqual({})
+        expect(state.configs["2"]).toEqual({frame})
+    })
+
     it("同じパーツを前後に一括選択する", () => {
         const tire = createPart(1, "Tire")
         let state = createInitialSimulatorState("tire")

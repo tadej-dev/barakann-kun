@@ -79,4 +79,14 @@ describe("security-sensitive D1 queries", () => {
         expect(statements[0]?.sql).toContain("WHERE user_id = ?")
         expect(statements[0]?.parameters).toEqual(["user-2"])
     })
+
+    it("保存構成の件数確認にもユーザーID条件を付ける", async () => {
+        const {database, statements} = createDatabaseStub()
+        const repository = new D1SavedBuildRepository(database)
+
+        await expect(repository.count("user-3")).resolves.toBe(0)
+
+        expect(statements[0]?.sql).toContain("WHERE user_id = ?")
+        expect(statements[0]?.parameters).toEqual(["user-3"])
+    })
 })

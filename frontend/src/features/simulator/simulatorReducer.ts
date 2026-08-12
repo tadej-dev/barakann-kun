@@ -38,6 +38,10 @@ type SimulatorAction =
     activeConfigId: ConfigId
     configs: ConfigStates
 }
+    | {
+    type: "restoreActiveConfig"
+    selectedParts: ConfigStates[ConfigId]
+}
 
 // 空の構成状態
 function createEmptyConfigs(): ConfigStates {
@@ -166,6 +170,16 @@ export function simulatorReducer(
                 ...state, // 現在状態の引き継ぎ
                 activeConfigId: action.activeConfigId, // 保存済み構成の復元
                 configs: action.configs, // 保存済み選択状態の復元
+            }
+
+        case "restoreActiveConfig":
+            return {
+                ...state,
+                activeSlot: getPartSlots("frame")[0],
+                configs: {
+                    ...state.configs,
+                    [state.activeConfigId]: action.selectedParts,
+                },
             }
 
         default:

@@ -1,5 +1,8 @@
 import {fetchCsrfToken} from "@/features/auth/authApi"
 
+// サーバー側と同じ保存上限をUI表示にも利用する
+export const MAX_SAVED_BUILDS = 20
+
 // D1へ保存する構成内パーツの入力
 export type SavedBuildPartInput = {
     slotKey: string
@@ -149,6 +152,34 @@ function parseSavedBuild(value: unknown): SavedBuild {
     }
 }
 
+// 一覧レスポンスも1件ずつ検証し、不正な要素を黙って欠落させない
+function parseSavedBuildList(value: unknown): SavedBuild[] {
+    if (!Array.isArray(value)) {
+        throw new SavedBuildApiError(
+            "保存構成一覧のレスポンスを解釈できませんでした",
+        )
+    }
+
+    return value.map(parseSavedBuild)
+}
+
+// ログインユーザーの保存構成一覧を更新日時順で取得
+export async function fetchSavedBuilds(
+    signal?: AbortSignal,
+): Promise<SavedBuild[]> {
+    const response = await fetch("/api/builds", {
+        credentials: "same-origin",
+        signal,
+        headers: {Accept: "application/json"},
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "保存構成一覧の取得に失敗しました")
+    }
+
+    return parseSavedBuildList(await response.json())
+}
+
 // localStorage移行で1構成をD1へ登録
 export async function createSavedBuild(
     name: string,
@@ -173,4 +204,74 @@ export async function createSavedBuild(
     }
 
     return parseSavedBuild(await response.json())
+}
+
+// 現在の選択内容で保存構成を上書き
+export async function updateSavedBuild(
+    buildId: string,
+    version: number,
+    name: string,
+    parts: SavedBuildPartInput[],
+): Promise<SavedBuild> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({name, version, parts, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の上書きに失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// 保存済みパーツのスナップショットを維持したまま名称を変更
+export async function renameSavedBuild(
+    buildId: string,
+    version: number,
+    name: string,
+): Promise<SavedBuild> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({name, version, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成名の変更に失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// version一致時だけ保存構成を削除
+export async function deleteSavedBuild(
+    buildId: string,
+    version: number,
+): Promise<void> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({version, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の削除に失敗しました")
+    }
 }

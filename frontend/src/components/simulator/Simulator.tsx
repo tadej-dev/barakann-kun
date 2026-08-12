@@ -1,8 +1,10 @@
 import {useEffect, useMemo, useReducer, useState} from "react"
 
 import {fetchParts, fetchPartsByIds} from "@/api/parts"
+import type {SavedBuild} from "@/api/savedBuilds"
 import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
 import {CategoryList} from "@/components/simulator/CategoryList"
+import {SavedBuildPanel} from "@/components/simulator/SavedBuildPanel"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
@@ -33,6 +35,7 @@ import type {Part} from "@/types/part"
 // シミュレーターのプロパティ
 type SimulatorProps = {
     categories: Category[] // カテゴリー一覧
+    savedBuildsReloadKey?: number
 }
 
 // 空の選択済みパーツ
@@ -41,6 +44,7 @@ const EMPTY_SELECTED_PARTS: SelectedParts = {}
 // シミュレーター本体
 export function Simulator({
                               categories,
+                              savedBuildsReloadKey = 0,
                           }: SimulatorProps) {
     const [storedState] = useState(loadSimulatorState)
     const storedPartIds = useMemo(
@@ -367,6 +371,39 @@ export function Simulator({
         })
     }
 
+    // D1の保存構成を最新マスターデータへ解決して現在の作業枠へ復元
+    async function restoreSavedBuild(build: SavedBuild) {
+        const partIds = Array.from(new Set(
+            build.parts.map((savedPart) => savedPart.partId),
+        ))
+        const parts = partIds.length > 0
+            ? await fetchPartsByIds(partIds)
+            : []
+        const partsById = new Map(parts.map((part) => [part.id, part]))
+        const restoredEntries = build.parts.map((savedPart) => {
+            const part = partsById.get(savedPart.partId)
+
+            if (!part) {
+                throw new Error(
+                    `保存構成のパーツID ${savedPart.partId} が見つかりません`,
+                )
+            }
+
+            if (part.categoryKey !== getPartSlotCategoryKey(savedPart.slotKey)) {
+                throw new Error(
+                    "保存構成のカテゴリー情報が現在のマスターデータと一致しません",
+                )
+            }
+
+            return [savedPart.slotKey, part] as const
+        })
+
+        dispatch({
+            type: "restoreActiveConfig",
+            selectedParts: Object.fromEntries(restoredEntries),
+        })
+    }
+
     return (
         <div className="bg-slate-100 p-4">
             <main className="grid min-h-[calc(100vh-64px)] grid-cols-1 gap-4 lg:grid-cols-[230px_1fr]">
@@ -379,13 +416,20 @@ export function Simulator({
                     />
                 </aside>
 
-                <section className="rounded-lg border border-slate-300 bg-white p-4">
+                <section className="min-w-0 overflow-hidden rounded-lg border border-slate-300 bg-white p-4">
                     <SummaryCards
                         totalPrice={totalPrice}
                         totalWeight={totalWeight}
                         activeConfigId={activeConfigId}
                         onConfigChange={changeConfig}
                         onClearActiveConfig={clearActiveConfig}
+                    />
+
+                    <SavedBuildPanel
+                        activeConfigId={activeConfigId}
+                        selectedParts={selectedParts}
+                        reloadKey={savedBuildsReloadKey}
+                        onRestore={restoreSavedBuild}
                     />
 
                     {restoreError && (

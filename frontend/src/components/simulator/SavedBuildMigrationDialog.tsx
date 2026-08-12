@@ -9,25 +9,33 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
+import {Input} from "@/components/ui/input"
+import type {ConfigId} from "@/features/simulator/simulatorTypes"
 import type {SavedBuildMigrationResult} from "@/lib/saved-build-migration"
 
 type SavedBuildMigrationDialogProps = {
     open: boolean
     configCount: number
+    configIds: ConfigId[]
+    names: Partial<Record<ConfigId, string>>
     isSubmitting: boolean
     result: SavedBuildMigrationResult | null
     onConfirm: () => void
     onDismiss: () => void
+    onNameChange: (configId: ConfigId, name: string) => void
 }
 
 // localStorage移行の確認と結果を表示するダイアログ
 export function SavedBuildMigrationDialog({
     open,
     configCount,
+    configIds,
+    names,
     isSubmitting,
     result,
     onConfirm,
     onDismiss,
+    onNameChange,
 }: SavedBuildMigrationDialogProps) {
     if (!open) {
         return null
@@ -35,6 +43,11 @@ export function SavedBuildMigrationDialog({
 
     const hasFailed = Boolean(result?.failed.length)
     const isCompleted = result !== null
+    const hasInvalidName = configIds.some((configId) => {
+        const name = names[configId]?.trim() ?? ""
+
+        return name.length === 0 || name.length > 100
+    })
 
     return (
         <div
@@ -85,9 +98,31 @@ export function SavedBuildMigrationDialog({
 
                     <CardContent className="space-y-3 py-5">
                         {!isCompleted && (
-                            <p className="text-sm leading-6 text-slate-600">
-                                構成は1件ずつ保存されます。保存に失敗しても、ブラウザ内の構成は削除されません。
-                            </p>
+                            <div className="space-y-4">
+                                <p className="text-sm leading-6 text-slate-600">
+                                    構成は1件ずつ保存されます。保存に失敗しても、ブラウザ内の構成は削除されません。
+                                </p>
+
+                                <div className="space-y-3">
+                                    {configIds.map((configId) => (
+                                        <label
+                                            key={configId}
+                                            className="grid gap-1.5 text-sm font-medium text-slate-800"
+                                        >
+                                            構成{configId}の保存名
+                                            <Input
+                                                value={names[configId] ?? ""}
+                                                maxLength={100}
+                                                aria-invalid={!(names[configId]?.trim())}
+                                                onChange={(event) => onNameChange(
+                                                    configId,
+                                                    event.target.value,
+                                                )}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         )}
 
                         {isCompleted && result && (
@@ -135,7 +170,7 @@ export function SavedBuildMigrationDialog({
                         )}
                         <Button
                             type="button"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || (!isCompleted && hasInvalidName)}
                             onClick={isCompleted ? onDismiss : onConfirm}
                         >
                             {isSubmitting
@@ -150,4 +185,3 @@ export function SavedBuildMigrationDialog({
         </div>
     )
 }
-

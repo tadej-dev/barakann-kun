@@ -1,12 +1,17 @@
 import type {
     DeleteSavedBuildResult,
+    RenameSavedBuildResult,
     SavedBuild,
     SavedBuildPart,
     SavedBuildPartInput,
     SavedBuildRepository,
     UpdateSavedBuildResult,
 } from "./saved-build-repository"
-import {MissingSavedBuildPartsError} from "./saved-build-repository"
+import {
+    MAX_SAVED_BUILDS_PER_USER,
+    MissingSavedBuildPartsError,
+    SavedBuildLimitExceededError,
+} from "./saved-build-repository"
 
 type SavedBuildRow = {
     id: string
@@ -30,6 +35,10 @@ type PartSnapshotRow = {
     weight: number
 }
 
+type CountRow = {
+    count: number
+}
+
 // IN句へ渡すプレースホルダー一覧を生成
 function placeholders(length: number): string {
     return Array.from({length}, () => "?").join(", ")
@@ -49,6 +58,18 @@ async function queryRows<T>(
 // D1を利用した保存構成リポジトリ
 export class D1SavedBuildRepository implements SavedBuildRepository {
     constructor(private readonly database: D1Database) {}
+
+    async count(userId: string): Promise<number> {
+        const rows = await queryRows<CountRow>(
+            this.database,
+            `SELECT COUNT(*) AS count
+             FROM saved_builds
+             WHERE user_id = ?`,
+            [userId],
+        )
+
+        return rows[0]?.count ?? 0
+    }
 
     async list(userId: string): Promise<SavedBuild[]> {
         const buildRows = await queryRows<SavedBuildRow>(
@@ -92,8 +113,22 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             this.database.prepare(
                 `INSERT INTO saved_builds (
                      id, user_id, name, version, created_at, updated_at
-                 ) VALUES (?, ?, ?, 1, ?, ?)`,
-            ).bind(id, userId, name, now, now),
+                 )
+                 SELECT ?, ?, ?, 1, ?, ?
+                 WHERE (
+                     SELECT COUNT(*)
+                     FROM saved_builds
+                     WHERE user_id = ?
+                 ) < ?`,
+            ).bind(
+                id,
+                userId,
+                name,
+                now,
+                now,
+                userId,
+                MAX_SAVED_BUILDS_PER_USER,
+            ),
             ...parts.map((part) => {
                 const snapshot = snapshots.get(part.partId)
 
@@ -105,7 +140,11 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                     `INSERT INTO saved_build_parts (
                          saved_build_id, slot_key, part_id, price, weight,
                          created_at, updated_at
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                     )
+                     SELECT ?, ?, ?, ?, ?, ?, ?
+                     WHERE EXISTS (
+                         SELECT 1 FROM saved_builds WHERE id = ?
+                     )`,
                 ).bind(
                     id,
                     part.slotKey,
@@ -114,12 +153,17 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                     snapshot.weight,
                     now,
                     now,
+                    id,
                 )
             }),
         ]
 
         // 構成本体とパーツを同じD1バッチで登録する
-        await this.database.batch(statements)
+        const results = await this.database.batch(statements)
+
+        if (results[0]?.meta.changes === 0) {
+            throw new SavedBuildLimitExceededError()
+        }
 
         const build = await this.findById(userId, id)
 
@@ -206,6 +250,36 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
 
         if (!build) {
             throw new Error("保存構成の更新結果を取得できませんでした")
+        }
+
+        return {kind: "updated", build}
+    }
+
+    async rename(
+        userId: string,
+        buildId: string,
+        version: number,
+        name: string,
+    ): Promise<RenameSavedBuildResult> {
+        const now = new Date().toISOString()
+        const result = await this.database.prepare(
+            `UPDATE saved_builds
+             SET name = ?, version = version + 1, updated_at = ?
+             WHERE id = ? AND user_id = ? AND version = ?`,
+        ).bind(name, now, buildId, userId, version).run()
+
+        if (result.meta.changes === 0) {
+            const currentBuild = await this.findById(userId, buildId)
+
+            return currentBuild
+                ? {kind: "conflict"}
+                : {kind: "not_found"}
+        }
+
+        const build = await this.findById(userId, buildId)
+
+        if (!build) {
+            throw new Error("保存構成の名称変更結果を取得できませんでした")
         }
 
         return {kind: "updated", build}

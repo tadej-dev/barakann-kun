@@ -195,6 +195,7 @@ export async function migrateLocalSimulatorState(
     userId: string,
     state: StoredSimulatorState,
     signal?: AbortSignal,
+    names: Partial<Record<ConfigId, string>> = {},
 ): Promise<SavedBuildMigrationResult> {
     const migrationState = loadSavedBuildMigration(userId)
     const result: SavedBuildMigrationResult = {
@@ -219,8 +220,9 @@ export async function migrateLocalSimulatorState(
         }
 
         try {
+            const requestedName = names[configId]?.trim()
             const build = await createSavedBuild(
-                `構成${configId}`,
+                requestedName || `構成${configId}`,
                 toSavedBuildParts(selections),
                 signal,
             )

@@ -55,6 +55,14 @@ export function parseUpdateSavedBuildPayload(value: unknown) {
     }).safeParse(value)
 }
 
+// 保存構成の名称変更リクエストを検証
+export function parseRenameSavedBuildPayload(value: unknown) {
+    return z.object({
+        name: savedBuildNameSchema,
+        version: z.number().int().positive().safe(),
+    }).safeParse(value)
+}
+
 // 保存構成の削除リクエストを検証
 export function parseDeleteSavedBuildPayload(value: unknown) {
     return z.object({

@@ -12,6 +12,7 @@ import type {
     SavedBuild,
     SavedBuildPartInput,
     SavedBuildRepository,
+    RenameSavedBuildResult,
     UpdateSavedBuildResult,
 } from "../src/db/saved-build-repository"
 import type {Category, Part} from "../src/types"
@@ -131,6 +132,13 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     }]
     lastUserId: string | null = null
     lastParts: SavedBuildPartInput[] = []
+    buildCount = 1
+
+    async count(userId: string): Promise<number> {
+        this.lastUserId = userId
+
+        return userId === "user-1" ? this.buildCount : 0
+    }
 
     async list(userId: string): Promise<SavedBuild[]> {
         this.lastUserId = userId
@@ -201,6 +209,32 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }
     }
 
+    async rename(
+        userId: string,
+        buildId: string,
+        version: number,
+        name: string,
+    ): Promise<RenameSavedBuildResult> {
+        this.lastUserId = userId
+
+        if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
+            return {kind: "not_found"}
+        }
+
+        if (version !== 1) {
+            return {kind: "conflict"}
+        }
+
+        return {
+            kind: "updated",
+            build: {
+                ...this.builds[0],
+                name,
+                version: 2,
+            },
+        }
+    }
+
     async delete(
         userId: string,
         buildId: string,
@@ -231,6 +265,10 @@ class TestAccountRepository implements AccountRepository {
 // 同じversionを同時更新したときの競合を再現するRepository
 class ConcurrentSavedBuildRepository implements SavedBuildRepository {
     version = 1
+
+    async count(): Promise<number> {
+        return 0
+    }
 
     async list(): Promise<SavedBuild[]> {
         return []
@@ -272,6 +310,10 @@ class ConcurrentSavedBuildRepository implements SavedBuildRepository {
                 })),
             },
         }
+    }
+
+    async rename(): Promise<RenameSavedBuildResult> {
+        return {kind: "not_found"}
     }
 
     async delete(): Promise<DeleteSavedBuildResult> {
@@ -807,6 +849,42 @@ describe("saved builds API", () => {
         })
     })
 
+    it("rejects a new build when the user reached the storage limit", async () => {
+        const limitedRepository = new TestSavedBuildRepository()
+        limitedRepository.buildCount = 20
+        const limitedApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: limitedRepository,
+        })
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(limitedApp, bindings)
+        const response = await limitedApp.request(
+            "/api/builds",
+            {
+                method: "POST",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "上限超過",
+                    parts: [],
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toEqual({
+            error: {
+                code: "SAVED_BUILD_LIMIT_EXCEEDED",
+                message: "保存できる構成は20件までです",
+            },
+        })
+    })
+
     it("rejects state changes without a valid CSRF token", async () => {
         const response = await app.request(
             "/api/builds",
@@ -948,6 +1026,35 @@ describe("saved builds API", () => {
                 message: "保存構成が先に更新されています。最新状態を取得してください",
             },
         })
+    })
+
+    it("renames a build without replacing its parts", async () => {
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
+        savedBuildRepository.lastParts = []
+        const response = await app.request(
+            "/api/builds/11111111-1111-4111-8111-111111111111",
+            {
+                method: "PATCH",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "名称だけ変更",
+                    version: 1,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({
+            name: "名称だけ変更",
+            version: 2,
+        })
+        expect(savedBuildRepository.lastParts).toEqual([])
     })
 
     it("returns one success and one conflict for concurrent updates", async () => {

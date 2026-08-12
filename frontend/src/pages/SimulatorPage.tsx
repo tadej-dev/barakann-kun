@@ -11,6 +11,7 @@ import {
 } from "@/lib/saved-build-migration"
 import {loadSimulatorState} from "@/lib/simulator-storage"
 import type {SavedBuildMigrationResult} from "@/lib/saved-build-migration"
+import type {ConfigId} from "@/features/simulator/simulatorTypes"
 import type {Category} from "@/types/category"
 
 // シミュレーター画面
@@ -26,15 +27,22 @@ export function SimulatorPage() {
     const [dismissedMigrationUserId, setDismissedMigrationUserId] = useState<string | null>(null)
     const [isMigrating, setIsMigrating] = useState(false)
     const [migrationResult, setMigrationResult] = useState<SavedBuildMigrationResult | null>(null)
+    const [savedBuildsReloadKey, setSavedBuildsReloadKey] = useState(0)
     const migrationControllerRef = useRef<AbortController | null>(null)
 
     // 空の構成を除いた、移行候補の構成数
-    const migrationConfigCount = useMemo(
+    const migrationConfigIds = useMemo(
         () => localSimulatorState
-            ? getNonEmptyConfigIds(localSimulatorState).length
-            : 0,
+            ? getNonEmptyConfigIds(localSimulatorState)
+            : [],
         [localSimulatorState],
     )
+    const migrationConfigCount = migrationConfigIds.length
+    const [migrationNames, setMigrationNames] = useState<
+        Partial<Record<ConfigId, string>>
+    >(() => Object.fromEntries(
+        migrationConfigIds.map((configId) => [configId, `構成${configId}`]),
+    ))
 
     // カテゴリー一覧
     const [categories, setCategories] = useState<
@@ -80,10 +88,15 @@ export function SimulatorPage() {
                 user.id,
                 stateToMigrate,
                 controller.signal,
+                migrationNames,
             )
 
             if (!controller.signal.aborted) {
                 setMigrationResult(result)
+
+                if (result.created.length > 0) {
+                    setSavedBuildsReloadKey((current) => current + 1)
+                }
             }
         } catch (error) {
             if (!controller.signal.aborted) {
@@ -197,15 +210,23 @@ export function SimulatorPage() {
                 </div>
             )}
 
-            <Simulator categories={categories}/>
+            <Simulator
+                categories={categories}
+                savedBuildsReloadKey={savedBuildsReloadKey}
+            />
 
             <SavedBuildMigrationDialog
                 open={isMigrationDialogOpen}
                 configCount={migrationConfigCount}
+                configIds={migrationConfigIds}
+                names={migrationNames}
                 isSubmitting={isMigrating}
                 result={migrationResult}
                 onConfirm={() => void migrateLocalConfigurations()}
                 onDismiss={dismissMigrationDialog}
+                onNameChange={(configId, name) => setMigrationNames(
+                    (current) => ({...current, [configId]: name}),
+                )}
             />
         </>
     )

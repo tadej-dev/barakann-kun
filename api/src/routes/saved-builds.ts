@@ -7,10 +7,15 @@ import {
     parseCsrfToken,
     verifyCsrfToken,
 } from "../auth/csrf"
-import {MissingSavedBuildPartsError} from "../db/saved-build-repository"
+import {
+    MAX_SAVED_BUILDS_PER_USER,
+    MissingSavedBuildPartsError,
+    SavedBuildLimitExceededError,
+} from "../db/saved-build-repository"
 import {
     parseCreateSavedBuildPayload,
     parseDeleteSavedBuildPayload,
+    parseRenameSavedBuildPayload,
     parseSavedBuildId,
     parseUpdateSavedBuildPayload,
 } from "../schemas/saved-builds"
@@ -104,6 +109,19 @@ function invalidParts(
     )
 }
 
+// 保存件数上限は事前確認とD1の条件付きINSERTの両方で利用する
+function savedBuildLimitExceeded(context: SavedBuildContext) {
+    return context.json(
+        {
+            error: {
+                code: "SAVED_BUILD_LIMIT_EXCEEDED",
+                message: `保存できる構成は${MAX_SAVED_BUILDS_PER_USER}件までです`,
+            },
+        },
+        409,
+    )
+}
+
 // 現在のセッションからアプリ内ユーザーIDを取得
 async function getUserId(
     context: SavedBuildContext,
@@ -155,6 +173,12 @@ savedBuildsRoute.post("/", async (context) => {
         return invalidPayload(context)
     }
 
+    const savedBuildCount = await context.var.savedBuildRepository.count(userId)
+
+    if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
+        return savedBuildLimitExceeded(context)
+    }
+
     try {
         const build = await context.var.savedBuildRepository.create(
             userId,
@@ -166,6 +190,10 @@ savedBuildsRoute.post("/", async (context) => {
     } catch (error) {
         if (error instanceof MissingSavedBuildPartsError) {
             return invalidParts(context, error)
+        }
+
+        if (error instanceof SavedBuildLimitExceededError) {
+            return savedBuildLimitExceeded(context)
         }
 
         throw error
@@ -273,6 +301,66 @@ savedBuildsRoute.put("/:buildId", async (context) => {
 
         throw error
     }
+})
+
+// パーツの保存時点情報を維持したまま名称だけを変更
+savedBuildsRoute.patch("/:buildId", async (context) => {
+    const userId = await getUserId(context)
+
+    if (!userId) {
+        return unauthenticated(context)
+    }
+
+    const buildId = context.req.param("buildId")
+
+    if (!parseSavedBuildId(buildId).success) {
+        return invalidBuildId(context)
+    }
+
+    const payload = await readJson(context)
+
+    if (!(await hasValidCsrfToken(context, payload))) {
+        return invalidCsrf(context)
+    }
+
+    const parsedPayload = parseRenameSavedBuildPayload(payload)
+
+    if (!parsedPayload.success) {
+        return invalidPayload(context)
+    }
+
+    const result = await context.var.savedBuildRepository.rename(
+        userId,
+        buildId,
+        parsedPayload.data.version,
+        parsedPayload.data.name,
+    )
+
+    if (result.kind === "not_found") {
+        return context.json(
+            {
+                error: {
+                    code: "SAVED_BUILD_NOT_FOUND",
+                    message: "保存構成が見つかりません",
+                },
+            },
+            404,
+        )
+    }
+
+    if (result.kind === "conflict") {
+        return context.json(
+            {
+                error: {
+                    code: "SAVED_BUILD_CONFLICT",
+                    message: "保存構成が先に更新されています。最新状態を取得してください",
+                },
+            },
+            409,
+        )
+    }
+
+    return context.json(result.build)
 })
 
 // 保存構成をversion一致時だけ削除
