@@ -1,4 +1,4 @@
-import {describe, expect, it, vi} from "vitest"
+import {describe, expect, it} from "vitest"
 import type {Adapter} from "@auth/core/adapters"
 
 import {createApp} from "../src/app"
@@ -467,7 +467,7 @@ describe("authentication API", () => {
         })
     })
 
-    it("provides a Google login entry point", async () => {
+    it("provides a standard sign-in entry point for the Google login alias", async () => {
         const response = await app.request(
             "/api/auth/google?callbackUrl=%2Fsimulator",
             {},
@@ -476,7 +476,7 @@ describe("authentication API", () => {
 
         expect(response.status).toBe(302)
         expect(response.headers.get("location")).toBe(
-            "http://localhost/api/auth/signin/google?callbackUrl=%2Fsimulator",
+            "http://localhost/api/auth/signin?callbackUrl=%2Fsimulator",
         )
     })
 
@@ -489,7 +489,7 @@ describe("authentication API", () => {
 
         expect(response.status).toBe(302)
         expect(response.headers.get("location")).toBe(
-            "http://localhost/api/auth/signin/google?callbackUrl=%2F",
+            "http://localhost/api/auth/signin?callbackUrl=%2F",
         )
     })
 
@@ -505,7 +505,7 @@ describe("authentication API", () => {
 
         expect(response.status).toBe(302)
         expect(response.headers.get("location")).toBe(
-            "http://localhost:5173/api/auth/signin/google?callbackUrl=%2Fsimulator",
+            "http://localhost:5173/api/auth/signin?callbackUrl=%2Fsimulator",
         )
     })
 
@@ -523,49 +523,28 @@ describe("authentication API", () => {
         expect(csrfPayload.csrfToken).toEqual(expect.any(String))
         expect(cookie).toEqual(expect.any(String))
 
-        vi.stubGlobal("fetch", vi.fn(async () => (
-            new Response(JSON.stringify({
-                issuer: "https://accounts.google.com",
-                authorization_endpoint:
-                    "https://accounts.google.com/o/oauth2/v2/auth",
-                token_endpoint: "https://oauth2.googleapis.com/token",
-                userinfo_endpoint:
-                    "https://openidconnect.googleapis.com/v1/userinfo",
-                jwks_uri: "https://www.googleapis.com/oauth2/v3/certs",
-                code_challenge_methods_supported: ["S256"],
-            }),
-                {
-                    headers: {"content-type": "application/json"},
+        const response = await app.request(
+            "/api/auth/signin/google",
+            {
+                method: "POST",
+                headers: {
+                    "content-type": "application/x-www-form-urlencoded",
+                    cookie: cookie ?? "",
                 },
-            )
-        )))
+                body: new URLSearchParams({
+                    csrfToken: csrfPayload.csrfToken,
+                    callbackUrl: "/simulator",
+                }).toString(),
+            },
+            bindings,
+        )
 
-        try {
-            const response = await app.request(
-                "/api/auth/signin/google",
-                {
-                    method: "POST",
-                    headers: {
-                        "content-type": "application/x-www-form-urlencoded",
-                        cookie: cookie ?? "",
-                    },
-                    body: new URLSearchParams({
-                        csrfToken: csrfPayload.csrfToken,
-                        callbackUrl: "/simulator",
-                    }).toString(),
-                },
-                bindings,
-            )
+        const location = response.headers.get("location") ?? ""
 
-            const location = response.headers.get("location") ?? ""
-
-            expect(response.status).toBe(302)
-            expect(location).toContain("accounts.google.com")
-            expect(location).toContain("code_challenge_method=S256")
-            expect(location).toContain("nonce=")
-        } finally {
-            vi.unstubAllGlobals()
-        }
+        expect(response.status).toBe(302)
+        expect(location).toContain("accounts.google.com")
+        expect(location).toContain("state=")
+        expect(location).toContain("code_challenge_method=S256")
     })
 
     it("reports missing AUTH_SECRET before handling auth", async () => {

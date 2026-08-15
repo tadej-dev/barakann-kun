@@ -26,6 +26,10 @@ type ApiErrorPayload = {
     }
 }
 
+type AuthRedirectPayload = {
+    url?: unknown
+}
+
 // 認証API共通のエラー生成
 function createAuthApiError(message: string): Error {
     return new Error(message)
@@ -147,6 +151,34 @@ export async function fetchCsrfToken(): Promise<string> {
     }
 
     return payload.csrfToken
+}
+
+// Auth.jsのプロバイダー指定ログインはCSRF付きPOSTで開始する
+export async function startGoogleLogin(callbackUrl: string): Promise<string> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch("/api/auth/signin/google", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Auth-Return-Redirect": "1",
+        },
+        body: new URLSearchParams({
+            csrfToken,
+            callbackUrl,
+        }).toString(),
+    })
+    const payload = await readJson(
+        response,
+        "Googleログインの開始に失敗しました",
+    ) as AuthRedirectPayload
+
+    if (typeof payload.url !== "string" || payload.url.length === 0) {
+        throw createAuthApiError("Googleログインの開始に失敗しました")
+    }
+
+    return payload.url
 }
 
 // CSRF検証付きログアウト

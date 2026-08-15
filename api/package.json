@@ -8,6 +8,7 @@
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:local-auth": "node scripts/check-local-auth-config.mjs",
     "check:production": "node scripts/check-production-config.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",

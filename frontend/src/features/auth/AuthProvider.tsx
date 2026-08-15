@@ -11,6 +11,7 @@ import {
     fetchAuthSession,
     getCurrentCallbackUrl,
     logout as logoutAuthSession,
+    startGoogleLogin,
 } from "@/features/auth/authApi"
 import {
     AuthContext,
@@ -81,11 +82,22 @@ export function AuthProvider({children}: AuthProviderProps) {
         }
     }, [])
 
-    // Googleログイン開始
-    const login = useCallback(() => {
-        const callbackUrl = encodeURIComponent(getCurrentCallbackUrl())
+    // CSRF検証後にAuth.jsから返されたGoogleの認証URLへ遷移する
+    const login = useCallback(async () => {
+        try {
+            const loginUrl = await startGoogleLogin(getCurrentCallbackUrl())
 
-        window.location.assign(`/api/auth/google?callbackUrl=${callbackUrl}`)
+            window.location.assign(loginUrl)
+        } catch (error) {
+            setAuthState((current) => ({
+                ...current,
+                status: "error",
+                errorMessage: getErrorMessage(
+                    error,
+                    "Googleログインの開始に失敗しました",
+                ),
+            }))
+        }
     }, [])
 
     // CSRFトークン取得後のログアウト

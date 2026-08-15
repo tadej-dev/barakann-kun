@@ -8,6 +8,7 @@
     "build": "npm --prefix api run build",
     "test": "npm --prefix api test && npm --prefix frontend test",
     "lint": "npm --prefix api run typecheck && npm --prefix frontend run lint",
+    "check:local-auth": "npm --prefix api run check:local-auth",
     "db:migrate:local": "npm --prefix api run db:migrate:local",
     "db:migrate:remote": "npm --prefix api run db:migrate:remote",
     "deploy": "npm --prefix api run deploy"

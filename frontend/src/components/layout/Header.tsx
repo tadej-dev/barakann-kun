@@ -161,21 +161,33 @@ export function Header() {
                     )}
 
                     {(status === "unauthenticated" || status === "error") && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-9 gap-2 rounded-lg border-slate-600 bg-white px-3 text-sm font-medium text-slate-900 shadow-none hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950 sm:px-4"
-                            onClick={login}
-                        >
-                            <GoogleIcon className="size-4" />
-                            <span className="hidden sm:inline">
-                                Googleでログイン
-                            </span>
-                            <span className="sm:hidden">
-                                ログイン
-                            </span>
-                        </Button>
+                        <>
+                            {status === "error" && errorMessage && (
+                                <span
+                                    className="hidden max-w-56 truncate text-xs text-amber-300 md:inline"
+                                    title={errorMessage}
+                                    role="alert"
+                                >
+                                    {errorMessage}
+                                </span>
+                            )}
+
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-9 gap-2 rounded-lg border-slate-600 bg-white px-3 text-sm font-medium text-slate-900 shadow-none hover:border-slate-400 hover:bg-slate-100 hover:text-slate-950 sm:px-4"
+                                onClick={() => void login()}
+                            >
+                                <GoogleIcon className="size-4" />
+                                <span className="hidden sm:inline">
+                                    Googleでログイン
+                                </span>
+                                <span className="sm:hidden">
+                                    ログイン
+                                </span>
+                            </Button>
+                        </>
                     )}
 
                 </div>

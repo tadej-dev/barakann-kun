@@ -73,6 +73,37 @@ http://localhost:5173/api/auth/callback/google
 
 設定変更後は、`npm run dev`を再起動してください。
 
+設定値を確認する場合は、次のコマンドを実行します。値そのものは表示しません。
+
+```bash
+npm run check:local-auth
+```
+
+フロントエンドはGoogle OAuthのコールバック先と一致するよう、`http://localhost:5173`
+以外のポートでは起動しません。5173番ポートを別のプロセスが使用している場合は、先に終了してください。
+
+### 実GoogleアカウントとローカルD1の確認
+
+Google Cloud Consoleでローカル用のOAuthクライアントを作成し、OAuth同意画面のテストユーザーへ
+確認に使うGoogleアカウントを追加します。設定値を`api/.dev.vars`へ保存した後、次の順番で起動します。
+
+```bash
+npm run check:local-auth
+npm run db:migrate:local
+npm run dev
+```
+
+ブラウザで`http://localhost:5173/simulator`を開き、次の項目を確認します。
+
+- 未ログイン時は保存構成パネルが表示されない
+- ヘッダーのGoogleログインからGoogleへ遷移し、`/api/auth/callback/google`を経由して戻る
+- ログイン後に`/api/auth/session`がユーザー情報を返す
+- 構成を名前付きで保存し、一覧表示・復元・名前変更・上書き・削除ができる
+- ログアウト後に保存構成パネルが非表示になる
+- ブラウザを再読み込みしてもD1へ保存した構成を取得できる
+
+Google Cloud Consoleの認証情報や`api/.dev.vars`の内容は、リポジトリへ追加したりチャットへ貼り付けたりしないでください。
+
 ## テストと型検査
 
 ```bash
@@ -107,6 +138,7 @@ Google認証の実処理はAuth.js標準エンドポイントへ委譲してい�
 
 - `GET /api/auth/google`: Googleログイン画面への入口
 - `GET /api/auth/google/callback`: Googleからの戻り先（Auth.jsへ転送）
+- `POST /api/auth/signin/google`: CSRFトークン付きでGoogle認証を開始する標準エンドポイント
 - `GET /api/auth/session`: `{authenticated, user}`形式のログイン状態
 - `POST /api/auth/logout`: CSRFトークンを検証してセッションを削除
 
@@ -117,6 +149,9 @@ Google認証の実処理はAuth.js標準エンドポイントへ委譲してい�
 Auth.js標準の`/api/auth/signin/google`、`/api/auth/callback/google`、
 `/api/auth/signout`も利用できます。セッションCookieの値はD1へ直接保存せず、
 SHA-256ハッシュのみを`sessions.token_hash`へ保存します。
+
+Googleプロバイダーは認可・トークン・UserInfoエンドポイントを明示したOAuth 2.0設定です。
+Googleの認可レスポンスで`iss`が欠落する場合にも対応しつつ、stateとPKCEの検証は維持します。
 
 ## アカウント削除API
 

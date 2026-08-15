@@ -14,7 +14,7 @@ export type AuthContextValue = AuthState & {
     isDeletingAccount: boolean
     isLoggingOut: boolean
     deleteAccount: () => Promise<void>
-    login: () => void
+    login: () => Promise<void>
     logout: () => Promise<void>
     refreshSession: () => Promise<void>
 }

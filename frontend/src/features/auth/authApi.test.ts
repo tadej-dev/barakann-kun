@@ -4,6 +4,7 @@ import {
     deleteAccount,
     fetchAuthSession,
     logout,
+    startGoogleLogin,
 } from "@/features/auth/authApi"
 
 describe("authApi", () => {
@@ -64,6 +65,38 @@ describe("authApi", () => {
 
         await expect(fetchAuthSession()).rejects.toThrow(
             "認証設定が未完了です。api/.dev.varsにAUTH_SECRETを設定してください。",
+        )
+    })
+
+    it("CSRFトークン付きPOSTでGoogleログインURLを取得する", async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                csrfToken: "csrf-token",
+            }), {
+                headers: {"content-type": "application/json"},
+            }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                url: "https://accounts.google.com/o/oauth2/v2/auth?...",
+            }), {
+                headers: {"content-type": "application/json"},
+            }))
+        vi.stubGlobal("fetch", fetchMock)
+
+        await expect(startGoogleLogin("/simulator")).resolves.toBe(
+            "https://accounts.google.com/o/oauth2/v2/auth?...",
+        )
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            "/api/auth/signin/google",
+            expect.objectContaining({
+                method: "POST",
+                credentials: "same-origin",
+                headers: expect.objectContaining({
+                    "X-Auth-Return-Redirect": "1",
+                }),
+                body: "csrfToken=csrf-token&callbackUrl=%2Fsimulator",
+            }),
         )
     })
 

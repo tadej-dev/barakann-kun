@@ -159,7 +159,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/builds", initializeAuthConfig)
     app.use("/api/builds/*", initializeAuthConfig)
 
-    // Googleログイン開始用の別名。実際の認証処理はAuth.jsへ委譲する。
+    // 互換用の入口。プロバイダー指定のGETはAuth.jsで拒否されるため標準画面へ渡す。
     app.get("/api/auth/google/callback", (context) =>
         executeAuthAtPath(context, "/api/auth/callback/google"),
     )
@@ -175,10 +175,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
         const callbackUrl = context.req.query("callbackUrl") ?? "/"
         const baseUrl = context.env.AUTH_URL ?? context.req.url
-        const signInUrl = new URL(
-            "/api/auth/signin/google",
-            baseUrl,
-        )
+        const signInUrl = new URL("/api/auth/signin", baseUrl)
 
         signInUrl.searchParams.set("callbackUrl", callbackUrl)
 
