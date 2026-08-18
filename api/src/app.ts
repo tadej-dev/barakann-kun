@@ -14,11 +14,17 @@ import type {AppEnv} from "./app-env"
 import {createAuthConfig} from "./auth/auth-config"
 import type {AccountRepository} from "./db/account-repository"
 import type {CatalogRepository} from "./db/catalog-repository"
+import type {ConfigOrderRepository} from "./db/config-order-repository"
+import type {ConfigSlotRepository} from "./db/config-slot-repository"
 import {D1AccountRepository} from "./db/d1-account-repository"
 import {D1CatalogRepository} from "./db/d1-catalog-repository"
+import {D1ConfigOrderRepository} from "./db/config-order-repository"
+import {D1ConfigSlotRepository} from "./db/config-slot-repository"
 import {D1SavedBuildRepository} from "./db/d1-saved-build-repository"
 import type {SavedBuildRepository} from "./db/saved-build-repository"
 import {categoriesRoute} from "./routes/categories"
+import {configOrderRoute} from "./routes/config-order"
+import {configSlotsRoute} from "./routes/config-slots"
 import {accountRoute} from "./routes/account"
 import {partsRoute} from "./routes/parts"
 import {savedBuildsRoute} from "./routes/saved-builds"
@@ -27,6 +33,8 @@ import {savedBuildsRoute} from "./routes/saved-builds"
 type AppDependencies = {
     accountRepository?: AccountRepository
     catalogRepository?: CatalogRepository
+    configOrderRepository?: ConfigOrderRepository
+    configSlotRepository?: ConfigSlotRepository
     authAdapter?: Adapter
     savedBuildRepository?: SavedBuildRepository
 }
@@ -41,6 +49,7 @@ type AuthSessionPayload = {
 } | null
 
 const AUTH_CONFIG_ERROR_CODE = "AUTH_NOT_CONFIGURED"
+const GOOGLE_LOGIN_CANCELLED_ERROR = "google-cancelled"
 const AUTH_SECRET_ERROR_MESSAGE =
     "認証設定が未完了です。api/.dev.varsにAUTH_SECRETを設定してください。"
 const GOOGLE_CONFIG_ERROR_MESSAGE =
@@ -64,13 +73,57 @@ function authConfigError(context: Context<AppEnv>, message: string) {
     )
 }
 
+// Googleの同意画面でキャンセルされた場合に、利用者向け画面へ戻す
+function redirectFromGoogleLoginCancellation(context: Context<AppEnv>) {
+    const baseUrl = context.env.AUTH_URL ?? context.req.url
+    const redirectUrl = new URL("/", baseUrl)
+
+    // 認証コードやGoogleの内部エラーは渡さず、画面表示用の固定値だけを付与する。
+    redirectUrl.searchParams.set("authError", GOOGLE_LOGIN_CANCELLED_ERROR)
+
+    return context.redirect(redirectUrl.toString())
+}
+
+// ログイン後の戻り先を同一オリジンのパスへ限定
+function normalizeCallbackUrl(
+    context: Context<AppEnv>,
+    callbackUrl: string | undefined,
+): string {
+    const baseUrl = context.env.AUTH_URL ?? context.req.url
+
+    if (!callbackUrl) {
+        return "/"
+    }
+
+    try {
+        const base = new URL(baseUrl)
+        const candidate = new URL(callbackUrl, base)
+
+        if (candidate.origin !== base.origin) {
+            return "/"
+        }
+
+        return `${candidate.pathname}${candidate.search}${candidate.hash}`
+    } catch {
+        return "/"
+    }
+}
+
 // Auth.jsの標準レスポンスをこのアプリのセッション形式へ変換
 async function normalizeSessionResponse(response: Response): Promise<Response> {
     if (!response.ok) {
         return response
     }
 
-    const payload = await response.json() as AuthSessionPayload
+    // Auth.jsの実装や設定によっては空の2xxレスポンスになる場合がある。
+    // その場合もセッションAPIの契約を壊さず、未ログインとして返す。
+    let payload: AuthSessionPayload = null
+
+    try {
+        payload = await response.json() as AuthSessionPayload
+    } catch {
+        payload = null
+    }
     const user = payload?.user
     const normalizedPayload = user?.id
         ? {
@@ -89,11 +142,28 @@ async function normalizeSessionResponse(response: Response): Promise<Response> {
     const headers = new Headers(response.headers)
 
     headers.set("content-type", "application/json")
+    // 元レスポンスの空本文用ヘッダーがJSON本文と食い違わないよう除去する。
+    headers.delete("content-length")
+    headers.delete("content-encoding")
 
     return new Response(JSON.stringify(normalizedPayload), {
-        status: response.status,
+        // 空の204をアプリのJSON契約へ正規化するため、返却ステータスは200へ揃える。
+        status: response.status === 204 ? 200 : response.status,
         statusText: response.statusText,
         headers,
+    })
+}
+
+// 本番ログへ認証情報やD1の詳細スタックを出さないエラーログを作成
+function logUnhandledApiError(context: Context<AppEnv>, error: unknown) {
+    if (context.env.AUTH_DEBUG === "true") {
+        console.error("Unhandled API error", error)
+
+        return
+    }
+
+    console.error("Unhandled API error", {
+        name: error instanceof Error ? error.name : "UnknownError",
     })
 }
 
@@ -158,11 +228,18 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/account", initializeAuthConfig)
     app.use("/api/builds", initializeAuthConfig)
     app.use("/api/builds/*", initializeAuthConfig)
+    app.use("/api/config-slots", initializeAuthConfig)
+    app.use("/api/config-slots/*", initializeAuthConfig)
+    app.use("/api/config-order", initializeAuthConfig)
 
     // 互換用の入口。プロバイダー指定のGETはAuth.jsで拒否されるため標準画面へ渡す。
-    app.get("/api/auth/google/callback", (context) =>
-        executeAuthAtPath(context, "/api/auth/callback/google"),
-    )
+    app.get("/api/auth/google/callback", async (context) => {
+        if (context.req.query("error") === "access_denied") {
+            return redirectFromGoogleLoginCancellation(context)
+        }
+
+        return executeAuthAtPath(context, "/api/auth/callback/google")
+    })
     app.get("/api/auth/google", (context) => {
         if (!context.env.AUTH_SECRET) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)
@@ -173,7 +250,10 @@ export function createApp(dependencies: AppDependencies = {}) {
             return authConfigError(context, GOOGLE_CONFIG_ERROR_MESSAGE)
         }
 
-        const callbackUrl = context.req.query("callbackUrl") ?? "/"
+        const callbackUrl = normalizeCallbackUrl(
+            context,
+            context.req.query("callbackUrl"),
+        )
         const baseUrl = context.env.AUTH_URL ?? context.req.url
         const signInUrl = new URL("/api/auth/signin", baseUrl)
 
@@ -195,6 +275,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.post("/api/auth/logout", (context) =>
         executeAuthAtPath(context, "/api/auth/signout"),
     )
+
+    // Googleが返すaccess_deniedは、Auth.jsのエラー画面ではなく再試行可能な画面へ戻す。
+    app.use("/api/auth/callback/google", async (context, next) => {
+        if (context.req.query("error") === "access_denied") {
+            return redirectFromGoogleLoginCancellation(context)
+        }
+
+        await next()
+    })
 
     // Auth.js標準認証エンドポイント
     app.all("/api/auth/*", authRequestHandler)
@@ -219,6 +308,27 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/builds", registerSavedBuildRepository)
     app.use("/api/builds/*", registerSavedBuildRepository)
 
+    // 構成1〜4の同期APIへD1リポジトリを登録
+    const registerConfigSlotRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
+        const repository = dependencies.configSlotRepository
+            ?? new D1ConfigSlotRepository(context.env.DB)
+
+        context.set("configSlotRepository", repository)
+        await next()
+    }
+    app.use("/api/config-slots", registerConfigSlotRepository)
+    app.use("/api/config-slots/*", registerConfigSlotRepository)
+
+    // 構成表示順APIへD1リポジトリを登録
+    const registerConfigOrderRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
+        const repository = dependencies.configOrderRepository
+            ?? new D1ConfigOrderRepository(context.env.DB)
+
+        context.set("configOrderRepository", repository)
+        await next()
+    }
+    app.use("/api/config-order", registerConfigOrderRepository)
+
     // アカウントAPIへD1リポジトリを登録
     const registerAccountRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
         const repository = dependencies.accountRepository
@@ -233,6 +343,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.get("/api/health", (context) => context.json({status: "ok"}))
     app.route("/api/account", accountRoute)
     app.route("/api/categories", categoriesRoute)
+    app.route("/api/config-order", configOrderRoute)
+    app.route("/api/config-slots", configSlotsRoute)
     app.route("/api/parts", partsRoute)
     app.route("/api/builds", savedBuildsRoute)
 
@@ -249,7 +361,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     // 予期しない例外に対する共通エラー応答
     app.onError((error, context) => {
-        console.error("Unhandled API error", error)
+        logUnhandledApiError(context, error)
 
         if (isMissingAuthSecret(error)) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)

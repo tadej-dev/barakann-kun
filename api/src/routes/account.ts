@@ -1,42 +1,18 @@
-import {getAuthUser} from "@hono/auth-js"
 import {Hono} from "hono"
-import type {Context} from "hono"
 
 import type {AppEnv} from "../app-env"
 import {
-    parseCsrfToken,
-    verifyCsrfToken,
-} from "../auth/csrf"
+    getUserId,
+    hasValidCsrfToken,
+    invalidCsrf,
+    readJson,
+    unauthenticated,
+    type ApiRouteContext,
+} from "./route-helpers"
 
 // アカウント削除API
 export const accountRoute = new Hono<AppEnv>()
-type AccountContext = Context<AppEnv>
-
-// 未ログイン状態の共通応答
-function unauthenticated(context: AccountContext) {
-    return context.json(
-        {
-            error: {
-                code: "UNAUTHENTICATED",
-                message: "ログインが必要です",
-            },
-        },
-        401,
-    )
-}
-
-// CSRFトークン不正時の応答
-function invalidCsrf(context: AccountContext) {
-    return context.json(
-        {
-            error: {
-                code: "INVALID_CSRF_TOKEN",
-                message: "不正なリクエストです。ページを再読み込みして再試行してください",
-            },
-        },
-        403,
-    )
-}
+type AccountContext = ApiRouteContext
 
 // アカウントが既に存在しない場合の応答
 function accountNotFound(context: AccountContext) {
@@ -56,6 +32,7 @@ function clearSessionCookies(context: AccountContext) {
     const secure = context.req.url.startsWith("https:")
     const cookieNames = [
         "authjs.session-token",
+        "__Host-authjs.session-token",
         "__Secure-authjs.session-token",
     ]
 
@@ -77,31 +54,20 @@ function clearSessionCookies(context: AccountContext) {
 
 // ログイン中の本人のアカウントを削除
 accountRoute.delete("/", async (context) => {
-    const authUser = await getAuthUser(context)
+    const userId = await getUserId(context)
 
-    if (!authUser?.user?.id) {
+    if (!userId) {
         return unauthenticated(context)
     }
 
-    let payload: unknown
+    const payload = await readJson(context)
 
-    try {
-        payload = await context.req.json()
-    } catch {
-        payload = null
-    }
-    const csrfToken = parseCsrfToken(payload)
-
-    if (!csrfToken || !(await verifyCsrfToken(
-        context.req.raw,
-        context.env.AUTH_SECRET,
-        csrfToken,
-    ))) {
+    if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
 
     const result = await context.var.accountRepository.deleteUser(
-        authUser.user.id,
+        userId,
     )
 
     if (result.kind === "not_found") {

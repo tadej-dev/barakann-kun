@@ -93,4 +93,19 @@ describe("simulator-storage", () => {
         })
         expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
     })
+
+    it("Storageへアクセスできない環境でも例外を画面へ伝播しない", () => {
+        Object.defineProperty(window, "localStorage", {
+            configurable: true,
+            get: () => {
+                throw new Error("Storage is unavailable")
+            },
+        })
+
+        expect(loadSimulatorState()).toBeNull()
+        expect(() => saveSimulatorState({
+            activeConfigId: "1",
+            configs: {"1": {}, "2": {}, "3": {}, "4": {}},
+        })).not.toThrow()
+    })
 })

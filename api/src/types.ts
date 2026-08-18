@@ -41,6 +41,8 @@ export type Bindings = {
     DB: D1Database
     AUTH_SECRET?: string
     AUTH_URL?: string
+    // OAuthコールバックの原因調査時だけ有効にするAuth.jsの詳細ログ設定
+    AUTH_DEBUG?: string
     GOOGLE_CLIENT_ID?: string
     GOOGLE_CLIENT_SECRET?: string
 }

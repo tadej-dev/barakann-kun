@@ -29,6 +29,15 @@ function isConfigId(value: unknown): value is ConfigId {
     return typeof value === "string" && CONFIG_IDS.includes(value as ConfigId)
 }
 
+// プライベートブラウズや容量超過でStorageが使えない場合も画面を壊さない
+function getLocalStorage(): Storage | null {
+    try {
+        return typeof window === "undefined" ? null : window.localStorage
+    } catch {
+        return null
+    }
+}
+
 function getStoredPartId(value: unknown) {
     if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
         return value
@@ -91,12 +100,20 @@ function parseStoredState(value: string): StoredSimulatorState | null {
 }
 
 export function loadSimulatorState(): StoredSimulatorState | null {
-    if (typeof window === "undefined") {
+    const storage = getLocalStorage()
+
+    if (!storage) {
         return null
     }
 
     for (const storageKey of [STORAGE_KEY, LEGACY_STORAGE_KEY]) {
-        const value = window.localStorage.getItem(storageKey)
+        let value: string | null
+
+        try {
+            value = storage.getItem(storageKey)
+        } catch {
+            return null
+        }
 
         if (!value) {
             continue
@@ -113,6 +130,12 @@ export function loadSimulatorState(): StoredSimulatorState | null {
 }
 
 export function saveSimulatorState(state: SimulatorStorageSource) {
+    const storage = getLocalStorage()
+
+    if (!storage) {
+        return
+    }
+
     const configs = Object.fromEntries(
         CONFIG_IDS.map((configId) => [
             configId,
@@ -124,17 +147,31 @@ export function saveSimulatorState(state: SimulatorStorageSource) {
         ]),
     ) as StoredConfigStates
 
-    window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-            activeConfigId: state.activeConfigId,
-            configs,
-        } satisfies StoredSimulatorState),
-    )
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    try {
+        storage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                activeConfigId: state.activeConfigId,
+                configs,
+            } satisfies StoredSimulatorState),
+        )
+        storage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+        // Storageへ書き込めない環境では、メモリ上の選択状態だけを維持する
+    }
 }
 
 export function clearSimulatorState() {
-    window.localStorage.removeItem(STORAGE_KEY)
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    const storage = getLocalStorage()
+
+    if (!storage) {
+        return
+    }
+
+    try {
+        storage.removeItem(STORAGE_KEY)
+        storage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+        // Storageへアクセスできない場合も、画面上のクリア処理は継続する
+    }
 }

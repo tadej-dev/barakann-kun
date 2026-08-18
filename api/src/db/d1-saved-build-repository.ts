@@ -9,9 +9,11 @@ import type {
 } from "./saved-build-repository"
 import {
     MAX_SAVED_BUILDS_PER_USER,
+    loadValidatedPartSnapshots,
     MissingSavedBuildPartsError,
     SavedBuildLimitExceededError,
 } from "./saved-build-repository"
+import {CONFIG_SLOT_IDS} from "./config-slot-repository"
 
 type SavedBuildRow = {
     id: string
@@ -25,12 +27,6 @@ type SavedBuildPartRow = {
     saved_build_id: string
     slot_key: string
     part_id: number
-    price: number
-    weight: number
-}
-
-type PartSnapshotRow = {
-    id: number
     price: number
     weight: number
 }
@@ -64,11 +60,12 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             this.database,
             `SELECT COUNT(*) AS count
              FROM saved_builds
-             WHERE user_id = ?`,
+             WHERE user_id = ? AND config_slot IS NULL`,
             [userId],
         )
 
-        return rows[0]?.count ?? 0
+        // 構成1〜4は固定の保存枠として常に確保し、追加構成の上限を同じ枠で判定する
+        return (rows[0]?.count ?? 0) + CONFIG_SLOT_IDS.length
     }
 
     async list(userId: string): Promise<SavedBuild[]> {
@@ -76,7 +73,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             this.database,
             `SELECT id, name, version, created_at, updated_at
              FROM saved_builds
-             WHERE user_id = ?
+             WHERE user_id = ? AND config_slot IS NULL
              ORDER BY updated_at DESC, id ASC`,
             [userId],
         )
@@ -92,7 +89,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             this.database,
             `SELECT id, name, version, created_at, updated_at
              FROM saved_builds
-             WHERE user_id = ? AND id = ?`,
+             WHERE user_id = ? AND id = ? AND config_slot IS NULL`,
             [userId, buildId],
         )
 
@@ -118,7 +115,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                  WHERE (
                      SELECT COUNT(*)
                      FROM saved_builds
-                     WHERE user_id = ?
+                     WHERE user_id = ? AND config_slot IS NULL
                  ) < ?`,
             ).bind(
                 id,
@@ -127,7 +124,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                 now,
                 now,
                 userId,
-                MAX_SAVED_BUILDS_PER_USER,
+                MAX_SAVED_BUILDS_PER_USER - CONFIG_SLOT_IDS.length,
             ),
             ...parts.map((part) => {
                 const snapshot = snapshots.get(part.partId)
@@ -189,15 +186,17 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             FROM saved_builds
             WHERE id = ?
               AND user_id = ?
+              AND config_slot IS NULL
               AND version = ?
               AND updated_at = ?
         )`
         const guardParameters = [buildId, userId, nextVersion, now]
         const statements = [
             this.database.prepare(
-                `UPDATE saved_builds
+                 `UPDATE saved_builds
                  SET name = ?, version = version + 1, updated_at = ?
-                 WHERE id = ? AND user_id = ? AND version = ?`,
+                 WHERE id = ? AND user_id = ? AND config_slot IS NULL
+                   AND version = ?`,
             ).bind(name, now, buildId, userId, version),
             this.database.prepare(
                 `DELETE FROM saved_build_parts
@@ -265,7 +264,8 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         const result = await this.database.prepare(
             `UPDATE saved_builds
              SET name = ?, version = version + 1, updated_at = ?
-             WHERE id = ? AND user_id = ? AND version = ?`,
+             WHERE id = ? AND user_id = ? AND config_slot IS NULL
+               AND version = ?`,
         ).bind(name, now, buildId, userId, version).run()
 
         if (result.meta.changes === 0) {
@@ -292,7 +292,8 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
     ): Promise<DeleteSavedBuildResult> {
         const result = await this.database.prepare(
             `DELETE FROM saved_builds
-             WHERE id = ? AND user_id = ? AND version = ?`,
+             WHERE id = ? AND user_id = ? AND config_slot IS NULL
+               AND version = ?`,
         ).bind(buildId, userId, version).run()
 
         if (result.meta.changes > 0) {
@@ -306,31 +307,11 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             : {kind: "not_found"}
     }
 
-    // パーツIDから保存時点の価格・重量を取得
+    // パーツIDの存在・カテゴリー・対応位置を検証し、保存時点の価格・重量を取得
     private async loadPartSnapshots(
         parts: SavedBuildPartInput[],
-    ): Promise<Map<number, PartSnapshotRow>> {
-        const partIds = Array.from(new Set(parts.map((part) => part.partId)))
-
-        if (partIds.length === 0) {
-            return new Map()
-        }
-
-        const rows = await queryRows<PartSnapshotRow>(
-            this.database,
-            `SELECT id, price, weight
-             FROM parts
-             WHERE id IN (${placeholders(partIds.length)})`,
-            partIds,
-        )
-        const snapshots = new Map(rows.map((row) => [row.id, row]))
-        const missingPartIds = partIds.filter((id) => !snapshots.has(id))
-
-        if (missingPartIds.length > 0) {
-            throw new MissingSavedBuildPartsError(missingPartIds)
-        }
-
-        return snapshots
+    ) {
+        return loadValidatedPartSnapshots(this.database, parts)
     }
 
     // 構成本体へスロット別パーツを付加

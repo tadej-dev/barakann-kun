@@ -16,14 +16,32 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import type {ConfigId} from "@/features/simulator/simulatorTypes"
+import type {
+    ConfigId,
+    ConfigStates,
+    SelectedParts,
+} from "@/features/simulator/simulatorTypes"
+import type {SavedBuild} from "@/api/savedBuilds"
+import type {ConfigSlot} from "@/api/configSlots"
 
 type SummaryCardsProps = {
     totalPrice: number
     totalWeight: number
     activeConfigId: ConfigId
+    activeSavedBuildId: string | null
+    configStates: ConfigStates
+    selectedParts: SelectedParts
+    isSavedBuildLoading: boolean
+    savedBuildErrorMessage: string
+    savedBuildsReloadKey?: number
+    autoSaveEnabled?: boolean
     onConfigChange: (configId: ConfigId) => void
+    onRestoreSavedBuild: (build: SavedBuild) => Promise<void>
+    onSavedBuildPrefetch: (build: SavedBuild) => void
+    onSavedBuildSelect: (build: SavedBuild) => void | Promise<void>
     onClearActiveConfig: () => void
+    onClearConfig: (configId: ConfigId) => Promise<void>
+    onRestoreConfigSlot: (slot: ConfigSlot) => Promise<void>
 }
 
 type SummaryCardId = "price" | "weight" | "config"
@@ -41,8 +59,20 @@ export function SummaryCards({
                                  totalPrice,
                                  totalWeight,
                                  activeConfigId,
+                                 activeSavedBuildId,
+                                 configStates,
+                                 selectedParts,
+                                 isSavedBuildLoading,
+                                 savedBuildErrorMessage,
+                                 savedBuildsReloadKey = 0,
+                                 autoSaveEnabled = true,
                                  onConfigChange,
+                                 onRestoreSavedBuild,
+                                 onSavedBuildPrefetch,
+                                 onSavedBuildSelect,
                                  onClearActiveConfig,
+                                 onClearConfig,
+                                 onRestoreConfigSlot,
                              }: SummaryCardsProps) {
     const [cardOrder, setCardOrder] =
         useState<SummaryCardId[]>(initialCardOrder)
@@ -73,16 +103,32 @@ export function SummaryCards({
             onValueChange={setCardOrder}
             getItemValue={(cardId) => cardId}
             strategy="grid"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,1fr))_minmax(260px,1fr)]"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
         >
             {cardOrder.map((cardId) => {
                 if (cardId === "config") {
                     return (
-                        <SortableItem key={cardId} value={cardId}>
+                        <SortableItem
+                            key={cardId}
+                            value={cardId}
+                            className="lg:col-span-2"
+                        >
                             <ConfigList
                                 activeConfigId={activeConfigId}
+                                activeSavedBuildId={activeSavedBuildId}
+                                configStates={configStates}
+                                selectedParts={selectedParts}
+                                isSavedBuildLoading={isSavedBuildLoading}
+                                savedBuildErrorMessage={savedBuildErrorMessage}
+                                savedBuildsReloadKey={savedBuildsReloadKey}
+                                autoSaveEnabled={autoSaveEnabled}
                                 onConfigChange={onConfigChange}
+                                onRestoreSavedBuild={onRestoreSavedBuild}
+                                onSavedBuildPrefetch={onSavedBuildPrefetch}
+                                onSavedBuildSelect={onSavedBuildSelect}
                                 onClearActiveConfig={onClearActiveConfig}
+                                onClearConfig={onClearConfig}
+                                onRestoreConfigSlot={onRestoreConfigSlot}
                             />
                         </SortableItem>
                     )

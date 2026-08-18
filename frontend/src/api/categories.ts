@@ -1,3 +1,7 @@
+import {
+    parseCategories,
+    readCatalogJson,
+} from "@/api/catalogResponse"
 import type {Category} from "@/types/category"
 
 export async function fetchCategories(): Promise<Category[]> {
@@ -7,5 +11,8 @@ export async function fetchCategories(): Promise<Category[]> {
         throw new Error("カテゴリーの取得に失敗しました")
     }
 
-    return response.json()
+    return parseCategories(await readCatalogJson(
+        response,
+        "カテゴリー一覧のレスポンスを解釈できませんでした",
+    ))
 }

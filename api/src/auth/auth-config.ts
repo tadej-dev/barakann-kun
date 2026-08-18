@@ -29,6 +29,8 @@ function createGoogleProvider(
         id: "google",
         name: "Google",
         type: "oauth",
+        // 明示OAuth設定でも、Googleが返すissuer値を正しく検証できるようにする。
+        issuer: "https://accounts.google.com",
         clientId,
         clientSecret,
         authorization: {
@@ -56,6 +58,7 @@ export function createAuthConfig(
     const {
         AUTH_SECRET,
         AUTH_URL,
+        AUTH_DEBUG,
         GOOGLE_CLIENT_ID,
         GOOGLE_CLIENT_SECRET,
     } = context.env
@@ -64,6 +67,9 @@ export function createAuthConfig(
         basePath: "/api/auth",
         secret: AUTH_SECRET ?? "",
         trustHost: true,
+        // OAuthプロバイダーのエラー内容を確認するときだけ、ローカルで明示的に有効化する。
+        // 本番で常時有効にすると認証フローの詳細がログへ出るため、既定値は無効にする。
+        debug: AUTH_DEBUG === "true",
         ...(AUTH_URL ? {url: AUTH_URL} : {}),
         adapter: adapter ?? createD1AuthAdapter(context.env.DB),
         providers: [

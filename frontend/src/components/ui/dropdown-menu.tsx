@@ -20,14 +20,21 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
     className,
+    align = "end",
+    side = "bottom",
+    sideOffset = 8,
     ...props
-}: React.ComponentProps<typeof MenuPrimitive.Popup>) {
+}: React.ComponentProps<typeof MenuPrimitive.Popup> & {
+    align?: React.ComponentProps<typeof MenuPrimitive.Positioner>["align"]
+    side?: React.ComponentProps<typeof MenuPrimitive.Positioner>["side"]
+    sideOffset?: React.ComponentProps<typeof MenuPrimitive.Positioner>["sideOffset"]
+}) {
     return (
         <MenuPrimitive.Portal>
             <MenuPrimitive.Positioner
-                side="bottom"
-                align="end"
-                sideOffset={8}
+                side={side}
+                align={align}
+                sideOffset={sideOffset}
                 className="z-50"
             >
                 <MenuPrimitive.Popup
@@ -45,15 +52,46 @@ function DropdownMenuContent({
 
 function DropdownMenuItem({
     className,
+    variant = "default",
     ...props
-}: React.ComponentProps<typeof MenuPrimitive.Item>) {
+}: React.ComponentProps<typeof MenuPrimitive.Item> & {
+    variant?: "default" | "destructive"
+}) {
     return (
         <MenuPrimitive.Item
             data-slot="dropdown-menu-item"
             className={cn(
                 "flex w-full cursor-default items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none transition-colors data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+                variant === "destructive" &&
+                    "text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive",
                 className,
             )}
+            {...props}
+        />
+    )
+}
+
+function DropdownMenuGroup({
+    className,
+    ...props
+}: React.ComponentProps<typeof MenuPrimitive.Group>) {
+    return (
+        <MenuPrimitive.Group
+            data-slot="dropdown-menu-group"
+            className={className}
+            {...props}
+        />
+    )
+}
+
+function DropdownMenuSeparator({
+    className,
+    ...props
+}: React.ComponentProps<typeof MenuPrimitive.Separator>) {
+    return (
+        <MenuPrimitive.Separator
+            data-slot="dropdown-menu-separator"
+            className={cn("my-1 h-px bg-border", className)}
             {...props}
         />
     )
@@ -62,6 +100,8 @@ function DropdownMenuItem({
 export {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 }

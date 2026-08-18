@@ -16,6 +16,8 @@ export type ConfigStates = Record<ConfigId, SelectedParts>
 // シミュレーター全体の状態
 export type SimulatorState = {
     activeConfigId: ConfigId // 選択中の構成ID
+    activeSavedBuildId: string | null // 選択中の追加構成ID
     activeSlot: PartSlot // 選択中のパーツ選択枠
     configs: ConfigStates // 構成別の選択状態
+    savedBuildParts: SelectedParts // 選択中の追加構成のパーツ
 }

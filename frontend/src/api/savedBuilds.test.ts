@@ -116,4 +116,15 @@ describe("savedBuilds API", () => {
             message: "保存できる構成は20件までです",
         })
     })
+
+    it("不正な重量を含む保存構成レスポンスを拒否する", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([{
+            ...BUILD,
+            parts: [{...BUILD.parts[0], weight: null}],
+        }])))
+
+        await expect(fetchSavedBuilds()).rejects.toThrow(
+            "保存構成のパーツ情報を解釈できませんでした",
+        )
+    })
 })

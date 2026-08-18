@@ -1,7 +1,16 @@
 import {fetchCsrfToken} from "@/features/auth/authApi"
+import {
+    isNonNegativeFiniteNumber,
+    isPartSlotKey,
+    isPositiveSafeInteger,
+} from "@/api/responseValidation"
 
 // サーバー側と同じ保存上限をUI表示にも利用する
 export const MAX_SAVED_BUILDS = 20
+const FIXED_CONFIG_COUNT = 4
+const MAX_PARTS_PER_BUILD = 100
+const MAX_SAVED_BUILD_ID_LENGTH = 200
+const MAX_TIMESTAMP_LENGTH = 64
 
 // D1へ保存する構成内パーツの入力
 export type SavedBuildPartInput = {
@@ -73,7 +82,7 @@ async function throwApiError(
         if (
             Array.isArray(payload.error?.partIds) &&
             payload.error.partIds.every(
-                (partId) => typeof partId === "number",
+                (partId) => isPositiveSafeInteger(partId),
             )
         ) {
             partIds = payload.error.partIds as number[]
@@ -83,6 +92,29 @@ async function throwApiError(
     }
 
     throw new SavedBuildApiError(message, code, partIds)
+}
+
+// DB由来のIDを画面へ流す前に、URLへ安全に渡せる長さと形式を確認。
+// 実DBはUUIDだが、移行処理やテスト用リポジトリの不透明なIDも扱えるようにする。
+function isSavedBuildId(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= MAX_SAVED_BUILD_ID_LENGTH &&
+        /^[A-Za-z0-9_-]+$/.test(value)
+}
+
+// 保存構成の表示文字列を、サーバーの入力上限と同じ範囲へ限定
+function isSavedBuildText(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 50
+}
+
+// 保存日時は表示・監査用途の短い文字列として扱う
+function isTimestamp(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= MAX_TIMESTAMP_LENGTH
 }
 
 // APIレスポンスの構造を検証し、予期しないJSONを画面へ流さない
@@ -100,12 +132,13 @@ function parseSavedBuild(value: unknown): SavedBuild {
     const parts = record.parts
 
     if (
-        typeof record.id !== "string" ||
-        typeof record.name !== "string" ||
-        typeof record.version !== "number" ||
-        typeof record.createdAt !== "string" ||
-        typeof record.updatedAt !== "string" ||
-        !Array.isArray(parts)
+        !isSavedBuildId(record.id) ||
+        !isSavedBuildText(record.name) ||
+        !isPositiveSafeInteger(record.version) ||
+        !isTimestamp(record.createdAt) ||
+        !isTimestamp(record.updatedAt) ||
+        !Array.isArray(parts) ||
+        parts.length > MAX_PARTS_PER_BUILD
     ) {
         throw new SavedBuildApiError(
             "保存構成のレスポンスを解釈できませんでした",
@@ -120,10 +153,10 @@ function parseSavedBuild(value: unknown): SavedBuild {
         const partRecord = part as Record<string, unknown>
 
         if (
-            typeof partRecord.slotKey !== "string" ||
-            typeof partRecord.partId !== "number" ||
-            typeof partRecord.price !== "number" ||
-            typeof partRecord.weight !== "number"
+            !isPartSlotKey(partRecord.slotKey) ||
+            !isPositiveSafeInteger(partRecord.partId) ||
+            !isNonNegativeFiniteNumber(partRecord.price) ||
+            !isNonNegativeFiniteNumber(partRecord.weight)
         ) {
             return []
         }
@@ -136,7 +169,10 @@ function parseSavedBuild(value: unknown): SavedBuild {
         }]
     })
 
-    if (parsedParts.length !== parts.length) {
+    if (
+        parsedParts.length !== parts.length ||
+        new Set(parsedParts.map((part) => part.slotKey)).size !== parsedParts.length
+    ) {
         throw new SavedBuildApiError(
             "保存構成のパーツ情報を解釈できませんでした",
         )
@@ -154,13 +190,24 @@ function parseSavedBuild(value: unknown): SavedBuild {
 
 // 一覧レスポンスも1件ずつ検証し、不正な要素を黙って欠落させない
 function parseSavedBuildList(value: unknown): SavedBuild[] {
-    if (!Array.isArray(value)) {
+    if (
+        !Array.isArray(value) ||
+        value.length > MAX_SAVED_BUILDS - FIXED_CONFIG_COUNT
+    ) {
         throw new SavedBuildApiError(
             "保存構成一覧のレスポンスを解釈できませんでした",
         )
     }
 
-    return value.map(parseSavedBuild)
+    const builds = value.map(parseSavedBuild)
+
+    if (new Set(builds.map((build) => build.id)).size !== builds.length) {
+        throw new SavedBuildApiError(
+            "保存構成一覧のレスポンスに重複した構成があります",
+        )
+    }
+
+    return builds
 }
 
 // ログインユーザーの保存構成一覧を更新日時順で取得

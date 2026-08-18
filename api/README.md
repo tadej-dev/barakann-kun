@@ -16,6 +16,12 @@ React SPAを同一Worker・同一オリジンで配信します。
 - `GET /api/builds/:id`
 - `PUT /api/builds/:id`
 - `DELETE /api/builds/:id`
+- `GET /api/config-slots`
+- `PATCH /api/config-slots/:id`
+- `PUT /api/config-slots/:id`
+- `DELETE /api/config-slots/:id`
+- `GET /api/config-order`
+- `PUT /api/config-order`
 
 ## ローカル起動
 
@@ -98,7 +104,8 @@ npm run dev
 - 未ログイン時は保存構成パネルが表示されない
 - ヘッダーのGoogleログインからGoogleへ遷移し、`/api/auth/callback/google`を経由して戻る
 - ログイン後に`/api/auth/session`がユーザー情報を返す
-- 構成を名前付きで保存し、一覧表示・復元・名前変更・上書き・削除ができる
+- 構成1〜4の選択パーツを選択変更後に自動保存し、名前変更・クリアができる
+- 追加した名前付き構成を一覧表示し、並び替え・名前変更・削除ができる
 - ログアウト後に保存構成パネルが非表示になる
 - ブラウザを再読み込みしてもD1へ保存した構成を取得できる
 
@@ -123,6 +130,8 @@ npm run build
 - `0001_initial_schema.sql`: D1用テーブルとインデックス
 - `0002_seed_master_data.sql`: カテゴリー・ブランド・パーツのマスターデータ
 - `0003_auth_and_saved_builds.sql`: 認証・セッション・ユーザーごとの保存構成
+- `0004_config_slots.sql`: 構成1〜4の固定スロットと選択パーツ
+- `0005_config_order.sql`: 固定・追加構成の表示順
 
 `0003`では、次のテーブルを追加します。
 
@@ -131,6 +140,9 @@ npm run build
 - `sessions`: トークンハッシュと有効期限を持つセッション
 - `saved_builds`: ユーザーが保存した構成
 - `saved_build_parts`: 構成内のスロット、パーツID、保存時の価格・重量
+
+`0004`では`saved_builds.config_slot`と固定構成用の一意インデックスを追加します。
+`0005`では、固定構成と追加構成の表示順を保存する`saved_build_orders`を追加します。
 
 ## 認証API
 

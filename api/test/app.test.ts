@@ -7,6 +7,13 @@ import type {
     DeleteAccountResult,
 } from "../src/db/account-repository"
 import type {CatalogRepository} from "../src/db/catalog-repository"
+import type {ConfigOrderRepository} from "../src/db/config-order-repository"
+import type {
+    ConfigSlot,
+    ConfigSlotId,
+    ConfigSlotMutationResult,
+    ConfigSlotRepository,
+} from "../src/db/config-slot-repository"
 import type {
     DeleteSavedBuildResult,
     SavedBuild,
@@ -262,6 +269,135 @@ class TestAccountRepository implements AccountRepository {
     }
 }
 
+// 構成スロットAPIのルート検証用リポジトリ
+class TestConfigSlotRepository implements ConfigSlotRepository {
+    readonly slots: ConfigSlot[] = ["1", "2", "3", "4"].map((configId) => ({
+        configId: configId as ConfigSlotId,
+        name: `構成${configId}`,
+        version: 0,
+        updatedAt: null,
+        parts: [],
+    }))
+
+    async list(userId: string): Promise<ConfigSlot[]> {
+        return userId === "user-1" ? this.slots : []
+    }
+
+    async rename(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+        name: string,
+    ): Promise<ConfigSlotMutationResult> {
+        if (userId !== "user-1") {
+            return {kind: "not_found"}
+        }
+
+        const slot = this.slots.find((candidate) => candidate.configId === configId)
+
+        if (!slot) {
+            return {kind: "not_found"}
+        }
+
+        if (slot.version !== version) {
+            return {kind: "conflict"}
+        }
+
+        Object.assign(slot, {
+            name,
+            version: version + 1,
+            updatedAt: "2026-08-16T00:00:00.000Z",
+        })
+
+        return {kind: "updated", slot}
+    }
+
+    async save(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+        name: string,
+        parts: SavedBuildPartInput[],
+    ): Promise<ConfigSlotMutationResult> {
+        if (userId !== "user-1") {
+            return {kind: "not_found"}
+        }
+
+        const slot = this.slots.find((candidate) => candidate.configId === configId)
+
+        if (!slot) {
+            return {kind: "not_found"}
+        }
+
+        if (slot.version !== version) {
+            return {kind: "conflict"}
+        }
+
+        Object.assign(slot, {
+            name,
+            version: version + 1,
+            updatedAt: "2026-08-16T00:00:00.000Z",
+            parts: parts.map((part) => ({
+                ...part,
+                price: 100,
+                weight: 100,
+            })),
+        })
+
+        return {kind: "updated", slot}
+    }
+
+    async clear(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+    ): Promise<ConfigSlotMutationResult> {
+        if (userId !== "user-1") {
+            return {kind: "not_found"}
+        }
+
+        const slot = this.slots.find((candidate) => candidate.configId === configId)
+
+        if (!slot) {
+            return {kind: "not_found"}
+        }
+
+        if (slot.version !== version) {
+            return {kind: "conflict"}
+        }
+
+        Object.assign(slot, {
+            version: version + 1,
+            updatedAt: "2026-08-16T00:00:00.000Z",
+            parts: [],
+        })
+
+        return {kind: "updated", slot}
+    }
+}
+
+// 構成表示順APIのルート検証用リポジトリ
+class TestConfigOrderRepository implements ConfigOrderRepository {
+    order = ["config:1", "config:2", "config:3", "config:4"]
+    lastUserId: string | null = null
+
+    async list(userId: string): Promise<string[]> {
+        this.lastUserId = userId
+
+        return userId === "user-1" ? this.order : []
+    }
+
+    async save(userId: string, itemKeys: string[]): Promise<string[]> {
+        this.lastUserId = userId
+
+        if (userId === "user-1") {
+            this.order = itemKeys
+        }
+
+        return itemKeys
+    }
+}
+
 // 同じversionを同時更新したときの競合を再現するRepository
 class ConcurrentSavedBuildRepository implements SavedBuildRepository {
     version = 1
@@ -509,6 +645,38 @@ describe("authentication API", () => {
         )
     })
 
+    it("falls back to the app root for an external callback URL", async () => {
+        const response = await app.request(
+            "/api/auth/google?callbackUrl=https%3A%2F%2Fevil.example%2Fsteal",
+            {},
+            {
+                ...createAuthBindings(),
+                AUTH_URL: "http://localhost:5173",
+            },
+        )
+
+        expect(response.status).toBe(302)
+        expect(response.headers.get("location")).toBe(
+            "http://localhost:5173/api/auth/signin?callbackUrl=%2F",
+        )
+    })
+
+    it("returns to the simulator with a retry message when Google login is cancelled", async () => {
+        const response = await app.request(
+            "/api/auth/callback/google?error=access_denied",
+            {},
+            {
+                ...createAuthBindings(),
+                AUTH_URL: "http://localhost:5173",
+            },
+        )
+
+        expect(response.status).toBe(302)
+        expect(response.headers.get("location")).toBe(
+            "http://localhost:5173/?authError=google-cancelled",
+        )
+    })
+
     it("redirects to Google after the CSRF token is issued", async () => {
         const bindings = createAuthBindings()
         const csrfResponse = await app.request(
@@ -618,6 +786,240 @@ describe("authentication API", () => {
 
         expect(response.status).toBe(302)
         expect(deletedTokens).toEqual(["test-session-token"])
+    })
+})
+
+// 構成1〜4の名前・選択パーツ同期API検証
+describe("config slot API", () => {
+    const configSlotRepository = new TestConfigSlotRepository()
+    const app = createApp({
+        catalogRepository: createRepository(),
+        authAdapter: createAuthAdapter(),
+        configSlotRepository,
+    })
+
+    it("returns four default config slots for the authenticated user", async () => {
+        const response = await app.request(
+            "/api/config-slots",
+            {
+                headers: {
+                    cookie: "authjs.session-token=test-session-token",
+                },
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual(configSlotRepository.slots)
+    })
+
+    it("renames, saves, and clears a config slot with CSRF protection", async () => {
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
+        const renameResponse = await app.request(
+            "/api/config-slots/1",
+            {
+                method: "PATCH",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "遠征用",
+                    version: 0,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(renameResponse.status).toBe(200)
+        expect(await renameResponse.json()).toMatchObject({
+            configId: "1",
+            name: "遠征用",
+            version: 1,
+        })
+
+        const saveResponse = await app.request(
+            "/api/config-slots/1",
+            {
+                method: "PUT",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "遠征用",
+                    version: 1,
+                    parts: [{slotKey: "frame", partId: 1}],
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(saveResponse.status).toBe(200)
+        expect(await saveResponse.json()).toMatchObject({
+            configId: "1",
+            name: "遠征用",
+            version: 2,
+            parts: [{slotKey: "frame", partId: 1}],
+        })
+
+        const clearResponse = await app.request(
+            "/api/config-slots/1",
+            {
+                method: "DELETE",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    version: 2,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(clearResponse.status).toBe(200)
+        expect(await clearResponse.json()).toMatchObject({
+            configId: "1",
+            name: "遠征用",
+            version: 3,
+            parts: [],
+        })
+    })
+
+    it("rejects config slot changes without a valid CSRF token", async () => {
+        const response = await app.request(
+            "/api/config-slots/1",
+            {
+                method: "PUT",
+                headers: {
+                    cookie: "authjs.session-token=test-session-token",
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "不正な変更",
+                    version: 3,
+                    parts: [],
+                }),
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(403)
+        expect(await response.json()).toMatchObject({
+            error: {code: "INVALID_CSRF_TOKEN"},
+        })
+    })
+
+    it("returns migration guidance instead of a generic 500 when config slots are unavailable", async () => {
+        const migrationApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            configSlotRepository: {
+                list: async () => {
+                    throw new Error("D1_ERROR: no such column: config_slot")
+                },
+            } as unknown as ConfigSlotRepository,
+        })
+        const response = await migrationApp.request(
+            "/api/config-slots",
+            {
+                headers: {
+                    cookie: "authjs.session-token=test-session-token",
+                },
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(503)
+        expect(await response.json()).toMatchObject({
+            error: {code: "CONFIG_SLOT_MIGRATION_REQUIRED"},
+        })
+    })
+})
+
+// 固定構成と追加構成の表示順同期API検証
+describe("config order API", () => {
+    const configOrderRepository = new TestConfigOrderRepository()
+    const app = createApp({
+        catalogRepository: createRepository(),
+        authAdapter: createAuthAdapter(),
+        configOrderRepository,
+    })
+
+    it("returns the saved order for the authenticated user", async () => {
+        const response = await app.request(
+            "/api/config-order",
+            {
+                headers: {
+                    cookie: "authjs.session-token=test-session-token",
+                },
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({
+            items: ["config:1", "config:2", "config:3", "config:4"],
+        })
+        expect(configOrderRepository.lastUserId).toBe("user-1")
+    })
+
+    it("saves the order with CSRF protection", async () => {
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
+        const nextOrder = [
+            "config:3",
+            "config:1",
+            "config:4",
+            "config:2",
+            "build:custom-build",
+        ]
+        const response = await app.request(
+            "/api/config-order",
+            {
+                method: "PUT",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    items: nextOrder,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({items: nextOrder})
+        expect(configOrderRepository.order).toEqual(nextOrder)
+    })
+
+    it("rejects an order without a valid CSRF token", async () => {
+        const response = await app.request(
+            "/api/config-order",
+            {
+                method: "PUT",
+                headers: {
+                    cookie: "authjs.session-token=test-session-token",
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    items: ["config:1", "config:2", "config:3", "config:4"],
+                }),
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(403)
+        expect(await response.json()).toMatchObject({
+            error: {code: "INVALID_CSRF_TOKEN"},
+        })
     })
 })
 
@@ -767,6 +1169,28 @@ describe("saved builds API", () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual(savedBuildRepository.builds)
         expect(savedBuildRepository.lastUserId).toBe("user-1")
+    })
+
+    it("returns migration guidance when saved-build schema is unavailable", async () => {
+        const migrationApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: {
+                list: async () => {
+                    throw new Error("D1_ERROR: no such column: config_slot")
+                },
+            } as unknown as SavedBuildRepository,
+        })
+        const response = await migrationApp.request(
+            "/api/builds",
+            authenticatedRequest,
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(503)
+        expect(await response.json()).toMatchObject({
+            error: {code: "SAVED_BUILD_MIGRATION_REQUIRED"},
+        })
     })
 
     it("does not expose another user's build", async () => {

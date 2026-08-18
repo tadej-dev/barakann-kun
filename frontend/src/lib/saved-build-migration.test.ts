@@ -1,6 +1,8 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
 import {
+    dismissLocalSimulatorMigration,
+    hasPendingLocalSimulatorMigration,
     loadSavedBuildMigration,
     migrateLocalSimulatorState,
 } from "@/lib/saved-build-migration"
@@ -116,7 +118,38 @@ describe("saved-build-migration", () => {
                 "1": {buildId: "build-1"},
                 "3": {buildId: "build-3"},
             },
+            completedAt: expect.any(String),
         })
+    })
+
+    it("保存完了後はローカル構成が変わっても移行案内を再表示しない", async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(createCsrfResponse())
+            .mockResolvedValueOnce(createSavedBuildResponse(
+                "build-1",
+                "構成1",
+            ))
+            .mockResolvedValueOnce(createCsrfResponse())
+            .mockResolvedValueOnce(createSavedBuildResponse(
+                "build-3",
+                "構成3",
+            ))
+        vi.stubGlobal("fetch", fetchMock)
+
+        const state = createState()
+
+        await migrateLocalSimulatorState("user-1", state)
+
+        const changedState: StoredSimulatorState = {
+            ...state,
+            configs: {
+                ...state.configs,
+                "1": {...state.configs["1"], frame: 99},
+            },
+        }
+
+        expect(hasPendingLocalSimulatorMigration("user-1", changedState))
+            .toBe(false)
     })
 
     it("移行時に利用者が指定した構成名を使用する", async () => {
@@ -177,6 +210,27 @@ describe("saved-build-migration", () => {
         expect(fetchMock).not.toHaveBeenCalled()
     })
 
+    it("同じ内容で移行を見送った構成は再表示せず、内容変更時は候補に戻す", () => {
+        const state = createState()
+
+        expect(hasPendingLocalSimulatorMigration("user-1", state)).toBe(true)
+
+        dismissLocalSimulatorMigration("user-1", state)
+
+        expect(hasPendingLocalSimulatorMigration("user-1", state)).toBe(false)
+
+        const changedState: StoredSimulatorState = {
+            ...state,
+            configs: {
+                ...state.configs,
+                "1": {...state.configs["1"], frame: 99},
+            },
+        }
+
+        expect(hasPendingLocalSimulatorMigration("user-1", changedState))
+            .toBe(true)
+    })
+
     it("構成ごとの失敗を記録し、成功した構成の移行を保持する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(createCsrfResponse())
@@ -210,5 +264,12 @@ describe("saved-build-migration", () => {
             .toMatchObject({buildId: "build-1"})
         expect(loadSavedBuildMigration("user-1")?.configs["3"])
             .toBeUndefined()
+
+        // 失敗結果を閉じた後は、同じ内容の移行案内を再表示しない
+        expect(hasPendingLocalSimulatorMigration("user-1", createState()))
+            .toBe(true)
+        dismissLocalSimulatorMigration("user-1", createState())
+        expect(hasPendingLocalSimulatorMigration("user-1", createState()))
+            .toBe(false)
     })
 })

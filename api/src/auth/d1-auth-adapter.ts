@@ -34,6 +34,8 @@ type UserSessionRow = UserRow & {
     session_expires_at: string
 }
 
+const MAX_DISPLAY_NAME_LENGTH = 100
+
 // D1から1行を型付きで取得する共通処理
 async function firstRow<T>(
     database: D1Database,
@@ -72,8 +74,10 @@ function normalizeEmail(email: string): string {
 // Auth.jsから渡された表示名をusers.display_nameの制約に合わせて整形
 function displayName(name: string | null | undefined, email: string): string {
     const normalizedName = name?.trim()
+    const candidate = normalizedName || email || "ユーザー"
 
-    return normalizedName || email
+    // Googleプロフィールの長い表示名でもDBのCHECK制約でログインを失敗させない。
+    return Array.from(candidate).slice(0, MAX_DISPLAY_NAME_LENGTH).join("")
 }
 
 // D1を利用するAuth.jsデータベースアダプター
@@ -319,8 +323,9 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
             const tokenHash = await hashSessionToken(session.sessionToken)
             const currentSession = await firstRow<SessionRow>(
                 database,
-                `${selectSessionSql} WHERE token_hash = ?`,
-                [tokenHash],
+                `${selectSessionSql}
+                 WHERE token_hash = ? AND expires_at > ?`,
+                [tokenHash, new Date().toISOString()],
             )
 
             if (!currentSession) {

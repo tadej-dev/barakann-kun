@@ -75,6 +75,159 @@ export class MissingSavedBuildPartsError extends Error {
     }
 }
 
+// スロットとパーツカテゴリー・対応位置の不一致を表すエラー
+export type InvalidSavedBuildPartIssue = {
+    slotKey: string
+    partId: number
+    reason: "category" | "position"
+}
+
+export class InvalidSavedBuildPartsError extends Error {
+    constructor(
+        readonly issues: InvalidSavedBuildPartIssue[],
+    ) {
+        super("保存構成のスロットとパーツの適合条件が一致しません")
+        this.name = "InvalidSavedBuildPartsError"
+    }
+
+    get partIds(): number[] {
+        return Array.from(new Set(this.issues.map((issue) => issue.partId)))
+    }
+}
+
+// 構成関連テーブルのマイグレーション未適用を判定するエラー
+export function isMissingSavedBuildSchemaError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false
+    }
+
+    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot)/i.test(error.message)) {
+        return true
+    }
+
+    return isMissingSavedBuildSchemaError(
+        (error as Error & {cause?: unknown}).cause,
+    )
+}
+
+// 保存構成APIが必要とするスロット・パーツの組み合わせを検証する行
+type ValidatablePartRow = {
+    id: number
+    price: number
+    weight: number
+    category_key: string
+    allowed_position: string | null
+}
+
+// D1のバインド変数上限を超えないよう、入力数に合わせたIN句を作成
+function placeholders(length: number): string {
+    return Array.from({length}, () => "?").join(", ")
+}
+
+// D1のクエリ結果を型付き配列として取得
+async function queryRows<T>(
+    database: D1Database,
+    sql: string,
+    parameters: unknown[] = [],
+): Promise<T[]> {
+    const result = await database.prepare(sql).bind(...parameters).all<T>()
+
+    return result.results
+}
+
+// スロットキーからカテゴリーと前後位置を分解
+function parseSlotKey(slotKey: string) {
+    const [categoryKey, position] = slotKey.split(":")
+
+    return {
+        categoryKey,
+        position: position === "front" || position === "rear"
+            ? position
+            : null,
+    }
+}
+
+// パーツの存在・カテゴリー・対応位置を一度のクエリで検証し、価格重量を返す
+export async function loadValidatedPartSnapshots(
+    database: D1Database,
+    parts: SavedBuildPartInput[],
+): Promise<Map<number, {id: number; price: number; weight: number}>> {
+    const partIds = Array.from(new Set(parts.map((part) => part.partId)))
+
+    if (partIds.length === 0) {
+        return new Map()
+    }
+
+    const rows = await queryRows<ValidatablePartRow>(
+        database,
+        `SELECT parts.id,
+                parts.price,
+                parts.weight,
+                categories.key AS category_key,
+                (
+                    SELECT specification.spec_value
+                    FROM part_specifications AS specification
+                    WHERE specification.part_id = parts.id
+                      AND specification.spec_key = 'allowed_position'
+                    LIMIT 1
+                ) AS allowed_position
+         FROM parts
+         JOIN categories ON categories.id = parts.category_id
+         WHERE parts.id IN (${placeholders(partIds.length)})`,
+        partIds,
+    )
+    const rowsByPartId = new Map(rows.map((row) => [row.id, row]))
+    const missingPartIds = partIds.filter((partId) => !rowsByPartId.has(partId))
+
+    if (missingPartIds.length > 0) {
+        throw new MissingSavedBuildPartsError(missingPartIds)
+    }
+
+    const issues: InvalidSavedBuildPartIssue[] = []
+
+    for (const part of parts) {
+        const row = rowsByPartId.get(part.partId)
+
+        if (!row) {
+            continue
+        }
+
+        const slot = parseSlotKey(part.slotKey)
+
+        if (row.category_key !== slot.categoryKey) {
+            issues.push({
+                slotKey: part.slotKey,
+                partId: part.partId,
+                reason: "category",
+            })
+
+            continue
+        }
+
+        if (
+            slot.position &&
+            row.allowed_position &&
+            row.allowed_position !== slot.position
+        ) {
+            issues.push({
+                slotKey: part.slotKey,
+                partId: part.partId,
+                reason: "position",
+            })
+        }
+    }
+
+    if (issues.length > 0) {
+        throw new InvalidSavedBuildPartsError(issues)
+    }
+
+    return new Map(rows.map((row) => [row.id, {
+        id: row.id,
+        price: row.price,
+        weight: row.weight,
+    }]))
+}
+
 // 同時リクエストを含めて保存上限へ達した場合のエラー
 export class SavedBuildLimitExceededError extends Error {
     constructor() {

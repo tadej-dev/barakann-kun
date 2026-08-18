@@ -1,3 +1,5 @@
+import {useMemo} from "react"
+
 import {CandidatePartsFilters} from "./CandidatePartsFilters"
 import {CandidatePartsBlockedMessage} from "./CandidatePartsBlockedMessage"
 import {CandidatePartsSelectionDialog} from "./CandidatePartsSelectionDialog"
@@ -16,11 +18,15 @@ import {Badge} from "@/components/ui/badge"
 import {
     evaluatePartCompatibility,
     getPartPackageUnit,
+    type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
 import {hasPartVariantColumn} from "@/features/simulator/partDisplay"
 import type {PartSlot} from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
+
+// 行数が多い場合だけブラウザ標準の遅延描画を有効化
+const CONTENT_VISIBILITY_THRESHOLD = 100
 
 // 候補パーツ表のプロパティ
 type CandidatePartsTableProps = {
@@ -80,12 +86,28 @@ export function CandidatePartsTable({
         confirmPendingSelection,
         pendingSelection,
         requestSelection,
+        requestSelectionBoth,
     } = useCandidatePartsSelection(
         activeSlot,
         selectedParts,
         onSelect,
     )
     const supportsFrontRearSelection = categorySlots.length === 2
+    const enableContentVisibility = filteredAndSortedParts.length >=
+        CONTENT_VISIBILITY_THRESHOLD
+    // 検索条件が変わっても適合判定を再計算せず、パーツ選択時だけ更新
+    const compatibilityByPartId = useMemo(() => {
+        const result = new Map<number, CompatibilityResult | null>()
+
+        for (const part of parts) {
+            result.set(
+                part.id,
+                evaluatePartCompatibility(part, activeSlot, selectedParts),
+            )
+        }
+
+        return result
+    }, [activeSlot, parts, selectedParts])
 
     // 選択不可状態
     if (blockedMessage) {
@@ -144,7 +166,14 @@ export function CandidatePartsTable({
                 onIntegratedHandlebarOnlyChange={setIntegratedHandlebarOnly}
             />
 
-            <div className="overflow-x-auto rounded-lg border bg-background">
+            <div
+                className={
+                    "rounded-lg border bg-background " +
+                    (enableContentVisibility
+                        ? "max-h-[70vh] overflow-auto"
+                        : "overflow-x-auto")
+                }
+            >
                 <Table
                     aria-label="候補パーツ一覧"
                     className="min-w-[760px] table-fixed"
@@ -173,18 +202,15 @@ export function CandidatePartsTable({
                                     part={part}
                                     isSelected={selectedPart?.id === part.id}
                                     showVariantColumn={showVariantColumn}
-                                    compatibility={evaluatePartCompatibility(
-                                        part,
-                                        activeSlot,
-                                        selectedParts,
-                                    )}
+                                    compatibility={compatibilityByPartId.get(part.id) ?? null}
+                                    enableContentVisibility={enableContentVisibility}
                                     canSelectBoth={
                                         supportsFrontRearSelection &&
                                         !part.specifications?.allowed_position &&
                                         getPartPackageUnit(part) !== "pair"
                                     }
-                                    onSelect={() => requestSelection(part)}
-                                    onSelectBoth={() => requestSelection(part, true)}
+                                    onSelect={requestSelection}
+                                    onSelectBoth={requestSelectionBoth}
                                 />
                             ))
                         )}

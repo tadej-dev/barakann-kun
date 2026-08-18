@@ -4,7 +4,7 @@ import {z} from "zod"
 const savedBuildIdSchema = z.string().uuid()
 
 // 構成名に許可する文字数
-const savedBuildNameSchema = z.string().trim().min(1).max(100)
+const savedBuildNameSchema = z.string().trim().min(1).max(50)
 
 // UI上のパーツスロット名とパーツID
 const savedBuildPartSchema = z.object({

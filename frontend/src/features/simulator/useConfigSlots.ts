@@ -1,39 +1,53 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 
 import {
-    createSavedBuild,
-    deleteSavedBuild,
-    fetchSavedBuilds,
-    renameSavedBuild,
-    updateSavedBuild,
-    type SavedBuild,
-    type SavedBuildPartInput,
-} from "@/api/savedBuilds"
+    clearConfigSlot,
+    fetchConfigSlots,
+    renameConfigSlot,
+    saveConfigSlot,
+    type ConfigSlot,
+} from "@/api/configSlots"
+import type {SavedBuildPartInput} from "@/api/savedBuilds"
+import {
+    CONFIG_IDS,
+} from "@/features/simulator/simulatorTypes"
 
-type SavedBuildOperation = "create" | "rename" | "update" | "delete"
+type ConfigSlotOperation = "rename" | "save" | "clear"
 
-type UseSavedBuildsOptions = {
+type UseConfigSlotsOptions = {
     enabled: boolean
     userId: string | null
     reloadKey?: number
 }
 
-// 保存構成一覧と変更系APIの状態をシミュレーターUIから分離
-export function useSavedBuilds({
+// 未保存の固定構成を画面へ表示する既定値
+function createDefaultConfigSlots(): ConfigSlot[] {
+    return CONFIG_IDS.map((configId) => ({
+        configId,
+        name: `構成${configId}`,
+        version: 0,
+        updatedAt: null,
+        parts: [],
+    }))
+}
+
+// 構成1〜4のD1同期と変更処理をUIから分離
+export function useConfigSlots({
     enabled,
     userId,
     reloadKey = 0,
-}: UseSavedBuildsOptions) {
-    const [builds, setBuilds] = useState<SavedBuild[]>([])
+}: UseConfigSlotsOptions) {
+    const [slots, setSlots] = useState(createDefaultConfigSlots)
+    const [hasLoadedSuccessfully, setHasLoadedSuccessfully] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
-    const [operation, setOperation] = useState<SavedBuildOperation | null>(null)
+    const [operation, setOperation] = useState<ConfigSlotOperation | null>(null)
     const [operationUserId, setOperationUserId] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState("")
     const [errorUserId, setErrorUserId] = useState<string | null>(null)
     const [errorReloadKey, setErrorReloadKey] = useState<number | null>(null)
     const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
-    const currentUserIdRef = useRef(userId)
     const [loadedReloadKey, setLoadedReloadKey] = useState<number | null>(null)
+    const currentUserIdRef = useRef(userId)
     const operationRequestIdRef = useRef(0)
 
     useEffect(() => {
@@ -44,7 +58,8 @@ export function useSavedBuilds({
         const requestUserId = userId
 
         if (!enabled || !requestUserId) {
-            setBuilds([])
+            setSlots(createDefaultConfigSlots())
+            setHasLoadedSuccessfully(false)
             setLoadedUserId(null)
             setLoadedReloadKey(null)
             setErrorMessage("")
@@ -57,7 +72,7 @@ export function useSavedBuilds({
         setIsLoading(true)
 
         try {
-            const nextBuilds = await fetchSavedBuilds(signal)
+            const nextSlots = await fetchConfigSlots(signal)
 
             if (
                 signal?.aborted ||
@@ -66,23 +81,25 @@ export function useSavedBuilds({
                 return undefined
             }
 
-            setBuilds(nextBuilds)
+            setSlots(nextSlots)
             setErrorMessage("")
             setErrorUserId(null)
             setErrorReloadKey(null)
+            setHasLoadedSuccessfully(true)
             setLoadedUserId(requestUserId)
             setLoadedReloadKey(reloadKey)
 
-            return nextBuilds
+            return nextSlots
         } catch (error) {
             if (
                 !signal?.aborted &&
                 currentUserIdRef.current === requestUserId
             ) {
+                setHasLoadedSuccessfully(false)
                 setErrorMessage(
                     error instanceof Error
                         ? error.message
-                        : "保存構成一覧の取得に失敗しました",
+                        : "構成の取得に失敗しました",
                 )
                 setErrorUserId(requestUserId)
                 setErrorReloadKey(reloadKey)
@@ -108,10 +125,10 @@ export function useSavedBuilds({
 
         const controller = new AbortController()
 
-        // 初回・移行完了時の取得は通信後にだけ状態を更新し、Effect直後の再描画を避ける
+        // ログイン後・保存構成の移行後にD1の固定構成を取得
         async function load() {
             try {
-                const nextBuilds = await fetchSavedBuilds(controller.signal)
+                const nextSlots = await fetchConfigSlots(controller.signal)
 
                 if (
                     controller.signal.aborted ||
@@ -120,10 +137,11 @@ export function useSavedBuilds({
                     return
                 }
 
-                setBuilds(nextBuilds)
+                setSlots(nextSlots)
                 setErrorMessage("")
                 setErrorUserId(null)
                 setErrorReloadKey(null)
+                setHasLoadedSuccessfully(true)
                 setLoadedUserId(requestUserId)
                 setLoadedReloadKey(reloadKey)
             } catch (error) {
@@ -131,10 +149,11 @@ export function useSavedBuilds({
                     !controller.signal.aborted &&
                     currentUserIdRef.current === requestUserId
                 ) {
+                    setHasLoadedSuccessfully(false)
                     setErrorMessage(
                         error instanceof Error
                             ? error.message
-                            : "保存構成一覧の取得に失敗しました",
+                            : "構成の取得に失敗しました",
                     )
                     setErrorUserId(requestUserId)
                     setErrorReloadKey(reloadKey)
@@ -154,8 +173,11 @@ export function useSavedBuilds({
         return () => controller.abort()
     }, [enabled, reloadKey, userId])
 
+    // 未ログイン中はD1の値を表示せず、固定スロットの既定名へ戻す
+    const visibleSlots = enabled ? slots : createDefaultConfigSlots()
+
     const runOperation = useCallback(async <T,>(
-        nextOperation: SavedBuildOperation,
+        nextOperation: ConfigSlotOperation,
         request: () => Promise<T>,
     ): Promise<T> => {
         const requestUserId = userId
@@ -176,7 +198,7 @@ export function useSavedBuilds({
                 setErrorMessage(
                     error instanceof Error
                         ? error.message
-                        : "保存構成の操作に失敗しました",
+                        : "構成の操作に失敗しました",
                 )
                 setErrorUserId(requestUserId)
                 setErrorReloadKey(reloadKey)
@@ -192,82 +214,73 @@ export function useSavedBuilds({
         }
     }, [reloadKey, userId])
 
-    const create = useCallback(async (
+    const replaceSlot = useCallback((
+        nextSlot: ConfigSlot,
+        expectedUserId: string | null,
+    ) => {
+        if (
+            !expectedUserId ||
+            currentUserIdRef.current !== expectedUserId
+        ) {
+            return
+        }
+
+        setSlots((current) => current.map((slot) =>
+            slot.configId === nextSlot.configId ? nextSlot : slot,
+        ))
+    }, [])
+
+    const rename = useCallback(async (
+        slot: ConfigSlot,
+        name: string,
+    ) => {
+        const requestUserId = userId
+
+        return runOperation("rename", async () => {
+            const renamed = await renameConfigSlot(
+                slot.configId,
+                slot.version,
+                name,
+            )
+            replaceSlot(renamed, requestUserId)
+
+            return renamed
+        })
+    }, [replaceSlot, runOperation, userId])
+
+    const save = useCallback(async (
+        slot: ConfigSlot,
         name: string,
         parts: SavedBuildPartInput[],
     ) => {
         const requestUserId = userId
 
-        return runOperation("create", async () => {
-            const build = await createSavedBuild(name, parts)
-
-            if (currentUserIdRef.current === requestUserId) {
-                setBuilds((current) => [
-                    build,
-                    ...current.filter((candidate) => candidate.id !== build.id),
-                ])
-            }
-
-            return build
-        })
-    }, [runOperation, userId])
-
-    const rename = useCallback(async (build: SavedBuild, name: string) => {
-        const requestUserId = userId
-
-        return runOperation("rename", async () => {
-            const renamed = await renameSavedBuild(
-                build.id,
-                build.version,
+        return runOperation("save", async () => {
+            const saved = await saveConfigSlot(
+                slot.configId,
+                slot.version,
                 name,
-            )
-            if (currentUserIdRef.current === requestUserId) {
-                setBuilds((current) => [
-                    renamed,
-                    ...current.filter((candidate) => candidate.id !== renamed.id),
-                ])
-            }
-
-            return renamed
-        })
-    }, [runOperation, userId])
-
-    const update = useCallback(async (
-        build: SavedBuild,
-        parts: SavedBuildPartInput[],
-    ) => {
-        const requestUserId = userId
-
-        return runOperation("update", async () => {
-            const updated = await updateSavedBuild(
-                build.id,
-                build.version,
-                build.name,
                 parts,
             )
-            if (currentUserIdRef.current === requestUserId) {
-                setBuilds((current) => [
-                    updated,
-                    ...current.filter((candidate) => candidate.id !== updated.id),
-                ])
-            }
+            replaceSlot(saved, requestUserId)
 
-            return updated
+            return saved
         })
-    }, [runOperation, userId])
+    }, [replaceSlot, runOperation, userId])
 
-    const remove = useCallback(async (build: SavedBuild) => {
+    const clear = useCallback(async (slot: ConfigSlot) => {
         const requestUserId = userId
 
-        return runOperation("delete", async () => {
-            await deleteSavedBuild(build.id, build.version)
-            if (currentUserIdRef.current === requestUserId) {
-                setBuilds((current) => current.filter(
-                    (candidate) => candidate.id !== build.id,
-                ))
-            }
+        return runOperation("clear", async () => {
+            const cleared = await clearConfigSlot(
+                slot.configId,
+                slot.version,
+            )
+            replaceSlot(cleared, requestUserId)
+
+            return cleared
         })
-    }, [runOperation, userId])
+    }, [replaceSlot, runOperation, userId])
 
     const hasCurrentUserData = enabled && Boolean(userId) &&
         loadedUserId === userId && loadedReloadKey === reloadKey
@@ -276,9 +289,9 @@ export function useSavedBuilds({
         errorReloadKey === reloadKey
 
     return {
-        builds: hasCurrentUserData ? builds : [],
-        create,
+        clear,
         errorMessage: hasCurrentError ? errorMessage : "",
+        hasLoadedSuccessfully: hasCurrentUserData && hasLoadedSuccessfully,
         isLoading: enabled && (
             isLoading ||
             (!hasCurrentUserData && !hasCurrentError)
@@ -287,8 +300,8 @@ export function useSavedBuilds({
             ? operation
             : null,
         reload,
-        remove,
         rename,
-        update,
+        save,
+        slots: hasCurrentUserData ? visibleSlots : createDefaultConfigSlots(),
     }
 }

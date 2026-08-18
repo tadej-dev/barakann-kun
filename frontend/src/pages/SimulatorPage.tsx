@@ -3,8 +3,11 @@ import {useEffect, useMemo, useRef, useState} from "react"
 import {fetchCategories} from "@/api/categories"
 import {Simulator} from "@/components/simulator/Simulator"
 import {SavedBuildMigrationDialog} from "@/components/simulator/SavedBuildMigrationDialog"
+import {Button} from "@/components/ui/button"
 import {useAuth} from "@/features/auth/useAuth"
+import {GoogleIcon} from "@/features/auth/GoogleIcon"
 import {
+    dismissLocalSimulatorMigration,
     getNonEmptyConfigIds,
     hasPendingLocalSimulatorMigration,
     migrateLocalSimulatorState,
@@ -18,17 +21,50 @@ import type {Category} from "@/types/category"
 export function SimulatorPage() {
     const {
         errorMessage: authErrorMessage,
+        login,
         status: authStatus,
         user,
     } = useAuth()
 
+    // Googleの同意画面でキャンセルされた通知を一度だけ表示する
+    const [isGoogleLoginCancelled] = useState(() => {
+        const url = new URL(window.location.href)
+
+        return url.searchParams.get("authError") === "google-cancelled"
+    })
+
+    useEffect(() => {
+        if (!isGoogleLoginCancelled) {
+            return
+        }
+
+        // ブラウザ更新で同じ通知を繰り返さないよう、表示後にクエリを消す。
+        const url = new URL(window.location.href)
+        url.searchParams.delete("authError")
+        window.history.replaceState(
+            null,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+        )
+    }, [isGoogleLoginCancelled])
+
     // 既存ユーザーのブラウザ構成を移行するため、初期状態を一度だけ読み取る
     const [localSimulatorState] = useState(loadSimulatorState)
-    const [dismissedMigrationUserId, setDismissedMigrationUserId] = useState<string | null>(null)
+    const [dismissedMigrationUserId, setDismissedMigrationUserId] =
+        useState<string | null>(null)
     const [isMigrating, setIsMigrating] = useState(false)
     const [migrationResult, setMigrationResult] = useState<SavedBuildMigrationResult | null>(null)
     const [savedBuildsReloadKey, setSavedBuildsReloadKey] = useState(0)
     const migrationControllerRef = useRef<AbortController | null>(null)
+    const migrationRequestIdRef = useRef(0)
+    const activeMigrationRequestIdRef = useRef<number | null>(null)
+    const [migrationOwnerKey, setMigrationOwnerKey] = useState<string | null>(null)
+    const [migrationResultOwnerKey, setMigrationResultOwnerKey] =
+        useState<string | null>(null)
+    const authUserId = authStatus === "authenticated"
+        ? user?.id ?? null
+        : null
+    const currentAuthUserIdRef = useRef(authUserId)
 
     // 空の構成を除いた、移行候補の構成数
     const migrationConfigIds = useMemo(
@@ -55,17 +91,33 @@ export function SimulatorPage() {
     // カテゴリー取得時のエラーメッセージ
     const [categoryErrorMessage, setCategoryErrorMessage] = useState("")
 
-    // 構成移行中の通信を画面破棄時に中断
+    // ユーザー変更時に、前ユーザーの構成移行通信と結果を無効化
+    useEffect(() => {
+        currentAuthUserIdRef.current = authUserId
+        migrationControllerRef.current?.abort()
+        migrationRequestIdRef.current += 1
+        activeMigrationRequestIdRef.current = null
+        // ユーザー切り替え時は前ユーザーの移行状態を画面から外す。
+        // これは外部認証状態との同期であり、同じEffect内で意図的に状態をリセットする。
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setMigrationOwnerKey(null)
+        setMigrationResultOwnerKey(null)
+    }, [authUserId])
+
+    // 画面破棄時に構成移行通信を中断
     useEffect(() => () => {
         migrationControllerRef.current?.abort()
     }, [])
 
     // 確認ダイアログからlocalStorage構成をD1へ取り込む
     async function migrateLocalConfigurations() {
+        const isCurrentMigrationRunning = isMigrating &&
+            migrationOwnerKey === authUserId
+
         if (
             !user ||
             authStatus !== "authenticated" ||
-            isMigrating
+            isCurrentMigrationRunning
         ) {
             return
         }
@@ -73,25 +125,33 @@ export function SimulatorPage() {
         const stateToMigrate = loadSimulatorState() ?? localSimulatorState
 
         if (!stateToMigrate) {
-            setDismissedMigrationUserId(user.id)
-
             return
         }
 
         const controller = new AbortController()
+        const requestId = ++migrationRequestIdRef.current
+        const migrationUserId = user.id
         migrationControllerRef.current = controller
+        activeMigrationRequestIdRef.current = requestId
         setIsMigrating(true)
+        setMigrationOwnerKey(migrationUserId)
         setMigrationResult(null)
+        setMigrationResultOwnerKey(null)
 
         try {
             const result = await migrateLocalSimulatorState(
-                user.id,
+                migrationUserId,
                 stateToMigrate,
                 controller.signal,
                 migrationNames,
             )
 
-            if (!controller.signal.aborted) {
+            if (
+                !controller.signal.aborted &&
+                currentAuthUserIdRef.current === migrationUserId &&
+                activeMigrationRequestIdRef.current === requestId
+            ) {
+                setMigrationResultOwnerKey(migrationUserId)
                 setMigrationResult(result)
 
                 if (result.created.length > 0) {
@@ -99,7 +159,12 @@ export function SimulatorPage() {
                 }
             }
         } catch (error) {
-            if (!controller.signal.aborted) {
+            if (
+                !controller.signal.aborted &&
+                currentAuthUserIdRef.current === migrationUserId &&
+                activeMigrationRequestIdRef.current === requestId
+            ) {
+                setMigrationResultOwnerKey(migrationUserId)
                 const message = error instanceof Error
                     ? error.message
                     : "構成の保存に失敗しました"
@@ -113,7 +178,11 @@ export function SimulatorPage() {
                 })
             }
         } finally {
-            if (!controller.signal.aborted) {
+            if (
+                !controller.signal.aborted &&
+                currentAuthUserIdRef.current === migrationUserId &&
+                activeMigrationRequestIdRef.current === requestId
+            ) {
                 setIsMigrating(false)
             }
         }
@@ -168,15 +237,37 @@ export function SimulatorPage() {
         user.id !== dismissedMigrationUserId &&
         hasPendingLocalSimulatorMigration(user.id, localSimulatorState),
     )
+    const isMigratingForCurrentUser = Boolean(
+        authUserId &&
+        isMigrating &&
+        migrationOwnerKey === authUserId,
+    )
+    const hasMigrationResultForCurrentUser = Boolean(
+        authUserId &&
+        migrationResult &&
+        migrationResultOwnerKey === authUserId,
+    )
     const isMigrationDialogOpen = Boolean(
         authStatus === "authenticated" &&
         user &&
-        (hasPendingMigration || isMigrating || migrationResult),
+        (hasPendingMigration ||
+            isMigratingForCurrentUser ||
+            hasMigrationResultForCurrentUser),
     )
 
     // ダイアログを閉じたユーザーを記録し、同一画面で繰り返し表示しない
     function dismissMigrationDialog() {
+        if (user) {
+            // 途中失敗の結果画面を閉じた場合も、同じ内容の再表示を防ぐ
+            const stateToDismiss = loadSimulatorState() ?? localSimulatorState
+
+            if (stateToDismiss) {
+                dismissLocalSimulatorMigration(user.id, stateToDismiss)
+            }
+        }
+
         setMigrationResult(null)
+        setMigrationResultOwnerKey(null)
         setDismissedMigrationUserId(user?.id ?? null)
     }
 
@@ -201,6 +292,34 @@ export function SimulatorPage() {
     // シミュレーター画面
     return (
         <>
+            {isGoogleLoginCancelled && (
+                <div
+                    className="border-b border-amber-300 bg-amber-50 px-4 py-4 text-amber-950"
+                    role="alert"
+                >
+                    <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm font-semibold">
+                                Googleログインがキャンセルされました。
+                            </p>
+                            <p className="mt-1 text-sm text-amber-900/80">
+                                再度ログインする場合は、ボタンを押してください。
+                            </p>
+                        </div>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full border-amber-400 bg-white text-amber-950 hover:bg-amber-100 hover:text-amber-950 sm:w-auto"
+                            onClick={() => void login()}
+                        >
+                            <GoogleIcon className="size-4" />
+                            もう一度Googleでログイン
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {authStatus === "error" && authErrorMessage && (
                 <div
                     className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900"
@@ -213,6 +332,7 @@ export function SimulatorPage() {
             <Simulator
                 categories={categories}
                 savedBuildsReloadKey={savedBuildsReloadKey}
+                autoSaveEnabled={!isMigrationDialogOpen}
             />
 
             <SavedBuildMigrationDialog

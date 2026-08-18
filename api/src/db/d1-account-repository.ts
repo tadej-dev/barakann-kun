@@ -3,14 +3,29 @@ import type {
     DeleteAccountResult,
 } from "./account-repository"
 
+// 表示順マイグレーション前のD1でもアカウント削除を止めないための判定
+function isMissingConfigOrderTableError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false
+    }
+
+    if (/no such table:\s*saved_build_orders/i.test(error.message)) {
+        return true
+    }
+
+    return isMissingConfigOrderTableError(
+        (error as Error & {cause?: unknown}).cause,
+    )
+}
+
 // D1上のユーザー関連データを削除するRepository
 export class D1AccountRepository implements AccountRepository {
     constructor(private readonly database: D1Database) {}
 
     async deleteUser(userId: string): Promise<DeleteAccountResult> {
-        // 外部キーの設定に依存せず、保存構成・セッション・OAuth紐付けを先に削除する。
+        // 外部キーの設定に依存せず、保存構成・表示順・セッション・OAuth紐付けを先に削除する。
         // 同じD1バッチへまとめることで、途中まで削除された状態を残さない。
-        const results = await this.database.batch([
+        const statements = [
             this.database.prepare(
                 `DELETE FROM saved_build_parts
                  WHERE saved_build_id IN (
@@ -21,6 +36,9 @@ export class D1AccountRepository implements AccountRepository {
                 "DELETE FROM saved_builds WHERE user_id = ?",
             ).bind(userId),
             this.database.prepare(
+                "DELETE FROM saved_build_orders WHERE user_id = ?",
+            ).bind(userId),
+            this.database.prepare(
                 "DELETE FROM sessions WHERE user_id = ?",
             ).bind(userId),
             this.database.prepare(
@@ -29,8 +47,23 @@ export class D1AccountRepository implements AccountRepository {
             this.database.prepare(
                 "DELETE FROM users WHERE id = ?",
             ).bind(userId),
-        ])
-        const userDelete = results[4]
+        ]
+        let results: D1Result[]
+
+        try {
+            results = await this.database.batch(statements)
+        } catch (error) {
+            if (!isMissingConfigOrderTableError(error)) {
+                throw error
+            }
+
+            // 0005未適用の旧D1では、存在しない表示順テーブルだけを外して再実行する。
+            // D1のbatchは失敗時にロールバックされるため、途中削除は残らない。
+            results = await this.database.batch(
+                statements.filter((_, index) => index !== 2),
+            )
+        }
+        const userDelete = results[results.length - 1]
 
         if (!userDelete) {
             throw new Error("アカウント削除の結果を取得できませんでした")
@@ -41,4 +74,3 @@ export class D1AccountRepository implements AccountRepository {
             : {kind: "not_found"}
     }
 }
-

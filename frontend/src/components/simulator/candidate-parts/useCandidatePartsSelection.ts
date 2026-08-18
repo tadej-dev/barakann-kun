@@ -1,4 +1,4 @@
-import {useState} from "react"
+import {useCallback, useMemo, useState} from "react"
 
 import {
     evaluatePartCompatibility,
@@ -27,9 +27,12 @@ export function useCandidatePartsSelection(
         removeSlotKeys: string[]
         removedPartNames: string[]
     } | null>(null)
-    const categorySlots = getPartSlots(activeSlot.categoryKey)
+    const categorySlots = useMemo(
+        () => getPartSlots(activeSlot.categoryKey),
+        [activeSlot.categoryKey],
+    )
 
-    function requestSelection(part: Part, selectBoth = false) {
+    const requestSelection = useCallback((part: Part, selectBoth = false) => {
         const packageUnit = getPartPackageUnit(part)
         const targetSlots = selectBoth || packageUnit === "pair"
             ? categorySlots
@@ -80,9 +83,14 @@ export function useCandidatePartsSelection(
                     .filter((name): name is string => Boolean(name)),
             )),
         })
-    }
+    }, [activeSlot, categorySlots, onSelect, selectedParts])
 
-    function confirmPendingSelection() {
+    // 前後一括選択ボタンへ渡すコールバックを安定化
+    const requestSelectionBoth = useCallback((part: Part) => {
+        requestSelection(part, true)
+    }, [requestSelection])
+
+    const confirmPendingSelection = useCallback(() => {
         if (!pendingSelection) {
             return
         }
@@ -93,13 +101,17 @@ export function useCandidatePartsSelection(
             pendingSelection.removeSlotKeys,
         )
         setPendingSelection(null)
-    }
+    }, [onSelect, pendingSelection])
 
     return {
-        cancelPendingSelection: () => setPendingSelection(null),
+        cancelPendingSelection: useCallback(
+            () => setPendingSelection(null),
+            [],
+        ),
         categorySlots,
         confirmPendingSelection,
         pendingSelection,
         requestSelection,
+        requestSelectionBoth,
     }
 }

@@ -31,6 +31,30 @@ describe("simulatorReducer", () => {
         )
     })
 
+    it("追加構成を選択すると、その構成へパーツ選択を反映する", () => {
+        const frame = createPart(1, "Frame")
+        const groupset = createPart(2, "Groupset")
+        let state = createInitialSimulatorState("frame")
+
+        state = simulatorReducer(state, {
+            type: "selectSavedBuild",
+            buildId: "build-1",
+            parts: {frame},
+        })
+        state = simulatorReducer(state, {
+            type: "changeSlot",
+            slot: createPartSlot("groupset"),
+        })
+        state = simulatorReducer(state, {
+            type: "selectPart",
+            part: groupset,
+        })
+
+        expect(state.activeSavedBuildId).toBe("build-1")
+        expect(state.savedBuildParts).toEqual({frame, groupset})
+        expect(state.configs["1"]).toEqual({})
+    })
+
     it("同じカテゴリーの前後に異なるパーツを保持する", () => {
         const frontTire = createPart(1, "Front Tire")
         const rearTire = createPart(2, "Rear Tire")
@@ -233,25 +257,6 @@ describe("simulatorReducer", () => {
 
         expect(state.activeSlot).toEqual(createPartSlot("frame"))
         expect(state.configs["1"]).toEqual({})
-    })
-
-    it("保存構成を現在の作業枠だけへ復元する", () => {
-        const frame = createPart(1, "Saved Frame")
-        let state = createInitialSimulatorState("groupset")
-
-        state = simulatorReducer(state, {
-            type: "changeConfig",
-            configId: "2",
-        })
-        state = simulatorReducer(state, {
-            type: "restoreActiveConfig",
-            selectedParts: {frame},
-        })
-
-        expect(state.activeConfigId).toBe("2")
-        expect(state.activeSlot).toEqual(createPartSlot("frame"))
-        expect(state.configs["1"]).toEqual({})
-        expect(state.configs["2"]).toEqual({frame})
     })
 
     it("同じパーツを前後に一括選択する", () => {

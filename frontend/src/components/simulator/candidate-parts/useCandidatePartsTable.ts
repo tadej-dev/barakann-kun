@@ -50,6 +50,14 @@ export function useCandidatePartsTable(parts: Part[]) {
         )].sort((a, b) => a.localeCompare(b, "ja-JP"))
     }, [parts])
 
+    // カテゴリー変更で存在しなくなったフィルターを表示上解除し、空結果を防ぐ
+    const effectiveSelectedBrand = selectedBrand !== ALL_BRANDS &&
+        brands.includes(selectedBrand)
+        ? selectedBrand
+        : ALL_BRANDS
+    const effectiveIntegratedHandlebarOnly = integratedHandlebarOnly &&
+        hasIntegratedHandlebars
+
     // 絞り込み・並び替え後の候補パーツ
     const filteredAndSortedParts = useMemo(() => {
         // 全角・半角、大文字・小文字を統一した検索文字列
@@ -69,12 +77,11 @@ export function useCandidatePartsTable(parts: Part[]) {
                 .toLocaleLowerCase("ja-JP")
                 .includes(normalizedQuery))
 
-            const matchesBrand = selectedBrand === ALL_BRANDS ||
-                part.brandName === selectedBrand
+            const matchesBrand = effectiveSelectedBrand === ALL_BRANDS ||
+                part.brandName === effectiveSelectedBrand
 
             const matchesIntegratedHandlebar =
-                !integratedHandlebarOnly ||
-                !hasIntegratedHandlebars ||
+                !effectiveIntegratedHandlebarOnly ||
                 (part.blockedCategoryKeys ?? []).includes("stem")
 
             return matchesName &&
@@ -117,10 +124,9 @@ export function useCandidatePartsTable(parts: Part[]) {
         })
     }, [
         parts,
-        hasIntegratedHandlebars,
-        integratedHandlebarOnly,
+        effectiveIntegratedHandlebarOnly,
+        effectiveSelectedBrand,
         searchQuery,
-        selectedBrand,
         sortDescriptor,
     ])
 
@@ -138,8 +144,8 @@ export function useCandidatePartsTable(parts: Part[]) {
 
     // 検索条件の有無
     const hasActiveFilters = searchQuery.trim() !== "" ||
-        selectedBrand !== ALL_BRANDS ||
-        (hasIntegratedHandlebars && integratedHandlebarOnly)
+        effectiveSelectedBrand !== ALL_BRANDS ||
+        effectiveIntegratedHandlebarOnly
 
     return {
         brands,
@@ -147,9 +153,9 @@ export function useCandidatePartsTable(parts: Part[]) {
         filteredAndSortedParts,
         hasActiveFilters,
         hasIntegratedHandlebars,
-        integratedHandlebarOnly,
+        integratedHandlebarOnly: effectiveIntegratedHandlebarOnly,
         searchQuery,
-        selectedBrand,
+        selectedBrand: effectiveSelectedBrand,
         setIntegratedHandlebarOnly,
         setSearchQuery,
         setSelectedBrand,

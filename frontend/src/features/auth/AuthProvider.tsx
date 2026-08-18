@@ -2,6 +2,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from "react"
@@ -41,9 +42,12 @@ export function AuthProvider({children}: AuthProviderProps) {
     const [authState, setAuthState] = useState(initialAuthState)
     const [isDeletingAccount, setIsDeletingAccount] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
+    const sessionRequestIdRef = useRef(0)
 
     // セッションAPIの再取得
     const refreshSession = useCallback(async (signal?: AbortSignal) => {
+        const requestId = ++sessionRequestIdRef.current
+
         setAuthState((current) => ({
             ...current,
             status: "loading",
@@ -52,6 +56,13 @@ export function AuthProvider({children}: AuthProviderProps) {
 
         try {
             const session = await fetchAuthSession(signal)
+
+            if (
+                signal?.aborted ||
+                sessionRequestIdRef.current !== requestId
+            ) {
+                return
+            }
 
             if (session.authenticated) {
                 setAuthState({
@@ -67,7 +78,10 @@ export function AuthProvider({children}: AuthProviderProps) {
                 })
             }
         } catch (error) {
-            if (signal?.aborted) {
+            if (
+                signal?.aborted ||
+                sessionRequestIdRef.current !== requestId
+            ) {
                 return
             }
 
@@ -126,6 +140,8 @@ export function AuthProvider({children}: AuthProviderProps) {
 
         try {
             await deleteAuthAccount()
+            // 削除前に開始されたセッション取得が、削除済み状態を上書きしないよう無効化
+            sessionRequestIdRef.current += 1
             setAuthState({
                 status: "unauthenticated",
                 user: null,

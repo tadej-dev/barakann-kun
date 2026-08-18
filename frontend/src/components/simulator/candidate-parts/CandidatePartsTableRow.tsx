@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react"
+import {memo, type KeyboardEvent} from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {buttonVariants} from "@/components/ui/button"
@@ -18,8 +18,9 @@ type CandidatePartsTableRowProps = {
     showVariantColumn: boolean
     compatibility: CompatibilityResult | null
     canSelectBoth: boolean
-    onSelect: () => void
-    onSelectBoth: () => void
+    enableContentVisibility: boolean
+    onSelect: (part: Part) => void
+    onSelectBoth: (part: Part) => void
 }
 
 const priceFormatter = new Intl.NumberFormat("ja-JP", {
@@ -41,12 +42,13 @@ const compatibilityLabels = {
 }
 
 // 候補パーツ表の行
-export function CandidatePartsTableRow({
+function CandidatePartsTableRowComponent({
     part,
     isSelected,
     showVariantColumn,
     compatibility,
     canSelectBoth,
+    enableContentVisibility,
     onSelect,
     onSelectBoth,
 }: CandidatePartsTableRowProps) {
@@ -59,7 +61,7 @@ export function CandidatePartsTableRow({
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
             if (!isSelectionBlocked) {
-                onSelect()
+                onSelect(part)
             }
         }
     }
@@ -76,10 +78,17 @@ export function CandidatePartsTableRow({
                     ? "cursor-pointer bg-muted hover:bg-muted"
                     : "cursor-pointer"
             }
+            style={enableContentVisibility
+                ? {
+                    // 大量行では画面外の描画をブラウザへ委譲
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "0 96px",
+                }
+                : undefined}
             aria-disabled={isSelectionBlocked}
             onClick={() => {
                 if (!isSelectionBlocked) {
-                    onSelect()
+                    onSelect(part)
                 }
             }}
             onKeyDown={handleKeyDown}
@@ -138,7 +147,7 @@ export function CandidatePartsTableRow({
                             className={`${buttonVariants({variant: "outline", size: "sm"})} mt-1 w-fit`}
                             onClick={(event) => {
                                 event.stopPropagation()
-                                onSelectBoth()
+                                onSelectBoth(part)
                             }}
                         >
                             前後に選択
@@ -177,3 +186,6 @@ export function CandidatePartsTableRow({
         </TableRow>
     )
 }
+
+// 選択状態や適合結果が変わらない行は再描画を省略
+export const CandidatePartsTableRow = memo(CandidatePartsTableRowComponent)

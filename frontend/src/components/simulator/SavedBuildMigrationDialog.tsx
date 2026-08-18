@@ -13,6 +13,8 @@ import {Input} from "@/components/ui/input"
 import type {ConfigId} from "@/features/simulator/simulatorTypes"
 import type {SavedBuildMigrationResult} from "@/lib/saved-build-migration"
 
+const MAX_CONFIG_NAME_LENGTH = 50
+
 type SavedBuildMigrationDialogProps = {
     open: boolean
     configCount: number
@@ -46,7 +48,7 @@ export function SavedBuildMigrationDialog({
     const hasInvalidName = configIds.some((configId) => {
         const name = names[configId]?.trim() ?? ""
 
-        return name.length === 0 || name.length > 100
+        return name.length === 0 || name.length > MAX_CONFIG_NAME_LENGTH
     })
 
     return (
@@ -112,13 +114,21 @@ export function SavedBuildMigrationDialog({
                                             構成{configId}の保存名
                                             <Input
                                                 value={names[configId] ?? ""}
-                                                maxLength={100}
-                                                aria-invalid={!(names[configId]?.trim())}
+                                                maxLength={MAX_CONFIG_NAME_LENGTH}
+                                                aria-invalid={(() => {
+                                                    const name = names[configId]?.trim() ?? ""
+
+                                                    return name.length === 0 ||
+                                                        name.length > MAX_CONFIG_NAME_LENGTH
+                                                })()}
                                                 onChange={(event) => onNameChange(
                                                     configId,
                                                     event.target.value,
                                                 )}
                                             />
+                                            <span className="text-xs font-normal text-slate-500">
+                                                {names[configId]?.trim().length ?? 0} / {MAX_CONFIG_NAME_LENGTH}文字
+                                            </span>
                                         </label>
                                     ))}
                                 </div>

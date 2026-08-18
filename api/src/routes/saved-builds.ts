@@ -1,16 +1,23 @@
-import {getAuthUser} from "@hono/auth-js"
 import {Hono} from "hono"
-import type {Context} from "hono"
 
 import type {AppEnv} from "../app-env"
 import {
-    parseCsrfToken,
-    verifyCsrfToken,
-} from "../auth/csrf"
+    getUserId,
+    hasValidCsrfToken,
+    invalidCsrf,
+    readJson,
+    unauthenticated,
+    type ApiRouteContext,
+} from "./route-helpers"
 import {
     MAX_SAVED_BUILDS_PER_USER,
+    InvalidSavedBuildPartsError,
     MissingSavedBuildPartsError,
     SavedBuildLimitExceededError,
+    isMissingSavedBuildSchemaError,
+    type DeleteSavedBuildResult,
+    type RenameSavedBuildResult,
+    type SavedBuild,
 } from "../db/saved-build-repository"
 import {
     parseCreateSavedBuildPayload,
@@ -22,20 +29,7 @@ import {
 
 // 保存構成API
 export const savedBuildsRoute = new Hono<AppEnv>()
-type SavedBuildContext = Context<AppEnv>
-
-// 未ログイン状態の共通応答
-function unauthenticated(context: SavedBuildContext) {
-    return context.json(
-        {
-            error: {
-                code: "UNAUTHENTICATED",
-                message: "ログインが必要です",
-            },
-        },
-        401,
-    )
-}
+type SavedBuildContext = ApiRouteContext
 
 // 保存構成IDの形式エラー応答
 function invalidBuildId(context: SavedBuildContext) {
@@ -63,39 +57,10 @@ function invalidPayload(context: SavedBuildContext) {
     )
 }
 
-// 保存構成の変更系APIに必要なCSRF検証エラー
-function invalidCsrf(context: SavedBuildContext) {
-    return context.json(
-        {
-            error: {
-                code: "INVALID_CSRF_TOKEN",
-                message: "不正なリクエストです。ページを再読み込みして再試行してください",
-            },
-        },
-        403,
-    )
-}
-
-// 本文のCSRFトークンとAuth.jsのCookieを照合
-async function hasValidCsrfToken(
-    context: SavedBuildContext,
-    payload: unknown,
-): Promise<boolean> {
-    const csrfToken = parseCsrfToken(payload)
-
-    return Boolean(
-        csrfToken && await verifyCsrfToken(
-            context.req.raw,
-            context.env.AUTH_SECRET,
-            csrfToken,
-        ),
-    )
-}
-
 // 保存構成に存在しないパーツのエラー応答
 function invalidParts(
     context: SavedBuildContext,
-    error: MissingSavedBuildPartsError,
+    error: MissingSavedBuildPartsError | InvalidSavedBuildPartsError,
 ) {
     return context.json(
         {
@@ -107,6 +72,29 @@ function invalidParts(
         },
         400,
     )
+}
+
+// 保存構成関連マイグレーション未適用の案内応答
+function migrationRequired(context: SavedBuildContext) {
+    return context.json(
+        {
+            error: {
+                code: "SAVED_BUILD_MIGRATION_REQUIRED",
+                message: "構成保存機能が未適用です。apiでD1マイグレーションを実行してください",
+            },
+        },
+        503,
+    )
+}
+
+// D1エラーを利用者向けのマイグレーション案内へ変換
+function migrationResponse(
+    context: SavedBuildContext,
+    error: unknown,
+): Response | null {
+    return isMissingSavedBuildSchemaError(error)
+        ? migrationRequired(context)
+        : null
 }
 
 // 保存件数上限は事前確認とD1の条件付きINSERTの両方で利用する
@@ -122,24 +110,6 @@ function savedBuildLimitExceeded(context: SavedBuildContext) {
     )
 }
 
-// 現在のセッションからアプリ内ユーザーIDを取得
-async function getUserId(
-    context: SavedBuildContext,
-): Promise<string | null> {
-    const authUser = await getAuthUser(context)
-
-    return authUser?.user?.id ?? null
-}
-
-// リクエストJSONを読み取り、形式不正をnullへ統一
-async function readJson(context: SavedBuildContext) {
-    try {
-        return await context.req.json()
-    } catch {
-        return null
-    }
-}
-
 // 保存構成一覧を取得
 savedBuildsRoute.get("/", async (context) => {
     const userId = await getUserId(context)
@@ -148,7 +118,19 @@ savedBuildsRoute.get("/", async (context) => {
         return unauthenticated(context)
     }
 
-    const builds = await context.var.savedBuildRepository.list(userId)
+    let builds: SavedBuild[]
+
+    try {
+        builds = await context.var.savedBuildRepository.list(userId)
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
 
     return context.json(builds)
 })
@@ -173,13 +155,13 @@ savedBuildsRoute.post("/", async (context) => {
         return invalidPayload(context)
     }
 
-    const savedBuildCount = await context.var.savedBuildRepository.count(userId)
-
-    if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
-        return savedBuildLimitExceeded(context)
-    }
-
     try {
+        const savedBuildCount = await context.var.savedBuildRepository.count(userId)
+
+        if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
+            return savedBuildLimitExceeded(context)
+        }
+
         const build = await context.var.savedBuildRepository.create(
             userId,
             parsedPayload.data.name,
@@ -190,6 +172,16 @@ savedBuildsRoute.post("/", async (context) => {
     } catch (error) {
         if (error instanceof MissingSavedBuildPartsError) {
             return invalidParts(context, error)
+        }
+
+        if (error instanceof InvalidSavedBuildPartsError) {
+            return invalidParts(context, error)
+        }
+
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
         }
 
         if (error instanceof SavedBuildLimitExceededError) {
@@ -214,10 +206,22 @@ savedBuildsRoute.get("/:buildId", async (context) => {
         return invalidBuildId(context)
     }
 
-    const build = await context.var.savedBuildRepository.findById(
-        userId,
-        buildId,
-    )
+    let build: SavedBuild | null
+
+    try {
+        build = await context.var.savedBuildRepository.findById(
+            userId,
+            buildId,
+        )
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
 
     if (!build) {
         return context.json(
@@ -299,6 +303,16 @@ savedBuildsRoute.put("/:buildId", async (context) => {
             return invalidParts(context, error)
         }
 
+        if (error instanceof InvalidSavedBuildPartsError) {
+            return invalidParts(context, error)
+        }
+
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
         throw error
     }
 })
@@ -329,12 +343,24 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
         return invalidPayload(context)
     }
 
-    const result = await context.var.savedBuildRepository.rename(
-        userId,
-        buildId,
-        parsedPayload.data.version,
-        parsedPayload.data.name,
-    )
+    let result: RenameSavedBuildResult
+
+    try {
+        result = await context.var.savedBuildRepository.rename(
+            userId,
+            buildId,
+            parsedPayload.data.version,
+            parsedPayload.data.name,
+        )
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
 
     if (result.kind === "not_found") {
         return context.json(
@@ -389,11 +415,23 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
         return invalidPayload(context)
     }
 
-    const result = await context.var.savedBuildRepository.delete(
-        userId,
-        buildId,
-        parsedPayload.data.version,
-    )
+    let result: DeleteSavedBuildResult
+
+    try {
+        result = await context.var.savedBuildRepository.delete(
+            userId,
+            buildId,
+            parsedPayload.data.version,
+        )
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
 
     if (result.kind === "not_found") {
         return context.json(
