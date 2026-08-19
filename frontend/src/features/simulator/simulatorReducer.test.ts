@@ -22,7 +22,9 @@ function createPart(
     }
 }
 
+// 構成切り替え・パーツ選択・排他解除が状態遷移として正しく適用されることを確認する。
 describe("simulatorReducer", () => {
+    // 前後選択可能なカテゴリーを開いた直後は、前輪を操作対象にする。
     it("前後カテゴリーは前輪スロットを初期表示する", () => {
         const state = createInitialSimulatorState("tire")
 
@@ -31,6 +33,7 @@ describe("simulatorReducer", () => {
         )
     })
 
+    // 追加構成をアクティブにした後の選択は、固定枠ではなくその構成へ保存する。
     it("追加構成を選択すると、その構成へパーツ選択を反映する", () => {
         const frame = createPart(1, "Frame")
         const groupset = createPart(2, "Groupset")
@@ -55,6 +58,7 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({})
     })
 
+    // 前後スロットを分けることで、同じカテゴリーでも別商品を保持できる。
     it("同じカテゴリーの前後に異なるパーツを保持する", () => {
         const frontTire = createPart(1, "Front Tire")
         const rearTire = createPart(2, "Rear Tire")
@@ -83,6 +87,7 @@ describe("simulatorReducer", () => {
         })
     })
 
+    // 一体型商品の選択で占有されたカテゴリーは、前後の既存選択をまとめて解除する。
     it("カテゴリーが占有された場合は前後両方の選択を解除する", () => {
         const frontTire = createPart(1, "Front Tire")
         const rearTire = createPart(2, "Rear Tire")
@@ -121,6 +126,7 @@ describe("simulatorReducer", () => {
         })
     })
 
+    // 占有中でも候補画面へ移動できるようにし、解除案内を表示する余地を残す。
     it("占有中カテゴリーに解除案内表示のため移動できる", () => {
         const tireIncludedPart = createPart(
             1,
@@ -145,6 +151,7 @@ describe("simulatorReducer", () => {
         expect(nextState.configs).toBe(state.configs)
     })
 
+    // コンポセットが含む単品カテゴリーは、前後分を含めて一括で排他解除する。
     it("コンポセット選択時に単品とブレーキの前後選択を解除する", () => {
         const rearDerailleur = createPart(1, "Rear Derailleur")
         const frontCaliper = createPart(2, "Front Caliper")
@@ -188,6 +195,7 @@ describe("simulatorReducer", () => {
         })
     })
 
+    // コンポセット占有中の単品カテゴリーでは、Reducerが新しい選択を無視する。
     it("コンポセットが占有する単品カテゴリーでパーツは選択できない", () => {
         const groupset = createPart(1, "Groupset", [
             "rear_derailleur",
@@ -214,6 +222,7 @@ describe("simulatorReducer", () => {
         expect(nextState.configs["1"]).toEqual({groupset})
     })
 
+    // 競合解消のために指定されたスロットだけを削除し、他の選択を残す。
     it("指定したパーツだけを構成から解除する", () => {
         const frame = createPart(1, "Frame")
         const groupset = createPart(2, "Groupset", ["crankset"])
@@ -239,6 +248,7 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({frame})
     })
 
+    // 構成全体をクリアした後は、次の開始点としてフレームを選択状態にする。
     it("構成をクリアするとフレーム選択に戻る", () => {
         const groupset = createPart(1, "Groupset")
         let state = createInitialSimulatorState("frame")
@@ -259,6 +269,7 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({})
     })
 
+    // 一括選択指定がある場合は、同一商品を前後スロットへ一度に反映する。
     it("同じパーツを前後に一括選択する", () => {
         const tire = createPart(1, "Tire")
         let state = createInitialSimulatorState("tire")
@@ -275,6 +286,7 @@ describe("simulatorReducer", () => {
         })
     })
 
+    // UIが選んだ競合解除スロットを先に外し、新しい候補を選択する。
     it("非互換パーツを解除して選択する", () => {
         const tire = createPart(1, "Tire")
         const tube = createPart(2, "Tube")

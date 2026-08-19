@@ -25,6 +25,7 @@ function createGoogleProvider(
     clientId: string,
     clientSecret: string,
 ): OAuthConfig<Record<string, unknown>> {
+    // discoveryへ依存せず使用するGoogleの各エンドポイントを固定する
     return {
         id: "google",
         name: "Google",
@@ -63,6 +64,7 @@ export function createAuthConfig(
         GOOGLE_CLIENT_SECRET,
     } = context.env
 
+    // ルートとテストで共通利用するAuth.js設定をここで組み立てる
     return {
         basePath: "/api/auth",
         secret: AUTH_SECRET ?? "",
@@ -71,6 +73,7 @@ export function createAuthConfig(
         // 本番で常時有効にすると認証フローの詳細がログへ出るため、既定値は無効にする。
         debug: AUTH_DEBUG === "true",
         ...(AUTH_URL ? {url: AUTH_URL} : {}),
+        // テストから渡されたAdapterを優先し通常時だけD1実装を生成する
         adapter: adapter ?? createD1AuthAdapter(context.env.DB),
         providers: [
             createGoogleProvider(
@@ -79,6 +82,7 @@ export function createAuthConfig(
             ),
         ],
         session: {
+            // D1のセッションを正本としてログアウトや期限切れを管理する
             strategy: "database",
             maxAge: SESSION_MAX_AGE_SECONDS,
             updateAge: SESSION_UPDATE_AGE_SECONDS,
@@ -86,6 +90,7 @@ export function createAuthConfig(
         callbacks: {
             // Auth.js標準のセッションへアプリ内ユーザーIDを追加
             async session({session, user}) {
+                // 保存APIが本文のユーザーIDを信頼せず所有者を判定できるようにする
                 if (session.user) {
                     session.user.id = user.id
                 }

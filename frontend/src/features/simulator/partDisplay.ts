@@ -4,6 +4,7 @@ import type {Part} from "@/types/part"
 export function getPartDisplayName(
     part: Pick<Part, "name" | "modelName" | "brandName">,
 ): string {
+    // modelNameを優先し、ブランド名が重複する場合だけ先頭の表記を取り除く。
     const productName = part.modelName?.trim() || part.name.trim()
     const brandName = part.brandName.trim()
 
@@ -32,6 +33,7 @@ export function getPartDisplayName(
 export function hasPartVariantColumn(
     parts: Pick<Part, "variantName" | "specifications">[],
 ): boolean {
+    // 1件でもバリエーションまたは規格値があれば列を残し、情報の見落としを防ぐ。
     return parts.some((part) => {
         const hasVariantName = Boolean(part.variantName?.trim())
         const hasSpecifications = Object.values(

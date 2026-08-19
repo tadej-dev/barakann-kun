@@ -47,6 +47,7 @@ function migrationRequired(context: ConfigOrderContext) {
 
 // ログインユーザーの現在の表示順を取得
 configOrderRoute.get("/", async (context) => {
+    // 表示順はユーザー固有データなのでセッションから所有者を取得する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -56,6 +57,7 @@ configOrderRoute.get("/", async (context) => {
     let items: string[]
 
     try {
+        // 保存順と現在存在する構成の照合はRepositoryへ任せる
         items = await context.var.configOrderRepository.list(userId)
     } catch (error) {
         if (error instanceof ConfigOrderMigrationRequiredError) {
@@ -70,6 +72,7 @@ configOrderRoute.get("/", async (context) => {
 
 // 表示順をユーザー所有の構成だけで置き換え
 configOrderRoute.put("/", async (context) => {
+    // 本文からユーザーIDを受け取らずセッションの所有者へ保存する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -78,17 +81,20 @@ configOrderRoute.put("/", async (context) => {
 
     const payload = await readJson(context)
 
+    // 並び替えもサーバー状態を変更するためCSRF検証を行う
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
 
     const parsedPayload = parseConfigOrderPayload(payload)
 
+    // 配列の件数や重複を確認してからRepositoryへ渡す
     if (!parsedPayload.success) {
         return invalidPayload(context)
     }
 
     try {
+        // Repositoryで現在の所有構成と一致する完全な順列か再確認する
         const items = await context.var.configOrderRepository.save(
             userId,
             parsedPayload.data.items,

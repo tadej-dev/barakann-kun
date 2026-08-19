@@ -44,6 +44,7 @@ import { createPortal } from "react-dom"
 
 import { cn } from "@/lib/utils"
 
+// ドラッグ中のハンドルとオーバーレイへ、同じ操作状態を渡すためのContext。
 // Sortable Item Context
 const SortableItemContext = createContext<{
   listeners: DraggableSyntheticListeners | undefined
@@ -112,6 +113,7 @@ function Sortable<T>({
   children,
   ...props
 }: SortableRootProps<T>) {
+  // センサーごとに起動条件を分け、クリックとドラッグの誤操作を防ぐ。
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
 
   const sensors = useSensors(
@@ -133,6 +135,7 @@ function Sortable<T>({
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      // オーバーレイを表示するIDを先に保持し、元のカードを半透明にする。
       setActiveId(event.active.id)
       onDragStart?.(event)
     },
@@ -145,6 +148,7 @@ function Sortable<T>({
       setActiveId(null)
       onDragEnd?.(event)
 
+      // ドロップ先がない場合は並び順を変えず、キャンセル扱いにする。
       if (!over) return
 
       // Handle item reordering
@@ -156,6 +160,7 @@ function Sortable<T>({
       )
 
       if (activeIndex !== overIndex) {
+        // 呼び出し元が保存処理を持つ場合はonMoveへ委譲し、通常は配列を即時並べ替える。
         if (onMove) {
           onMove({ event, activeIndex, overIndex })
         } else {
@@ -172,6 +177,7 @@ function Sortable<T>({
   }, [])
 
   const getStrategy = () => {
+    // グリッドと横並びは矩形位置、縦並びはリスト位置に合わせて判定する。
     switch (strategy) {
       case "horizontal":
         return rectSortingStrategy
@@ -199,6 +205,7 @@ function Sortable<T>({
 
   // Find the active child for the overlay
   const overlayContent = useMemo(() => {
+    // ドラッグ中の項目だけを複製し、レイアウトから独立したプレビューとして表示する。
     if (!activeId) return null
     let result: ReactNode = null
     Children.forEach(children, (child) => {
@@ -264,6 +271,7 @@ function SortableItem({
   disabled,
   ...props
 }: SortableItemProps) {
+  // オーバーレイ自身は再びsortable対象にせず、元要素だけをドラッグ可能にする。
   const isOverlay = useContext(IsOverlayContext)
 
   const {
@@ -335,6 +343,7 @@ function SortableItemHandle({
   cursor = true,
   ...props
 }: SortableItemHandleProps) {
+  // ハンドルだけにdnd-kitのlistenerを付け、カード本体のクリック操作と分離する。
   const { listeners, isDragging, disabled } = useContext(SortableItemContext)
 
   const defaultProps = {

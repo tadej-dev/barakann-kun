@@ -26,6 +26,7 @@ export function CandidatePartsFilters({
     onSearchQueryChange,
     onIntegratedHandlebarOnlyChange,
 }: CandidatePartsFiltersProps) {
+    // ブランド・製品名・一体型ハンドルの条件を同じ候補状態へ渡し、表側で一括して再計算する。
     return (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <BrandSelect

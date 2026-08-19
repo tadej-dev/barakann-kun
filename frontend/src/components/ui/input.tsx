@@ -3,7 +3,9 @@ import { Input as InputPrimitive } from "@base-ui/react/input"
 
 import { cn } from "@/lib/utils"
 
+// 検索・構成名入力で共通の高さ、フォーカス表示、無効状態を適用する。
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  // typeやvalueなどの標準input属性はBase UIへそのまま委譲する。
   return (
     <InputPrimitive
       type={type}

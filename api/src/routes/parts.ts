@@ -7,6 +7,7 @@ import {parseCategory, parsePartIds} from "../schemas/parts"
 export const partsRoute = new Hono<AppEnv>()
 
 partsRoute.get("/by-ids", async (context) => {
+    // 保存構成の復元など複数の既知IDをまとめて取得する入口
     // 複数クエリパラメーターを配列として受け取り、形式を検証
     const parsedIds = parsePartIds(context.req.queries("ids"))
 
@@ -32,6 +33,7 @@ partsRoute.get("/by-ids", async (context) => {
 })
 
 partsRoute.get("/", async (context) => {
+    // シミュレーターの候補表示用にカテゴリー単位で取得する入口
     // categoryクエリの形式を検証
     const parsedCategory = parseCategory(context.req.query("category"))
 

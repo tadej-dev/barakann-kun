@@ -22,6 +22,7 @@ type UseConfigSlotsOptions = {
 
 // 未保存の固定構成を画面へ表示する既定値
 function createDefaultConfigSlots(): ConfigSlot[] {
+    // 未ログイン時の表示とAPI失敗時のフォールバックを同じ初期名で揃える。
     return CONFIG_IDS.map((configId) => ({
         configId,
         name: `構成${configId}`,
@@ -37,6 +38,7 @@ export function useConfigSlots({
     userId,
     reloadKey = 0,
 }: UseConfigSlotsOptions) {
+    // 固定枠の値と読み込み・操作対象ユーザーを別々に管理する。
     const [slots, setSlots] = useState(createDefaultConfigSlots)
     const [hasLoadedSuccessfully, setHasLoadedSuccessfully] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -57,6 +59,7 @@ export function useConfigSlots({
     const reload = useCallback(async (signal?: AbortSignal) => {
         const requestUserId = userId
 
+        // 未ログイン時は前ユーザーの固定構成を表示せず、未保存の既定値へ戻す。
         if (!enabled || !requestUserId) {
             setSlots(createDefaultConfigSlots())
             setHasLoadedSuccessfully(false)
@@ -74,6 +77,7 @@ export function useConfigSlots({
         try {
             const nextSlots = await fetchConfigSlots(signal)
 
+            // 取得開始後にユーザーが変わった場合、前ユーザーの構成を新しい画面へ混ぜない。
             if (
                 signal?.aborted ||
                 currentUserIdRef.current !== requestUserId
@@ -119,6 +123,7 @@ export function useConfigSlots({
     useEffect(() => {
         const requestUserId = userId
 
+        // 認証されていない間はD1取得を開始しない。
         if (!enabled || !requestUserId) {
             return
         }
@@ -130,6 +135,7 @@ export function useConfigSlots({
             try {
                 const nextSlots = await fetchConfigSlots(controller.signal)
 
+                // アンマウント後・ユーザー切り替え後の応答はReact stateへ反映しない。
                 if (
                     controller.signal.aborted ||
                     currentUserIdRef.current !== requestUserId
@@ -180,6 +186,7 @@ export function useConfigSlots({
         nextOperation: ConfigSlotOperation,
         request: () => Promise<T>,
     ): Promise<T> => {
+        // 名称変更・パーツ保存・クリアで共通する操作中表示と競合エラー処理をまとめる。
         const requestUserId = userId
         const requestId = ++operationRequestIdRef.current
         setOperation(nextOperation)
@@ -218,6 +225,7 @@ export function useConfigSlots({
         nextSlot: ConfigSlot,
         expectedUserId: string | null,
     ) => {
+        // API応答が返るまでにログアウトした場合、前ユーザーの結果を画面へ戻さない。
         if (
             !expectedUserId ||
             currentUserIdRef.current !== expectedUserId
@@ -237,6 +245,7 @@ export function useConfigSlots({
         const requestUserId = userId
 
         return runOperation("rename", async () => {
+            // PATCH結果を受け取った固定枠だけ差し替える。
             const renamed = await renameConfigSlot(
                 slot.configId,
                 slot.version,
@@ -256,6 +265,7 @@ export function useConfigSlots({
         const requestUserId = userId
 
         return runOperation("save", async () => {
+            // 現在のパーツ配列と名前をPUTし、返却されたversionを保持する。
             const saved = await saveConfigSlot(
                 slot.configId,
                 slot.version,
@@ -272,6 +282,7 @@ export function useConfigSlots({
         const requestUserId = userId
 
         return runOperation("clear", async () => {
+            // DELETE後の空スロットを一覧へ反映し、次の自動保存が新versionを使えるようにする。
             const cleared = await clearConfigSlot(
                 slot.configId,
                 slot.version,

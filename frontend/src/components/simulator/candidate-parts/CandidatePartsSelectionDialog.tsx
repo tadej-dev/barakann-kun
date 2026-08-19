@@ -21,6 +21,7 @@ export function CandidatePartsSelectionDialog({
     onConfirm,
     onCancel,
 }: CandidatePartsSelectionDialogProps) {
+    // selectionがnullの間は閉じ、置換対象がある場合だけ確認操作を受け付ける。
     return (
         <AlertDialog.Root
             open={selection !== null}

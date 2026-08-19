@@ -96,6 +96,8 @@ function normalizeCallbackUrl(
     }
 
     try {
+        // 相対URLは自アプリのURLを基準に絶対URLへ変換する
+        // 絶対URLは同一オリジンの場合だけ戻り先として許可する
         const base = new URL(baseUrl)
         const candidate = new URL(callbackUrl, base)
 
@@ -105,6 +107,7 @@ function normalizeCallbackUrl(
 
         return `${candidate.pathname}${candidate.search}${candidate.hash}`
     } catch {
+        // URLとして解釈できない値は安全なトップページへ戻す
         return "/"
     }
 }
@@ -124,6 +127,7 @@ async function normalizeSessionResponse(response: Response): Promise<Response> {
     } catch {
         payload = null
     }
+    // Auth.js固有の形式を画面が扱いやすい認証状態へ変換する
     const user = payload?.user
     const normalizedPayload = user?.id
         ? {
@@ -141,6 +145,7 @@ async function normalizeSessionResponse(response: Response): Promise<Response> {
         }
     const headers = new Headers(response.headers)
 
+    // 本文をJSONへ置き換えるため元の長さや圧縮情報を引き継がない
     headers.set("content-type", "application/json")
     // 元レスポンスの空本文用ヘッダーがJSON本文と食い違わないよう除去する。
     headers.delete("content-length")
@@ -185,6 +190,8 @@ async function executeAuthAtPath(
         throw new Error("Missing AUTH_SECRET")
     }
 
+    // 互換用ルートのパスをAuth.jsが処理できる標準パスへ置き換える
+    // メソッドやCookieなど元リクエストの情報は維持する
     const url = new URL(context.req.raw.url)
     url.pathname = path
     const body = context.req.raw.body
@@ -232,6 +239,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/config-slots/*", initializeAuthConfig)
     app.use("/api/config-order", initializeAuthConfig)
 
+    // 旧クライアントのコールバックURLをAuth.js標準URLへ中継する
     // 互換用の入口。プロバイダー指定のGETはAuth.jsで拒否されるため標準画面へ渡す。
     app.get("/api/auth/google/callback", async (context) => {
         if (context.req.query("error") === "access_denied") {
@@ -241,6 +249,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         return executeAuthAtPath(context, "/api/auth/callback/google")
     })
     app.get("/api/auth/google", (context) => {
+        // OAuthを開始する前に必須設定を確認して原因の分かる応答を返す
         if (!context.env.AUTH_SECRET) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)
         }
@@ -264,6 +273,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     // Auth.jsの標準セッションを、未ログイン状態も明示する形式へ統一。
     app.get("/api/auth/session", async (context) => {
+        // Auth.jsが空の応答を返しても画面には共通のJSON形式を返す
         const response = await authRequestHandler(context, async () => {})
 
         return normalizeSessionResponse(
@@ -288,6 +298,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     // Auth.js標準認証エンドポイント
     app.all("/api/auth/*", authRequestHandler)
 
+    // すべてのAPIから同じカタログRepositoryを参照できるよう登録する
     // APIリクエストごとにカタログリポジトリをContextへ登録
     app.use("/api/*", async (context, next) => {
         const repository = dependencies.catalogRepository
@@ -329,6 +340,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
     app.use("/api/config-order", registerConfigOrderRepository)
 
+    // アカウント削除ルートで使用するRepositoryをContextへ登録する
     // アカウントAPIへD1リポジトリを登録
     const registerAccountRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
         const repository = dependencies.accountRepository
@@ -340,6 +352,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/account", registerAccountRepository)
 
     // カタログAPIのルート登録
+    // 機能ごとに分けたルートを最終的なAPIパスへ組み込む
     app.get("/api/health", (context) => context.json({status: "ok"}))
     app.route("/api/account", accountRoute)
     app.route("/api/categories", categoriesRoute)
@@ -363,6 +376,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.onError((error, context) => {
         logUnhandledApiError(context, error)
 
+        // 認証秘密鍵の不足は設定で解決できるため専用の503応答にする
         if (isMissingAuthSecret(error)) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)
         }

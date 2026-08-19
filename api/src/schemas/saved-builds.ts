@@ -15,6 +15,7 @@ const savedBuildPartSchema = z.object({
         .max(100)
         // 前後スロットは「tire:front」のように内部キーをそのまま保存する
         .regex(/^[a-z][a-z0-9_-]*(:(front|rear))?$/),
+    // D1へ渡す前に正の安全な整数へ限定する
     partId: z.number().int().positive().safe(),
 })
 
@@ -23,6 +24,7 @@ const savedBuildPartsSchema = z
     .array(savedBuildPartSchema)
     .max(100)
     .superRefine((parts, context) => {
+        // 1つのスロットに複数パーツが保存されないよう重複を確認する
         const slotKeys = new Set<string>()
 
         for (const [index, part] of parts.entries()) {
@@ -45,11 +47,13 @@ const savedBuildPayloadSchema = z.object({
 
 // 保存構成の新規作成リクエストを検証
 export function parseCreateSavedBuildPayload(value: unknown) {
+    // 新規作成のversionはD1側で割り当てるため本文には要求しない
     return savedBuildPayloadSchema.safeParse(value)
 }
 
 // 保存構成の更新リクエストを検証
 export function parseUpdateSavedBuildPayload(value: unknown) {
+    // 更新では現在の正のversionを必須にして競合検出へ使用する
     return savedBuildPayloadSchema.extend({
         version: z.number().int().positive().safe(),
     }).safeParse(value)
@@ -57,6 +61,7 @@ export function parseUpdateSavedBuildPayload(value: unknown) {
 
 // 保存構成の名称変更リクエストを検証
 export function parseRenameSavedBuildPayload(value: unknown) {
+    // 名前だけの変更でもversionを要求して競合検出へ使用する
     return z.object({
         name: savedBuildNameSchema,
         version: z.number().int().positive().safe(),
@@ -65,6 +70,7 @@ export function parseRenameSavedBuildPayload(value: unknown) {
 
 // 保存構成の削除リクエストを検証
 export function parseDeleteSavedBuildPayload(value: unknown) {
+    // 削除対象の世代を必須にして古い画面からの削除を防ぐ
     return z.object({
         version: z.number().int().positive().safe(),
     }).safeParse(value)
@@ -72,5 +78,6 @@ export function parseDeleteSavedBuildPayload(value: unknown) {
 
 // URLパラメーターの保存構成IDを検証
 export function parseSavedBuildId(value: string) {
+    // 公開IDとして使用しているUUID形式だけを受け付ける
     return savedBuildIdSchema.safeParse(value)
 }

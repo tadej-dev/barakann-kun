@@ -24,6 +24,7 @@ export function useSavedBuilds({
     userId,
     reloadKey = 0,
 }: UseSavedBuildsOptions) {
+    // 一覧、通信中の操作、ユーザー・reloadKey単位の読み込み結果を別々に保持する。
     const [builds, setBuilds] = useState<SavedBuild[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [operation, setOperation] = useState<SavedBuildOperation | null>(null)
@@ -43,6 +44,7 @@ export function useSavedBuilds({
     const reload = useCallback(async (signal?: AbortSignal) => {
         const requestUserId = userId
 
+        // 未ログイン時は前ユーザーの保存構成を消し、認証後に改めて一覧を取得する。
         if (!enabled || !requestUserId) {
             setBuilds([])
             setLoadedUserId(null)
@@ -57,8 +59,10 @@ export function useSavedBuilds({
         setIsLoading(true)
 
         try {
+            // 明示的な再読み込みでは、現在のCookieセッションの一覧を取り直す。
             const nextBuilds = await fetchSavedBuilds(signal)
 
+            // 読み込み中にユーザーが変わった応答は、現在の一覧へ適用しない。
             if (
                 signal?.aborted ||
                 currentUserIdRef.current !== requestUserId
@@ -90,6 +94,7 @@ export function useSavedBuilds({
 
             return undefined
         } finally {
+            // 取得結果が現ユーザーのものだけなら、読み込み表示を解除する。
             if (
                 !signal?.aborted &&
                 currentUserIdRef.current === requestUserId
@@ -102,17 +107,20 @@ export function useSavedBuilds({
     useEffect(() => {
         const requestUserId = userId
 
+        // 認証されていない間はD1への一覧取得を開始しない。
         if (!enabled || !requestUserId) {
             return
         }
 
         const controller = new AbortController()
 
+        // enabled・userIdが変わるたびに、前回の一覧を破棄して現ユーザーの一覧を取得する。
         // 初回・移行完了時の取得は通信後にだけ状態を更新し、Effect直後の再描画を避ける
         async function load() {
             try {
                 const nextBuilds = await fetchSavedBuilds(controller.signal)
 
+                // アンマウント後・ユーザー切り替え後の応答によるstate更新を防ぐ。
                 if (
                     controller.signal.aborted ||
                     currentUserIdRef.current !== requestUserId
@@ -160,6 +168,7 @@ export function useSavedBuilds({
     ): Promise<T> => {
         const requestUserId = userId
         const requestId = ++operationRequestIdRef.current
+        // 同時操作が発生した場合、最後に開始した操作だけがエラー表示を確定する。
         setOperation(nextOperation)
         setOperationUserId(requestUserId)
         setErrorMessage("")
@@ -167,8 +176,10 @@ export function useSavedBuilds({
         setErrorReloadKey(null)
 
         try {
+            // create/rename/update/deleteのAPI呼び出しを共通化し、操作表示とエラー状態を揃える。
             return await request()
         } catch (error) {
+            // 競合などの例外は呼び出し元にも返し、UI側で解決方法を選べるようにする。
             if (
                 currentUserIdRef.current === requestUserId &&
                 operationRequestIdRef.current === requestId
@@ -199,8 +210,10 @@ export function useSavedBuilds({
         const requestUserId = userId
 
         return runOperation("create", async () => {
+            // 新規作成は一覧の先頭へ追加し、同じIDが既にあれば重複を除く。
             const build = await createSavedBuild(name, parts)
 
+            // 認証ユーザーが同じ場合だけ、一覧へ作成結果を即時反映する。
             if (currentUserIdRef.current === requestUserId) {
                 setBuilds((current) => [
                     build,
@@ -216,11 +229,13 @@ export function useSavedBuilds({
         const requestUserId = userId
 
         return runOperation("rename", async () => {
+            // versionを含むPATCHの結果を、同一IDの一覧要素と置き換える。
             const renamed = await renameSavedBuild(
                 build.id,
                 build.version,
                 name,
             )
+            // PATCHの応答を差し替え、再取得を待たずに新しいversionを使えるようにする。
             if (currentUserIdRef.current === requestUserId) {
                 setBuilds((current) => [
                     renamed,
@@ -239,12 +254,14 @@ export function useSavedBuilds({
         const requestUserId = userId
 
         return runOperation("update", async () => {
+            // 現在の構成パーツでPUTし、次回操作に新しいversionを利用する。
             const updated = await updateSavedBuild(
                 build.id,
                 build.version,
                 build.name,
                 parts,
             )
+            // PUT応答を一覧へ反映し、次回の自動保存が最新versionを参照できるようにする。
             if (currentUserIdRef.current === requestUserId) {
                 setBuilds((current) => [
                     updated,
@@ -260,7 +277,9 @@ export function useSavedBuilds({
         const requestUserId = userId
 
         return runOperation("delete", async () => {
+            // 削除APIが成功してから一覧から除外し、失敗時の再試行対象を保持する。
             await deleteSavedBuild(build.id, build.version)
+            // 削除成功後だけ一覧から除外し、失敗時は競合対象を残して利用者へ知らせる。
             if (currentUserIdRef.current === requestUserId) {
                 setBuilds((current) => current.filter(
                     (candidate) => candidate.id !== build.id,
@@ -276,6 +295,7 @@ export function useSavedBuilds({
         errorReloadKey === reloadKey
 
     return {
+        // 認証ユーザー・reloadKeyが一致しない一時状態は、別ユーザーへ公開しない。
         builds: hasCurrentUserData ? builds : [],
         create,
         errorMessage: hasCurrentError ? errorMessage : "",

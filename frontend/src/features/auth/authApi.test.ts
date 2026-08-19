@@ -7,11 +7,13 @@ import {
     startGoogleLogin,
 } from "@/features/auth/authApi"
 
+// セッション取得とCSRF付きのログイン・ログアウト・アカウント削除を確認する。
 describe("authApi", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
+    // セッションなしはエラーではなく、認証済みfalseとしてUIへ渡す。
     it("未ログイン状態を取得する", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({
             authenticated: false,
@@ -27,6 +29,7 @@ describe("authApi", () => {
         })
     })
 
+    // セッションに含まれるプロフィール情報を、ヘッダー表示用に保持する。
     it("ログイン済みユーザーを取得する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             authenticated: true,
@@ -51,6 +54,7 @@ describe("authApi", () => {
         })
     })
 
+    // Auth.jsの設定不足は、スタックトレースではなく利用者向けメッセージに変換する。
     it("APIの認証設定エラーを画面表示用メッセージへ変換する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             error: {
@@ -68,6 +72,7 @@ describe("authApi", () => {
         )
     })
 
+    // Googleログイン開始前にCSRFを取得し、Auth.jsへ安全な戻り先を渡す。
     it("CSRFトークン付きPOSTでGoogleログインURLを取得する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -100,6 +105,7 @@ describe("authApi", () => {
         )
     })
 
+    // ログアウトもGETではなくCSRF付きPOSTでセッションを終了する。
     it("CSRFトークンを使ってログアウトする", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -122,6 +128,7 @@ describe("authApi", () => {
         )
     })
 
+    // アカウント削除は確認ダイアログから呼ばれる破壊的操作としてCSRFを要求する。
     it("CSRFトークンを使ってアカウントを削除する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({

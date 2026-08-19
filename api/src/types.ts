@@ -1,5 +1,6 @@
 // カテゴリーAPIのレスポンス
 export type Category = {
+    // idはDB内の関連付けに使用しkeyはURLや画面の識別に使用する
     id: number
     key: string
     displayName: string
@@ -7,6 +8,7 @@ export type Category = {
 
 // パーツに含まれる構成品
 export type PartIncludedItem = {
+    // categoryKeyがある付属品は同カテゴリーの二重選択防止にも使用する
     name: string
     quantity: number
     categoryKey: string | null
@@ -14,6 +16,7 @@ export type PartIncludedItem = {
 
 // パーツAPIのレスポンス
 export type Part = {
+    // DBのスネークケースを画面向けのキャメルケースへ変換した形式
     id: number
     name: string
     modelName: string
@@ -30,6 +33,7 @@ export type Part = {
 
 // APIエラーの共通形式
 export type ApiError = {
+    // codeは画面側の処理分岐に使用しmessageは利用者へ表示する
     error: {
         code: string
         message: string
@@ -38,6 +42,7 @@ export type ApiError = {
 
 // Cloudflare Workersから受け取るBindings
 export type Bindings = {
+    // Workers環境で使用するD1データベース
     DB: D1Database
     AUTH_SECRET?: string
     AUTH_URL?: string

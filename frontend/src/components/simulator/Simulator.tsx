@@ -25,8 +25,10 @@ export function Simulator({
         categories,
         autoSaveEnabled,
     }
+    // controllerの戻り値を表示コンポーネントへ配線し、このファイルでは状態を直接変更しない。
     const controller = useSimulatorController(controllerProps)
 
+    // 画面レイアウトは表示だけを担当し、選択・保存・復元の状態遷移はcontrollerへ集約する。
     return (
         <div className="bg-slate-100 p-4">
             <main className="grid min-h-[calc(100vh-64px)] grid-cols-1 gap-4 lg:grid-cols-[230px_1fr]">

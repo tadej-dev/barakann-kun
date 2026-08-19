@@ -16,6 +16,8 @@ import {
 
 const MAX_PARTS_PER_CONFIG_SLOT = 100
 
+// APIから受け取るパーツ数の上限を、異常に大きいレスポンスで画面が固まらないようにする。
+
 // D1へ同期する構成1〜4のスロット
 export type ConfigSlot = {
     configId: ConfigId
@@ -55,6 +57,7 @@ async function throwApiError(
     response: Response,
     fallbackMessage: string,
 ): Promise<never> {
+    // サーバーのエラー形式が崩れていても、呼び出し元へは共通の例外型で返す。
     let message = fallbackMessage
     let code: string | null = null
     let partIds: number[] = []
@@ -109,12 +112,14 @@ function parseConfigSlot(value: unknown): ConfigSlot {
         !Array.isArray(parts) ||
         parts.length > MAX_PARTS_PER_CONFIG_SLOT
     ) {
+        // name・version・日時・partsを同時に検査し、部分的に正しい構成を受け付けない。
         throw new ConfigSlotApiError(
             "構成スロットのレスポンスを解釈できませんでした",
         )
     }
 
     const parsedParts = parts.flatMap((part) => {
+        // 不正な要素を黙って捨てず、後段の件数比較でレスポンス全体を拒否する。
         if (typeof part !== "object" || part === null) {
             return []
         }
@@ -142,6 +147,7 @@ function parseConfigSlot(value: unknown): ConfigSlot {
         parsedParts.length !== parts.length ||
         new Set(parsedParts.map((part) => part.slotKey)).size !== parsedParts.length
     ) {
+        // 同じスロットが複数返った場合も状態を一意に復元できないため拒否する。
         throw new ConfigSlotApiError(
             "構成スロットのパーツ情報を解釈できませんでした",
         )
@@ -158,6 +164,7 @@ function parseConfigSlot(value: unknown): ConfigSlot {
 
 // 構成1〜4の一覧レスポンスを検証
 function parseConfigSlotList(value: unknown): ConfigSlot[] {
+    // 固定枠は必ず4件必要なので、件数とconfigIdの重複を先に確認する。
     if (!Array.isArray(value)) {
         throw new ConfigSlotApiError(
             "構成スロット一覧のレスポンスを解釈できませんでした",
@@ -179,6 +186,7 @@ function parseConfigSlotList(value: unknown): ConfigSlot[] {
         const slot = slots.find((candidate) => candidate.configId === configId)
 
         if (!slot) {
+            // 並び順に依存せず、固定ID順の配列へ正規化する。
             throw new ConfigSlotApiError(
                 "構成スロット一覧に不足している構成があります",
             )
@@ -192,6 +200,7 @@ function parseConfigSlotList(value: unknown): ConfigSlot[] {
 export async function fetchConfigSlots(
     signal?: AbortSignal,
 ): Promise<ConfigSlot[]> {
+    // 固定構成はログインユーザーのCookieに紐づくため、IDをURLから受け取らない。
     const response = await fetch("/api/config-slots", {
         credentials: "same-origin",
         signal,
@@ -199,6 +208,7 @@ export async function fetchConfigSlots(
     })
 
     if (!response.ok) {
+        // 競合・マイグレーション未適用などを、画面側が再試行できるコード付き例外へ変換する。
         return throwApiError(response, "構成の取得に失敗しました")
     }
 
@@ -211,6 +221,7 @@ export async function renameConfigSlot(
     version: number,
     name: string,
 ): Promise<ConfigSlot> {
+    // 名称変更もversion付きで送り、別端末の更新を誤って上書きしない。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(
         `/api/config-slots/${encodeURIComponent(configId)}`,
@@ -239,6 +250,7 @@ export async function saveConfigSlot(
     name: string,
     parts: SavedBuildPartInput[],
 ): Promise<ConfigSlot> {
+    // パーツ一覧と名称を同じversionで更新し、保存後のスナップショットを返す。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(
         `/api/config-slots/${encodeURIComponent(configId)}`,
@@ -265,6 +277,7 @@ export async function clearConfigSlot(
     configId: ConfigId,
     version: number,
 ): Promise<ConfigSlot> {
+    // 削除では枠自体を消さず、選択パーツだけを空にする。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(
         `/api/config-slots/${encodeURIComponent(configId)}`,

@@ -6,6 +6,7 @@ import "./index.css"
 import App from "./App.tsx"
 import {AuthProvider} from "@/features/auth/AuthProvider"
 
+// ルーターと認証コンテキストを最上位で共有し、全ページから同じ状態を参照できるようにする。
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <BrowserRouter>

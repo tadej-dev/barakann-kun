@@ -4,6 +4,7 @@ type GoogleIconProps = {
 
 // Googleのブランドカラーを使ったログインボタン用アイコン
 export function GoogleIcon({className = "size-5"}: GoogleIconProps) {
+    // SVG自身は装飾扱いとし、ボタンのテキストをスクリーンリーダーの主ラベルにする。
     return (
         <svg
             aria-hidden="true"

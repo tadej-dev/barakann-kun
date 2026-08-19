@@ -59,6 +59,7 @@ function createCsrfResponse() {
     })
 }
 
+// localStorageからD1へ移行する際の成功・スキップ・部分失敗・再表示条件を確認する。
 describe("saved-build-migration", () => {
     beforeEach(() => {
         Object.defineProperty(globalThis, "window", {
@@ -72,6 +73,7 @@ describe("saved-build-migration", () => {
         Reflect.deleteProperty(globalThis, "window")
     })
 
+    // パーツのある構成だけを作成し、前後スロットの順序をAPIへ安定して渡す。
     it("空の構成を除き、スロット順を安定させて移行する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(createCsrfResponse())
@@ -122,6 +124,7 @@ describe("saved-build-migration", () => {
         })
     })
 
+    // 一度移行したユーザーには、後からlocalStorageが変わっても同じ案内を出さない。
     it("保存完了後はローカル構成が変わっても移行案内を再表示しない", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(createCsrfResponse())
@@ -152,6 +155,7 @@ describe("saved-build-migration", () => {
             .toBe(false)
     })
 
+    // UIで入力された名前を優先し、固定枠名を勝手に上書きしない。
     it("移行時に利用者が指定した構成名を使用する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(createCsrfResponse())
@@ -189,6 +193,7 @@ describe("saved-build-migration", () => {
         )
     })
 
+    // ユーザー単位の移行記録があればAPIを呼ばず、二重登録を防ぐ。
     it("同じユーザーの移行済み構成を二重登録しない", async () => {
         vi.stubGlobal("fetch", vi.fn(async (input: string) => (
             input === "/api/auth/csrf"
@@ -210,6 +215,7 @@ describe("saved-build-migration", () => {
         expect(fetchMock).not.toHaveBeenCalled()
     })
 
+    // 見送りは内容の指紋に紐づけ、パーツが変わったときだけ再び候補にする。
     it("同じ内容で移行を見送った構成は再表示せず、内容変更時は候補に戻す", () => {
         const state = createState()
 
@@ -231,6 +237,7 @@ describe("saved-build-migration", () => {
             .toBe(true)
     })
 
+    // 部分失敗でも成功分のIDを保持し、次回に全件をやり直さない。
     it("構成ごとの失敗を記録し、成功した構成の移行を保持する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(createCsrfResponse())

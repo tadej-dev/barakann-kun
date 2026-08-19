@@ -34,6 +34,7 @@ export function useCandidatePartsSelection(
 
     const requestSelection = useCallback((part: Part, selectBoth = false) => {
         const packageUnit = getPartPackageUnit(part)
+        // 前後一括ボタン、またはペア販売情報がある場合は同じパーツを両スロットへ候補にする。
         const targetSlots = selectBoth || packageUnit === "pair"
             ? categorySlots
             : [activeSlot]
@@ -41,6 +42,7 @@ export function useCandidatePartsSelection(
             evaluatePartCompatibility(part, slot, selectedParts),
         )
 
+        // フレーム指定など保護対象の規格不一致は、確認ダイアログでも上書きさせない。
         if (compatibilityResults.some((result) => result?.selectionBlocked)) {
             return
         }
@@ -63,6 +65,7 @@ export function useCandidatePartsSelection(
         ]))
 
         if (removeSlotKeys.length === 0) {
+            // 既存選択を解除する必要がない場合は、確認なしで即時反映する。
             onSelect(part, targetSlots.map((slot) => slot.key))
             return
         }
@@ -91,6 +94,7 @@ export function useCandidatePartsSelection(
     }, [requestSelection])
 
     const confirmPendingSelection = useCallback(() => {
+        // 置換確認を開いた後に選択状態が変わっても、保留中の操作だけを確定する。
         if (!pendingSelection) {
             return
         }

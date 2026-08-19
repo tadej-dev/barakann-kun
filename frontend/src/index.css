@@ -3,8 +3,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* darkクラスを付けた範囲だけ、同じトークンをダークテーマへ切り替える。 */
 @custom-variant dark (&:is(.dark *));
 
+/* UIプリミティブが参照する色・角丸をTailwindのテーマ変数へ公開する。 */
 @theme inline {
 
     --font-heading: var(--font-sans);
@@ -90,6 +92,8 @@
 
 :root {
 
+    /* デフォルトテーマはシミュレーター全体の明るいカード・表面色を定義する。 */
+
     --background: oklch(1 0 0);
 
     --foreground: oklch(0.145 0 0);
@@ -157,6 +161,8 @@
 
 .dark {
 
+    /* 将来ダークテーマを有効にした場合の同名トークンをここで上書きする。 */
+
     --background: oklch(0.145 0 0);
 
     --foreground: oklch(0.985 0 0);
@@ -221,6 +227,7 @@
 }
 
 @layer base {
+  /* 全コンポーネントの境界線・フォーカスリングと本文の基本色を統一する。 */
   * {
     @apply border-border outline-ring/50;
     }

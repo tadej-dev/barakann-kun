@@ -26,6 +26,7 @@ export function AccountDeleteDialog({
     onConfirm,
     onDismiss,
 }: AccountDeleteDialogProps) {
+    // 親が開閉状態を管理するため、閉じている間はDOMと操作対象を生成しない。
     if (!open) {
         return null
     }
@@ -92,6 +93,7 @@ export function AccountDeleteDialog({
                     </CardContent>
 
                     <CardFooter className="justify-end gap-2">
+                        {/* API処理中は閉じる操作を止め、削除結果の表示を維持する。 */}
                         <Button
                             type="button"
                             variant="outline"
@@ -100,6 +102,7 @@ export function AccountDeleteDialog({
                         >
                             キャンセル
                         </Button>
+                        {/* 確認ボタンは親のAPI処理を呼び出し、状態更新はAuthProviderが行う。 */}
                         <Button
                             type="button"
                             variant="destructive"
@@ -114,4 +117,3 @@ export function AccountDeleteDialog({
         </div>
     )
 }
-

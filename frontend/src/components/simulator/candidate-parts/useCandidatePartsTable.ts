@@ -67,6 +67,7 @@ export function useCandidatePartsTable(parts: Part[]) {
             .toLocaleLowerCase("ja-JP")
 
         // 製品名・ブランド・一体型による絞り込み
+        // 入力条件が変わるたびに候補を再計算し、表示コンポーネントは結果だけを受け取る。
         const filteredParts = parts.filter((part) => {
             const matchesName = !normalizedQuery || [
                 part.name,
@@ -132,6 +133,7 @@ export function useCandidatePartsTable(parts: Part[]) {
 
     // 並び順の変更処理
     function changeSort(column: CandidatePartsSortKey) {
+        // 同じ列を押した時だけ昇順・降順を反転し、別列へ移る時は昇順へ戻す。
         setSortDescriptor((current) => ({
             column,
             direction:

@@ -16,6 +16,8 @@ export type AuthSession =
         user: null
     }
 
+// Auth.jsのレスポンスを直接UIへ渡さず、必要なフィールドだけを型付けする。
+
 type CsrfResponse = {
     csrfToken?: unknown
 }
@@ -37,6 +39,7 @@ function createAuthApiError(message: string): Error {
 
 // JSONレスポンスの取得
 async function readJson(response: Response, message: string): Promise<unknown> {
+    // 認証APIはエラー本文の形式が一定でないため、既定メッセージを先に用意する。
     if (!response.ok) {
         let responseMessage = message
 
@@ -62,6 +65,7 @@ async function readJson(response: Response, message: string): Promise<unknown> {
 
 // 認証状態の型判定
 function parseAuthSession(payload: unknown): AuthSession {
+    // authenticatedとuserの組み合わせを同時に確認し、片方だけの曖昧な状態を排除する。
     if (
         typeof payload !== "object" ||
         payload === null ||
@@ -75,6 +79,7 @@ function parseAuthSession(payload: unknown): AuthSession {
     const userValue = payloadRecord.user
 
     if (payloadRecord.authenticated === false && userValue === null) {
+        // 未ログインはuserを必ずnullに揃え、前回のユーザー情報を残さない。
         return {
             authenticated: false,
             user: null,
@@ -110,6 +115,7 @@ function parseAuthSession(payload: unknown): AuthSession {
 
 // 現在画面へ戻るための相対URL
 export function getCurrentCallbackUrl(): string {
+    // 外部プロバイダーから戻った後も、検索条件・ハッシュを含めて現在画面を復元する。
     return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }
 
@@ -117,6 +123,7 @@ export function getCurrentCallbackUrl(): string {
 export async function fetchAuthSession(
     signal?: AbortSignal,
 ): Promise<AuthSession> {
+    // no-cacheを指定し、ログアウト直後に古いセッションを表示しない。
     const response = await fetch("/api/auth/session", {
         signal,
         credentials: "same-origin",
@@ -135,6 +142,7 @@ export async function fetchAuthSession(
 
 // Auth.jsの変更系APIで共通利用するCSRFトークンを取得
 export async function fetchCsrfToken(): Promise<string> {
+    // 変更系リクエストの前に、Auth.jsが発行したCSRFトークンを取得する。
     const response = await fetch("/api/auth/csrf", {
         credentials: "same-origin",
         headers: {
@@ -147,6 +155,7 @@ export async function fetchCsrfToken(): Promise<string> {
     ) as CsrfResponse
 
     if (typeof payload.csrfToken !== "string" || payload.csrfToken.length === 0) {
+        // トークンがない場合は変更系APIを呼ばず、認証準備エラーとして止める。
         throw createAuthApiError("変更操作の準備に失敗しました")
     }
 
@@ -155,6 +164,7 @@ export async function fetchCsrfToken(): Promise<string> {
 
 // Auth.jsのプロバイダー指定ログインはCSRF付きPOSTで開始する
 export async function startGoogleLogin(callbackUrl: string): Promise<string> {
+    // リダイレクト先を相対URLとして渡し、ログイン後に現在の画面へ戻す。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch("/api/auth/signin/google", {
         method: "POST",
@@ -175,6 +185,7 @@ export async function startGoogleLogin(callbackUrl: string): Promise<string> {
     ) as AuthRedirectPayload
 
     if (typeof payload.url !== "string" || payload.url.length === 0) {
+        // リダイレクト先がない場合はwindow.locationを変更せず、ログイン開始失敗にする。
         throw createAuthApiError("Googleログインの開始に失敗しました")
     }
 
@@ -183,6 +194,7 @@ export async function startGoogleLogin(callbackUrl: string): Promise<string> {
 
 // CSRF検証付きログアウト
 export async function logout(): Promise<void> {
+    // Auth.jsのセッションCookie削除をサーバー側で行い、クライアントは完了後に再取得する。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch("/api/auth/logout", {
         method: "POST",
@@ -199,12 +211,14 @@ export async function logout(): Promise<void> {
     })
 
     if (!response.ok) {
+        // 204以外の応答はログアウト未完了としてAuthProviderへ返す。
         throw createAuthApiError("ログアウトに失敗しました")
     }
 }
 
 // CSRF検証付きで、現在のユーザーと関連データを削除
 export async function deleteAccount(): Promise<void> {
+    // アカウントと関連するD1データの削除を1リクエストにまとめる。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch("/api/account", {
         method: "DELETE",
@@ -217,6 +231,7 @@ export async function deleteAccount(): Promise<void> {
     })
 
     if (!response.ok) {
+        // エラー本文を共通パーサーで読み、設定・CSRF・サーバーエラーを同じ形式で伝える。
         await readJson(response, "アカウントの削除に失敗しました")
     }
 }

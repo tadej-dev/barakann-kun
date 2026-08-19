@@ -16,11 +16,13 @@ function slotPayload() {
     }))
 }
 
+// 固定構成の取得・名称変更・パーツ保存と、壊れたスロット情報の拒否を確認する。
 describe("configSlots API", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
+    // 固定4スロットを取得し、ログイン後の構成カードの基礎データにする。
     it("ログインユーザーの4構成を取得する", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify(
             slotPayload(),
@@ -36,6 +38,7 @@ describe("configSlots API", () => {
         )
     })
 
+    // 構成名の変更は、CSRFと楽観的ロック用versionを同時に送る。
     it("CSRFトークン付きで構成名を変更する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -72,6 +75,7 @@ describe("configSlots API", () => {
         )
     })
 
+    // 現在選択中のパーツだけをスロットキー付きで保存し、返却値を検証する。
     it("現在の選択パーツをCSRFトークン付きで保存する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -106,6 +110,7 @@ describe("configSlots API", () => {
         })
     })
 
+    // 1つのスロットに同じ位置が重複するレスポンスは、復元前に拒否する。
     it("同じスロットが重複するレスポンスを拒否する", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify(
             slotPayload().map((slot, index) => index === 0

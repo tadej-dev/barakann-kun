@@ -53,6 +53,7 @@ export function SelectedPartsTable({
         }
     }
 
+    // カテゴリーから前後位置を展開し、選択済みパーツがない枠も含めて常に同じ表構造を表示する。
     return (
         <div className="overflow-x-auto rounded-lg border bg-background">
             <Table
@@ -78,6 +79,7 @@ export function SelectedPartsTable({
 
                 <TableBody className="font-bold">
                     {categories.flatMap((category) => {
+                        // flatMapで前後スロットを同じ一覧へ並べ、行クリックを選択対象へ結び付ける。
                         return getPartSlots(category.key).map((slot) => {
                             const part = selectedParts[slot.key]
                             const positionLabel = getPartSlotPositionLabel(

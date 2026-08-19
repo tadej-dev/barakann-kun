@@ -32,9 +32,11 @@ function csrfResponse() {
     return jsonResponse({csrfToken: "csrf-token"})
 }
 
+// 追加構成APIのCRUD、CSRF・version送信、上限・不正レスポンスの扱いを確認する。
 describe("savedBuilds API", () => {
     afterEach(() => vi.unstubAllGlobals())
 
+    // 一覧取得は、保存構成をカードに描画できる形へ検証して返す。
     it("保存構成一覧のレスポンスを検証して返す", async () => {
         const fetchMock = vi.fn().mockResolvedValue(jsonResponse([BUILD]))
         vi.stubGlobal("fetch", fetchMock)
@@ -46,6 +48,7 @@ describe("savedBuilds API", () => {
         )
     })
 
+    // 名前変更ではCSRFと取得時versionを送り、別端末の更新を検出できるようにする。
     it("名称変更はPATCHでversionとCSRFトークンを送る", async () => {
         const renamed = {...BUILD, name: "レース用", version: 2}
         const fetchMock = vi.fn()
@@ -69,6 +72,7 @@ describe("savedBuilds API", () => {
         )
     })
 
+    // 上書き・削除も同じversion検証を通し、古い画面からの更新を防ぐ。
     it("上書きと削除にも競合検知用versionを送る", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(csrfResponse())
@@ -103,6 +107,7 @@ describe("savedBuilds API", () => {
         )
     })
 
+    // 上限超過などの業務エラーコードを、一般的なHTTPエラーと区別して返す。
     it("APIエラーコードを画面側で判定できる形にする", async () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
             error: {
@@ -117,6 +122,7 @@ describe("savedBuilds API", () => {
         })
     })
 
+    // 不正な重量を復元すると合計重量が壊れるため、一覧レスポンス全体を拒否する。
     it("不正な重量を含む保存構成レスポンスを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([{
             ...BUILD,

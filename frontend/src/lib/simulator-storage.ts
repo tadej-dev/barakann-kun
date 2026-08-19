@@ -69,6 +69,7 @@ function parseStoredState(value: string): StoredSimulatorState | null {
 
         const configs = Object.fromEntries(
             CONFIG_IDS.map((configId) => {
+                // 旧形式・欠損した構成は空として扱い、他の構成の復元を継続する。
                 const rawSelections = isRecord(storedState.configs)
                     && isRecord(storedState.configs[configId])
                     ? storedState.configs[configId]
@@ -79,6 +80,7 @@ function parseStoredState(value: string): StoredSimulatorState | null {
                 const selections = Object.fromEntries(
                     Object.entries(migratedSelections).flatMap(
                         ([slotKey, storedPart]) => {
+                            // 旧形式ではパーツ全体が保存されるため、IDだけを抽出して現行形式へ揃える。
                             const partId = getStoredPartId(storedPart)
 
                             return partId === null ? [] : [[slotKey, partId]]
@@ -122,6 +124,7 @@ export function loadSimulatorState(): StoredSimulatorState | null {
         const storedState = parseStoredState(value)
 
         if (storedState) {
+            // 現行キーを優先し、なければ旧キーを読み取って後方互換を保つ。
             return storedState
         }
     }

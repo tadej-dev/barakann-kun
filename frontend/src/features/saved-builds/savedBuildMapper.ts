@@ -5,6 +5,7 @@ import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 export function toSavedBuildPartInputs(
     selectedParts: SelectedParts,
 ): SavedBuildPartInput[] {
+    // オブジェクトの挿入順に依存せず、同じ選択内容を同じAPI入力へ変換する。
     return Object.entries(selectedParts)
         .sort(([firstKey], [secondKey]) => firstKey.localeCompare(secondKey))
         .map(([slotKey, part]) => ({slotKey, partId: part.id}))

@@ -4,6 +4,7 @@ import type * as React from "react"
 
 import {cn} from "@/lib/utils"
 
+// Portal・Backdrop・閉じるボタンを標準化し、各画面は内容と状態だけを指定する。
 const Dialog = DialogPrimitive.Root
 const DialogTrigger = DialogPrimitive.Trigger
 const DialogClose = DialogPrimitive.Close
@@ -13,6 +14,7 @@ function DialogContent({
     children,
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Popup>) {
+    // Portalに描画するため、親のoverflowやz-indexに影響されず画面中央へ表示できる。
     return (
         <DialogPrimitive.Portal>
             <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-slate-950/55 transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
@@ -38,6 +40,7 @@ function DialogContent({
 }
 
 function DialogHeader({className, ...props}: React.ComponentProps<"div">) {
+    // 閉じるボタンと見出しが重ならないよう、右側に余白を確保する。
     return (
         <div
             className={cn("space-y-1.5 pr-10", className)}
@@ -50,6 +53,7 @@ function DialogTitle({
     className,
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+    // Base UIのTitleを使い、aria-labelledbyでダイアログ名を関連付ける。
     return (
         <DialogPrimitive.Title
             className={cn("text-base font-semibold text-slate-950", className)}
@@ -62,6 +66,7 @@ function DialogDescription({
     className,
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+    // 入力条件や削除範囲など、操作前に伝える補足を統一する。
     return (
         <DialogPrimitive.Description
             className={cn("text-sm leading-6 text-slate-600", className)}
@@ -71,6 +76,7 @@ function DialogDescription({
 }
 
 function DialogFooter({className, ...props}: React.ComponentProps<"div">) {
+    // 狭い画面ではボタンを縦積みにし、広い画面では右寄せに戻す。
     return (
         <div
             className={cn(

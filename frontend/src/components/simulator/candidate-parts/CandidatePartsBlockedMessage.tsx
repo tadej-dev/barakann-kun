@@ -19,6 +19,7 @@ export function CandidatePartsBlockedMessage({
     blockingPartNames,
     onRemove,
 }: CandidatePartsBlockedMessageProps) {
+    // 排他中のカテゴリー名と原因パーツを、解除前に利用者へ具体的に知らせる。
     const categoryLabel = blockingCategoryNames.join("・")
     const partLabel = blockingPartNames.join("、")
 

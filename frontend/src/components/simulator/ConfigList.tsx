@@ -16,11 +16,9 @@ import {
 import {buttonVariants, Button} from "@/components/ui/button"
 import {
     Card,
-    CardAction,
     CardContent,
     CardDescription,
     CardHeader,
-    CardTitle,
 } from "@/components/ui/card"
 import {
     Dialog,
@@ -41,6 +39,12 @@ import {
 import {Input} from "@/components/ui/input"
 import {Checkbox} from "@/components/ui/checkbox"
 import {Badge} from "@/components/ui/badge"
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion"
 import {
     MAX_SAVED_BUILDS,
     type SavedBuild,
@@ -148,10 +152,12 @@ export function ConfigList({
         onRestoreConfigSlot,
     })
 
+    // 認証前は4つの固定枠だけを表示し、ログイン後はD1と同期する並び替え一覧へ切り替える。
     // 未ログイン時の既存レイアウト
     const compactConfigButtons = (
         <div className="grid grid-cols-2 gap-2">
             {CONFIG_IDS.map((configId) => {
+                // ログイン前は固定スロットだけを選択対象にし、追加構成のUIを出さない。
                 const isActive = configId === activeConfigId
 
                 return (
@@ -170,127 +176,146 @@ export function ConfigList({
     )
     return (
         <Card className="h-full border border-b-0">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-bold text-zinc-500">
-                    構成選択
-                    {isAuthenticated && (
-                        <Badge
-                            variant="secondary"
-                            aria-label="保存枠使用数"
-                            title="構成1〜4を含むアカウントの保存枠使用数"
+            <Accordion multiple={false} defaultValue={["config-list"]}>
+                <AccordionItem value="config-list" className="border-0">
+                    <CardHeader className="gap-0">
+                        <AccordionTrigger
+                            nativeButton={false}
+                            render={<div />}
+                            className="min-h-8"
                         >
-                            {isLoading || isSavedBuildsLoading
-                                ? `… / ${MAX_SAVED_BUILDS}`
-                                : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
-                        </Badge>
-                    )}
-                </CardTitle>
-
-                <CardAction className="flex items-center gap-1 self-center">
-                    {isAuthenticated && (
-                        <>
-                            <Button
-                                type="button"
-                                size="sm"
-                                className="h-7 gap-1 px-2 text-xs"
-                                disabled={
-                                    savedBuildsOperation !== null ||
-                                    totalSavedCount >= MAX_SAVED_BUILDS
-                                }
-                                title="現在の選択パーツを新しい構成として保存"
-                                aria-label="新しい構成を追加"
-                                onClick={openCreateSavedBuildDialog}
-                            >
-                                <Plus />
-                                追加
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="destructive"
-                                className="h-7 gap-1 px-2 text-xs"
-                                disabled={
-                                    isOperating || selectedSavedBuilds.length === 0
-                                }
-                                title={
-                                    selectedSavedBuilds.length > 0
-                                        ? `選択した${selectedSavedBuilds.length}件の追加構成を削除`
-                                        : "削除する追加構成を選択してください"
-                                }
-                                aria-label={`選択した追加構成を一括削除（${selectedSavedBuilds.length}件）`}
-                                onClick={openDeleteSelectedBuildsDialog}
-                            >
-                                <Trash2 />
-                                一括削除
-                            </Button>
-                        </>
-                    )}
-                    {!isAuthenticated && (
-                        <AlertDialog.Root>
-                            <AlertDialog.Trigger
-                                className={buttonVariants({
-                                    variant: "destructive",
-                                    size: "sm",
-                                })}
-                            >
-                                構成{activeConfigId}をクリア
-                            </AlertDialog.Trigger>
-
-                            <AlertDialog.Portal>
-                                <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0"/>
-                                <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-5 text-foreground shadow-xl transition-[scale,opacity] duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
-                                    <AlertDialog.Title className="text-base font-bold">
-                                        構成{activeConfigId}をクリアしますか？
-                                    </AlertDialog.Title>
-                                    <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
-                                        選択中のパーツがすべて解除されます。
-                                        <br/>
-                                        この操作は元に戻せません。
-                                    </AlertDialog.Description>
-
-                                    <div className="mt-5 flex justify-center gap-2">
-                                        <AlertDialog.Close
-                                            className={buttonVariants({
-                                                variant: "destructive",
-                                            })}
-                                            onClick={onClearActiveConfig}
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <span className="flex min-w-0 items-center gap-2 text-lg font-bold text-zinc-500">
+                                    構成選択
+                                    {/* 固定4枠も保存枠として数え、アカウント側の上限を画面上で共有する。 */}
+                                    {isAuthenticated && (
+                                        <Badge
+                                            variant="secondary"
+                                            aria-label="保存枠使用数"
+                                            title="構成1〜4を含むアカウントの保存枠使用数"
                                         >
-                                            クリアする
-                                        </AlertDialog.Close>
-                                        <AlertDialog.Close
-                                            className={buttonVariants({
-                                                variant: "outline",
-                                            })}
-                                        >
-                                            キャンセル
-                                        </AlertDialog.Close>
-                                    </div>
-                                </AlertDialog.Popup>
-                            </AlertDialog.Portal>
-                        </AlertDialog.Root>
-                    )}
+                                            {isLoading || isSavedBuildsLoading
+                                                ? `… / ${MAX_SAVED_BUILDS}`
+                                                : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
+                                        </Badge>
+                                    )}
+                                </span>
 
-                </CardAction>
-            </CardHeader>
+                                <div
+                                    className="ml-auto flex shrink-0 items-center gap-1"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onKeyDown={(event) => event.stopPropagation()}
+                                >
+                            {isAuthenticated && (
+                                <>
+                                    {/* 追加ボタンは保存枠の上限、削除ボタンは選択件数に応じて操作可否を決める。 */}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7 gap-1 px-2 text-xs"
+                                        disabled={
+                                            savedBuildsOperation !== null ||
+                                            totalSavedCount >= MAX_SAVED_BUILDS
+                                        }
+                                        title="現在の選択パーツを新しい構成として保存"
+                                        aria-label="新しい構成を追加"
+                                        onClick={openCreateSavedBuildDialog}
+                                    >
+                                        <Plus />
+                                        追加
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="destructive"
+                                        className="h-7 gap-1 px-2 text-xs"
+                                        disabled={
+                                            isOperating || selectedSavedBuilds.length === 0
+                                        }
+                                        title={
+                                            selectedSavedBuilds.length > 0
+                                                ? `選択した${selectedSavedBuilds.length}件の追加構成を削除`
+                                                : "削除する追加構成を選択してください"
+                                        }
+                                        aria-label={`選択した追加構成を一括削除（${selectedSavedBuilds.length}件）`}
+                                        onClick={openDeleteSelectedBuildsDialog}
+                                    >
+                                        <Trash2 />
+                                        一括削除
+                                    </Button>
+                                </>
+                            )}
+                            {!isAuthenticated && (
+                                // 未ログイン時は現在の固定枠だけを確認ダイアログ付きでクリアできる。
+                                <AlertDialog.Root>
+                                    <AlertDialog.Trigger
+                                        className={buttonVariants({
+                                            variant: "destructive",
+                                            size: "sm",
+                                        })}
+                                    >
+                                        構成{activeConfigId}をクリア
+                                    </AlertDialog.Trigger>
 
-            <CardContent className="space-y-3">
-                {!isAuthenticated && compactConfigButtons}
+                                    <AlertDialog.Portal>
+                                        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0"/>
+                                        <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-5 text-foreground shadow-xl transition-[scale,opacity] duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                                            <AlertDialog.Title className="text-base font-bold">
+                                                構成{activeConfigId}をクリアしますか？
+                                            </AlertDialog.Title>
+                                            <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+                                                選択中のパーツがすべて解除されます。
+                                                <br/>
+                                                この操作は元に戻せません。
+                                            </AlertDialog.Description>
 
-                {isAuthenticated && (
-                    <>
-                        <CardDescription>
-                            構成名と選択パーツをアカウントへ保存できます。
-                        </CardDescription>
+                                            <div className="mt-5 flex justify-center gap-2">
+                                                <AlertDialog.Close
+                                                    className={buttonVariants({
+                                                        variant: "destructive",
+                                                    })}
+                                                    onClick={onClearActiveConfig}
+                                                >
+                                                    クリアする
+                                                </AlertDialog.Close>
+                                                <AlertDialog.Close
+                                                    className={buttonVariants({
+                                                        variant: "outline",
+                                                    })}
+                                                >
+                                                    キャンセル
+                                                </AlertDialog.Close>
+                                            </div>
+                                        </AlertDialog.Popup>
+                                    </AlertDialog.Portal>
+                                </AlertDialog.Root>
+                            )}
+                                </div>
+                            </div>
+                        </AccordionTrigger>
+                    </CardHeader>
 
-                        {(isLoading ||
-                            isLoadingConfigOrder ||
-                            isSavedBuildLoading) && (
-                            <p className="text-sm text-muted-foreground" role="status">
-                                構成を読み込んでいます…
-                            </p>
-                        )}
+                    <AccordionContent>
+                        <CardContent className="space-y-3">
+                            {!isAuthenticated && compactConfigButtons}
 
-                        <div className="w-full overflow-hidden rounded-lg">
+                            {isAuthenticated && (
+                                <>
+                                    {/* ログイン後の一覧は固定枠と追加構成を同じSortableへ渡し、順序を一元管理する。 */}
+                                    <CardDescription>
+                                        構成名と選択パーツをアカウントへ保存できます。
+                                    </CardDescription>
+
+                                    {/* カタログ・並び順・保存構成のいずれかを取得中であることを伝える。 */}
+                                    {(isLoading ||
+                                        isLoadingConfigOrder ||
+                                        isSavedBuildLoading) && (
+                                        <p className="text-sm text-muted-foreground" role="status">
+                                            構成を読み込んでいます…
+                                        </p>
+                                    )}
+
+                                    <div className="w-full overflow-hidden rounded-lg">
                             <Sortable
                                 value={orderedItems}
                                 onValueChange={changeConfigOrder}
@@ -299,6 +324,7 @@ export function ConfigList({
                                 render={<ul className="grid grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />}
                             >
                                 {orderedItems.map((item) => {
+                                    // 固定枠と追加構成では操作メニューの内容が異なるため、種別ごとに描画する。
                                     if (item.kind === "slot") {
                                         const slot = item.slot
                                         const isActive = activeSavedBuildId === null &&
@@ -415,6 +441,7 @@ export function ConfigList({
                                         )
                                     }
 
+                                    // 追加構成は固定枠とは異なり、保存・改名・削除・選択対象になる。
                                     const build = item.build
                                     const isActive = build.id === activeSavedBuildId
 
@@ -550,74 +577,79 @@ export function ConfigList({
                                     )
                                 })}
                             </Sortable>
-                        </div>
+                                    </div>
 
-                        {(errorMessage ||
-                            savedBuildsErrorMessage ||
-                            savedBuildErrorMessage ||
-                            configOrderErrorMessage) && (
-                            <div
-                                className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                                role="alert"
-                            >
-                                <span>
-                                    {errorMessage ||
+                                    {/* API失敗を一覧の外へ逃がさず、再読み込み可能な状態として表示する。 */}
+                                    {(errorMessage ||
                                         savedBuildsErrorMessage ||
                                         savedBuildErrorMessage ||
-                                        configOrderErrorMessage}
-                                </span>
-                                {(savedBuildsErrorMessage || configOrderErrorMessage) && (
-                                    <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="outline"
-                                        onClick={() => {
-                                            if (savedBuildsErrorMessage) {
-                                                void reloadSavedBuilds()
-                                            }
+                                        configOrderErrorMessage) && (
+                                        <div
+                                            className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                                            role="alert"
+                                        >
+                                            <span>
+                                                {errorMessage ||
+                                                    savedBuildsErrorMessage ||
+                                                    savedBuildErrorMessage ||
+                                                    configOrderErrorMessage}
+                                            </span>
+                                            {(savedBuildsErrorMessage || configOrderErrorMessage) && (
+                                                <Button
+                                                    type="button"
+                                                    size="xs"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        if (savedBuildsErrorMessage) {
+                                                            void reloadSavedBuilds()
+                                                        }
 
-                                            if (configOrderErrorMessage) {
-                                                void reloadConfigOrder()
-                                            }
-                                        }}
-                                    >
-                                        再読み込み
-                                    </Button>
-                                )}
-                            </div>
-                        )}
+                                                        if (configOrderErrorMessage) {
+                                                            void reloadConfigOrder()
+                                                        }
+                                                    }}
+                                                >
+                                                    再読み込み
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
 
-                        {autoSaveConflict && (
-                            <div
-                                className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
-                                role="alert"
-                            >
-                                <span>
-                                    別の端末で構成が更新されています。保存方法を選択してください。
-                                </span>
-                                <div className="flex shrink-0 gap-2">
-                                    <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="outline"
-                                        onClick={() => void resolveAutoSaveConflict("reload")}
-                                    >
-                                        最新を読み込む
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="destructive"
-                                        onClick={() => void resolveAutoSaveConflict("overwrite")}
-                                    >
-                                        この端末で上書き
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
-            </CardContent>
+                                    {/* 別端末の更新を上書きしないため、最新取得か現在端末の上書きを選ばせる。 */}
+                                    {autoSaveConflict && (
+                                        <div
+                                            className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+                                            role="alert"
+                                        >
+                                            <span>
+                                                別の端末で構成が更新されています。保存方法を選択してください。
+                                            </span>
+                                            <div className="flex shrink-0 gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="xs"
+                                                    variant="outline"
+                                                    onClick={() => void resolveAutoSaveConflict("reload")}
+                                                >
+                                                    最新を読み込む
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="xs"
+                                                    variant="destructive"
+                                                    onClick={() => void resolveAutoSaveConflict("overwrite")}
+                                                >
+                                                    この端末で上書き
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </CardContent>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
 
             <Dialog
                 open={nameDialog !== null}

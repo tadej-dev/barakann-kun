@@ -2,18 +2,21 @@
 export const MAX_SAVED_BUILDS_PER_USER = 20
 
 export type SavedBuildPartInput = {
+    // 価格と重量はクライアントから受け取らずDBのマスターを使用する
     slotKey: string
     partId: number
 }
 
 // 保存構成に保持するパーツのスナップショット
 export type SavedBuildPart = SavedBuildPartInput & {
+    // 保存後にマスターデータが変わっても当時の合計を再現するための値
     price: number
     weight: number
 }
 
 // 保存構成のAPIレスポンス
 export type SavedBuild = {
+    // versionは別端末からの同時更新を検出するための世代番号
     id: string
     name: string
     version: number
@@ -39,6 +42,7 @@ export type DeleteSavedBuildResult =
 
 // 保存構成APIからDB層へ渡す契約
 export interface SavedBuildRepository {
+    // ルート層からSQLを隠し所有者条件を各操作で統一する
     count(userId: string): Promise<number>
     list(userId: string): Promise<SavedBuild[]>
     findById(userId: string, buildId: string): Promise<SavedBuild | null>
@@ -91,6 +95,7 @@ export class InvalidSavedBuildPartsError extends Error {
     }
 
     get partIds(): number[] {
+        // 同じパーツに複数の問題があってもAPIには重複なしで返す
         return Array.from(new Set(this.issues.map((issue) => issue.partId)))
     }
 }
@@ -105,6 +110,7 @@ export function isMissingSavedBuildSchemaError(error: unknown): boolean {
         return true
     }
 
+    // D1がSQLiteエラーをcauseへ包む場合もあるため原因を再帰的に確認する
     return isMissingSavedBuildSchemaError(
         (error as Error & {cause?: unknown}).cause,
     )
@@ -152,6 +158,7 @@ export async function loadValidatedPartSnapshots(
     database: D1Database,
     parts: SavedBuildPartInput[],
 ): Promise<Map<number, {id: number; price: number; weight: number}>> {
+    // 同じパーツが複数スロットにあってもDB照会は一度にまとめる
     const partIds = Array.from(new Set(parts.map((part) => part.partId)))
 
     if (partIds.length === 0) {
@@ -179,6 +186,7 @@ export async function loadValidatedPartSnapshots(
     const rowsByPartId = new Map(rows.map((row) => [row.id, row]))
     const missingPartIds = partIds.filter((partId) => !rowsByPartId.has(partId))
 
+    // 存在しないIDを黙って除外すると画面と保存結果が一致しなくなる
     if (missingPartIds.length > 0) {
         throw new MissingSavedBuildPartsError(missingPartIds)
     }
@@ -194,6 +202,7 @@ export async function loadValidatedPartSnapshots(
 
         const slot = parseSlotKey(part.slotKey)
 
+        // スロットのカテゴリーとパーツの実カテゴリーが一致するか確認する
         if (row.category_key !== slot.categoryKey) {
             issues.push({
                 slotKey: part.slotKey,
@@ -209,6 +218,7 @@ export async function loadValidatedPartSnapshots(
             row.allowed_position &&
             row.allowed_position !== slot.position
         ) {
+            // 前後指定のあるパーツが反対側へ保存されることを防ぐ
             issues.push({
                 slotKey: part.slotKey,
                 partId: part.partId,
@@ -218,6 +228,7 @@ export async function loadValidatedPartSnapshots(
     }
 
     if (issues.length > 0) {
+        // 不一致をまとめて返し一度の応答で修正箇所を判断できるようにする
         throw new InvalidSavedBuildPartsError(issues)
     }
 

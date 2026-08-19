@@ -35,6 +35,7 @@ export function isMissingConfigOrderTableError(error: unknown): boolean {
         return true
     }
 
+    // D1がSQLiteエラーをcauseへ包む場合もあるため原因を再帰的に確認する
     return isMissingConfigOrderTableError(
         (error as Error & {cause?: unknown}).cause,
     )
@@ -92,6 +93,7 @@ async function listCurrentItemKeys(
 
 // ユーザーごとの構成表示順をD1へ保存するリポジトリ
 export class D1ConfigOrderRepository implements ConfigOrderRepository {
+    // 構成一覧と保存済みの順序を同じD1接続で照合する
     constructor(private readonly database: D1Database) {}
 
     async list(userId: string): Promise<string[]> {
@@ -113,6 +115,7 @@ export class D1ConfigOrderRepository implements ConfigOrderRepository {
         let orderRows: OrderRow[]
 
         try {
+            // 削除済み構成が保存順に残っていても後で除外できるよう取得する
             orderRows = await queryRows<OrderRow>(
                 this.database,
                 `SELECT item_key, sort_order
@@ -134,6 +137,7 @@ export class D1ConfigOrderRepository implements ConfigOrderRepository {
             .map((row) => row.item_key)
         const orderedItemKeySet = new Set(orderedItemKeys)
 
+        // 順序保存後に追加された構成は既存順を保ったまま末尾へ補う
         // 新しく追加された構成は、既存の順序を壊さず末尾へ追加する
         return [
             ...orderedItemKeys,
@@ -161,6 +165,7 @@ export class D1ConfigOrderRepository implements ConfigOrderRepository {
         const currentItemKeySet = new Set(currentItemKeys)
         const uniqueItemKeys = new Set(itemKeys)
 
+        // 現在の全構成を一度ずつ含む完全な並び順かを確認する
         // 所有していない構成や重複・欠落を受け付けない
         if (
             uniqueItemKeys.size !== itemKeys.length ||
@@ -171,6 +176,7 @@ export class D1ConfigOrderRepository implements ConfigOrderRepository {
         }
 
         const statements = [
+            // 現在の順序を削除して受け取った順番を先頭から登録し直す
             this.database.prepare(
                 "DELETE FROM saved_build_orders WHERE user_id = ?",
             ).bind(userId),

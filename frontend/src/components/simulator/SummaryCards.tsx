@@ -74,9 +74,11 @@ export function SummaryCards({
                                  onClearConfig,
                                  onRestoreConfigSlot,
                              }: SummaryCardsProps) {
+    // カード順は画面内だけで管理し、数値計算や構成データの保存責務とは分離する。
     const [cardOrder, setCardOrder] =
         useState<SummaryCardId[]>(initialCardOrder)
 
+    // 金額・重量は同じカード描画器へ渡し、configだけは構成一覧専用のUIとして扱う。
     const cards: Record<Exclude<SummaryCardId, "config">, SummaryCard> = {
         price: {
             title: "合計金額",
@@ -97,6 +99,7 @@ export function SummaryCards({
         },
     }
 
+    // 数値カードと構成カードを同じSortableへ渡し、利用者が表示順を変更できるようにする。
     return (
         <Sortable
             value={cardOrder}
@@ -106,6 +109,7 @@ export function SummaryCards({
             className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
         >
             {cardOrder.map((cardId) => {
+                // 構成カードは幅広のレイアウトを使うため、通常の数値カードとは描画を分ける。
                 if (cardId === "config") {
                     return (
                         <SortableItem

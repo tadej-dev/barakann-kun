@@ -14,6 +14,7 @@ export function parseCsrfToken(payload: unknown): string | null {
         : null
 }
 
+
 // リクエストCookieから指定名の値を取り出す
 function readCookie(cookieHeader: string, name: string): string | null {
     for (const item of cookieHeader.split(";")) {
@@ -41,6 +42,7 @@ export async function verifyCsrfToken(
     secret: string | undefined,
     requestToken: string,
 ): Promise<boolean> {
+    // 秘密鍵がない状態ではCSRF検証を成立させない
     if (!secret) {
         return false
     }
@@ -51,6 +53,7 @@ export async function verifyCsrfToken(
         "__Host-authjs.csrf-token",
         "__Secure-authjs.csrf-token",
     ]
+    // HTTPとHTTPSで異なるAuth.jsのCookie名を許可された候補から探す
     const cookieValue = cookieNames
         .map((name) => readCookie(cookieHeader, name))
         .find((value): value is string => Boolean(value))
@@ -60,6 +63,7 @@ export async function verifyCsrfToken(
     }
 
     try {
+        // Cookieに保存されたトークン本体とハッシュを分けて検証する
         const decodedCookieValue = decodeURIComponent(cookieValue)
         const [cookieToken, cookieHash] = decodedCookieValue.split("|")
 
@@ -67,6 +71,7 @@ export async function verifyCsrfToken(
             return false
         }
 
+        // Auth.jsと同じ入力からハッシュを再計算して改ざんを検出する
         const data = new TextEncoder().encode(`${cookieToken}${secret}`)
         const digest = await crypto.subtle.digest("SHA-256", data)
         const expectedHash = Array.from(
@@ -76,7 +81,7 @@ export async function verifyCsrfToken(
 
         return cookieHash === expectedHash
     } catch {
+        // 壊れたCookieや不正なエンコードは検証失敗として扱う
         return false
     }
 }
-

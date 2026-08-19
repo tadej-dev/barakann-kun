@@ -4,6 +4,7 @@ import type {AuthUser} from "@/features/auth/authApi"
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "error"
 
+// 認証情報と、画面から実行できる認証操作を同じContextで公開する。
 export type AuthState = {
     status: AuthStatus
     user: AuthUser | null

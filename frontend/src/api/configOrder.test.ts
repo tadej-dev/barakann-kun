@@ -5,11 +5,13 @@ import {
     saveConfigOrder,
 } from "@/api/configOrder"
 
+// 表示順APIの取得・保存と、重複した順序の拒否を確認する。
 describe("configOrder API", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
+    // アカウントに保存されたキーの順番を、Sortableの初期値として返す。
     it("ログインユーザーの構成表示順を取得する", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({
             items: ["config:2", "config:1", "config:3", "config:4"],
@@ -30,6 +32,7 @@ describe("configOrder API", () => {
         )
     })
 
+    // 並び替えの保存ではCSRFトークンを先に取得し、同じ順序をPUTする。
     it("CSRFトークン付きで構成表示順を保存する", async () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
@@ -68,6 +71,7 @@ describe("configOrder API", () => {
         )
     })
 
+    // 同じキーが複数ある順序は表示の不定化につながるため受け付けない。
     it("重複した表示順レスポンスを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             items: ["config:1", "config:1", "config:3", "config:4"],

@@ -17,6 +17,7 @@ export function useConfigOrder({
     userId,
     reloadKey = 0,
 }: UseConfigOrderOptions) {
+    // order本体と「誰の・どのreloadKeyの結果か」を分けて、古い一覧を表示しない。
     const [order, setOrder] = useState<string[]>([])
     const [hasLoaded, setHasLoaded] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
@@ -39,6 +40,7 @@ export function useConfigOrder({
     const reload = useCallback(async (signal?: AbortSignal) => {
         const requestUserId = userId
 
+        // 未ログイン時は前ユーザーの並び順を残さず、次のログイン時に再取得する。
         if (!enabled || !requestUserId) {
             setOrder([])
             setHasLoaded(false)
@@ -56,6 +58,7 @@ export function useConfigOrder({
         try {
             const nextOrder = await fetchConfigOrder(signal)
 
+            // 取得中にログアウト・ユーザー切り替えが起きたレスポンスは適用しない。
             if (
                 signal?.aborted ||
                 currentUserIdRef.current !== requestUserId
@@ -95,6 +98,7 @@ export function useConfigOrder({
     useEffect(() => {
         const requestUserId = userId
 
+        // 未ログイン時は取得処理を開始せず、進行中の保存結果も古いユーザーとして扱う。
         if (!enabled || !requestUserId) {
             saveRequestIdRef.current += 1
             return
@@ -107,6 +111,7 @@ export function useConfigOrder({
             try {
                 const nextOrder = await fetchConfigOrder(controller.signal)
 
+                // 画面が破棄された、またはユーザーが変わった場合は状態を更新しない。
                 if (
                     controller.signal.aborted ||
                     currentUserIdRef.current !== requestUserId
@@ -151,6 +156,7 @@ export function useConfigOrder({
 
     // ドラッグ操作をキューへまとめ、保存中の次の操作を破棄しない
     const save = useCallback(async (nextOrder: string[]) => {
+        // 表示順の初期取得前に保存すると、未取得の項目を欠落させるため送信しない。
         if (
             !enabled ||
             !userId ||
@@ -160,9 +166,11 @@ export function useConfigOrder({
         }
 
         const requestUserId = userId
+        // UIは先に並び替え、API保存はキューで後追いするためドラッグ操作を遅延させない。
         setOrder(nextOrder)
         pendingOrderRef.current = nextOrder
 
+        // 既存リクエストがある場合は最新のpendingOrderだけを後続処理へ渡す。
         if (saveQueuePromiseRef.current) {
             return saveQueuePromiseRef.current
         }
@@ -174,6 +182,8 @@ export function useConfigOrder({
                 pendingOrderRef.current &&
                 currentUserIdRef.current === requestUserId
             ) {
+                // pendingOrderが更新されている間だけ、最新の順序を順番に保存する。
+                // 連続ドラッグでは、APIへ送る直前の最新順を一件ずつ処理する。
                 const orderToSave = pendingOrderRef.current
                 pendingOrderRef.current = null
                 const requestId = ++saveRequestIdRef.current
@@ -187,6 +197,7 @@ export function useConfigOrder({
                 try {
                     const savedOrder = await saveConfigOrder(orderToSave)
 
+                    // 後から開始した保存やユーザー切り替えで、古い応答を画面へ戻さない。
                     if (
                         currentUserIdRef.current === requestUserId &&
                         saveRequestIdRef.current === requestId
@@ -195,6 +206,7 @@ export function useConfigOrder({
                         lastSavedOrder = savedOrder
                     }
                 } catch (error) {
+                    // 並び順の競合・失敗後に古い順序を再送しないよう、待機中の値を破棄する。
                     pendingOrderRef.current = null
 
                     if (
@@ -223,6 +235,7 @@ export function useConfigOrder({
             return lastSavedOrder
         }
 
+        // queuePromiseを共有し、同時に発生したドラッグ操作が同じ保存チェーンへ合流する。
         const queuePromise = processQueue()
         saveQueuePromiseRef.current = queuePromise
 
@@ -249,6 +262,7 @@ export function useConfigOrder({
         errorReloadKey === reloadKey
 
     return {
+        // 取得対象と一致しないデータは、認証切り替え直後の一時表示として公開しない。
         errorMessage: hasCurrentError ? errorMessage : "",
         hasLoaded: hasCurrentUserData && hasLoaded,
         isLoading: enabled && (

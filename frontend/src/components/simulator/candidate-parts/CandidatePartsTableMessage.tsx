@@ -22,6 +22,7 @@ export function CandidatePartsTableMessage({
     className = "text-muted-foreground",
     children,
 }: CandidatePartsTableMessageProps) {
+    // 読み込み・空結果・エラーでも通常表と同じ列構造を保ち、レイアウトのがたつきを防ぐ。
     return (
         <div className="overflow-x-auto rounded-lg border bg-background">
             <Table

@@ -13,6 +13,7 @@ function isMissingConfigOrderTableError(error: unknown): boolean {
         return true
     }
 
+    // D1がSQLiteエラーをcauseへ包む場合もあるため原因を再帰的に確認する
     return isMissingConfigOrderTableError(
         (error as Error & {cause?: unknown}).cause,
     )
@@ -20,6 +21,7 @@ function isMissingConfigOrderTableError(error: unknown): boolean {
 
 // D1上のユーザー関連データを削除するRepository
 export class D1AccountRepository implements AccountRepository {
+    // アカウントと関連データを同じD1データベースから削除する
     constructor(private readonly database: D1Database) {}
 
     async deleteUser(userId: string): Promise<DeleteAccountResult> {
@@ -51,6 +53,7 @@ export class D1AccountRepository implements AccountRepository {
         let results: D1Result[]
 
         try {
+            // 関連データからusersまでを一括実行して途中状態を残さない
             results = await this.database.batch(statements)
         } catch (error) {
             if (!isMissingConfigOrderTableError(error)) {
@@ -65,6 +68,7 @@ export class D1AccountRepository implements AccountRepository {
         }
         const userDelete = results[results.length - 1]
 
+        // 最後のusers削除結果からアカウントの存在有無を判断する
         if (!userDelete) {
             throw new Error("アカウント削除の結果を取得できませんでした")
         }

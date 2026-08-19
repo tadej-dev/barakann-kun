@@ -111,6 +111,7 @@ export function SimulatorPage() {
 
     // 確認ダイアログからlocalStorage構成をD1へ取り込む
     async function migrateLocalConfigurations() {
+        // 認証前・別ユーザーの処理中・同一ユーザーの二重実行中は保存を開始しない。
         const isCurrentMigrationRunning = isMigrating &&
             migrationOwnerKey === authUserId
 
@@ -124,6 +125,7 @@ export function SimulatorPage() {
 
         const stateToMigrate = loadSimulatorState() ?? localSimulatorState
 
+        // Storageが空の場合は、ログインしていても移行対象がないためダイアログだけを閉じる。
         if (!stateToMigrate) {
             return
         }
@@ -151,6 +153,7 @@ export function SimulatorPage() {
                 currentAuthUserIdRef.current === migrationUserId &&
                 activeMigrationRequestIdRef.current === requestId
             ) {
+                // 現在のユーザー・リクエストだけを結果へ反映し、完了件数があれば一覧を再取得する。
                 setMigrationResultOwnerKey(migrationUserId)
                 setMigrationResult(result)
 
@@ -164,6 +167,7 @@ export function SimulatorPage() {
                 currentAuthUserIdRef.current === migrationUserId &&
                 activeMigrationRequestIdRef.current === requestId
             ) {
+                // 部分失敗も構成ごとに表示し、成功した構成を再試行で二重登録しない。
                 setMigrationResultOwnerKey(migrationUserId)
                 const message = error instanceof Error
                     ? error.message
@@ -194,6 +198,7 @@ export function SimulatorPage() {
 
         // カテゴリー一覧の取得処理
         async function loadCategories() {
+            // カテゴリーは候補取得の入口なので、一覧を読み終えるまでシミュレーターを表示しない。
             try {
                 const data = await fetchCategories()
 

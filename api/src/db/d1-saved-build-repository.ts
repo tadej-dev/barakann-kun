@@ -53,9 +53,11 @@ async function queryRows<T>(
 
 // D1を利用した保存構成リポジトリ
 export class D1SavedBuildRepository implements SavedBuildRepository {
+    // 保存構成の所有者条件と世代条件をすべての操作で統一する
     constructor(private readonly database: D1Database) {}
 
     async count(userId: string): Promise<number> {
+        // 追加構成の件数を取得して固定スロット4件と合算する
         const rows = await queryRows<CountRow>(
             this.database,
             `SELECT COUNT(*) AS count
@@ -69,6 +71,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
     }
 
     async list(userId: string): Promise<SavedBuild[]> {
+        // 固定スロットは別APIで扱うため追加構成だけを取得する
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
             `SELECT id, name, version, created_at, updated_at
@@ -85,6 +88,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         userId: string,
         buildId: string,
     ): Promise<SavedBuild | null> {
+        // IDと所有者を同時に指定して他ユーザーの構成を取得させない
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
             `SELECT id, name, version, created_at, updated_at
@@ -103,6 +107,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         name: string,
         parts: SavedBuildPartInput[],
     ): Promise<SavedBuild> {
+        // 選択パーツを検証して保存時点の価格と重量を確定する
         const snapshots = await this.loadPartSnapshots(parts)
         const id = crypto.randomUUID()
         const now = new Date().toISOString()
@@ -158,6 +163,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // 構成本体とパーツを同じD1バッチで登録する
         const results = await this.database.batch(statements)
 
+        // 条件付きINSERTが0件なら同時作成を含めて上限到達と判断する
         if (results[0]?.meta.changes === 0) {
             throw new SavedBuildLimitExceededError()
         }
@@ -178,6 +184,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         name: string,
         parts: SavedBuildPartInput[],
     ): Promise<UpdateSavedBuildResult> {
+        // 更新後のパーツを事前検証して同じ新世代でまとめて置き換える
         const snapshots = await this.loadPartSnapshots(parts)
         const nextVersion = version + 1
         const now = new Date().toISOString()
@@ -238,6 +245,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         }
 
         if (buildUpdate.meta.changes === 0) {
+            // 対象が残っていれば世代競合で存在しなければ削除済みと判断する
             const currentBuild = await this.findById(userId, buildId)
 
             return currentBuild
@@ -260,6 +268,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         version: number,
         name: string,
     ): Promise<RenameSavedBuildResult> {
+        // 名前だけの変更でもversionを進めて他端末との競合を検出する
         const now = new Date().toISOString()
         const result = await this.database.prepare(
             `UPDATE saved_builds
@@ -290,6 +299,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         buildId: string,
         version: number,
     ): Promise<DeleteSavedBuildResult> {
+        // 指定versionと一致する所有中の追加構成だけを削除する
         const result = await this.database.prepare(
             `DELETE FROM saved_builds
              WHERE id = ? AND user_id = ? AND config_slot IS NULL
@@ -320,6 +330,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             return []
         }
 
+        // 複数構成のパーツを一度に取得して構成IDごとに振り分ける
         const buildIds = rows.map((row) => row.id)
         const partRows = await queryRows<SavedBuildPartRow>(
             this.database,

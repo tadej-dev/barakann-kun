@@ -41,6 +41,7 @@ export async function readJson(context: ApiRouteContext): Promise<unknown> {
     try {
         return await context.req.json()
     } catch {
+        // 空本文や不正JSONは呼び出し元のスキーマ検証で処理できる形へ揃える
         return null
     }
 }
@@ -49,6 +50,7 @@ export async function readJson(context: ApiRouteContext): Promise<unknown> {
 export async function getUserId(
     context: ApiRouteContext,
 ): Promise<string | null> {
+    // ユーザーIDはリクエスト本文ではなくAuth.jsのセッションから取得する
     const authUser = await getAuthUser(context)
 
     return authUser?.user?.id ?? null
@@ -61,6 +63,7 @@ export async function hasValidCsrfToken(
 ): Promise<boolean> {
     const csrfToken = parseCsrfToken(payload)
 
+    // 本文にトークンがなければ暗号学的な検証を行わず失敗として返す
     return Boolean(
         csrfToken && await verifyCsrfToken(
             context.req.raw,

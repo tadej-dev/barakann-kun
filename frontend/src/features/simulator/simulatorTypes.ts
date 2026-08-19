@@ -10,6 +10,7 @@ export type ConfigId = (typeof CONFIG_IDS)[number]
 // 選択枠別の選択済みパーツ
 export type SelectedParts = Record<string, Part>
 
+// 固定構成と追加構成で共有する、スロット単位の選択状態。
 // 構成別の選択済みパーツ
 export type ConfigStates = Record<ConfigId, SelectedParts>
 

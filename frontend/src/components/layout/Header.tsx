@@ -58,6 +58,7 @@ export function Header() {
         }
     }
 
+    // 認証状態に応じて、確認中・ユーザーメニュー・ログイン導線のいずれかを表示する。
     return (
         <header className="sticky top-0 z-40 border-b border-slate-800 bg-[#0b0f12] text-white">
             <div className="mx-auto flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-8">
@@ -138,6 +139,7 @@ export function Header() {
 
                                     <div className="my-1 h-px bg-border" />
 
+                                    {/* ログアウト後のセッション再取得はAuthProviderへ集約する。 */}
                                     <DropdownMenuItem
                                         disabled={isLoggingOut}
                                         onClick={() => void logout()}
@@ -148,6 +150,7 @@ export function Header() {
                                             : "ログアウト"}
                                     </DropdownMenuItem>
 
+                                    {/* 削除処理は確認ダイアログで明示的に承認してから実行する。 */}
                                     <DropdownMenuItem
                                         disabled={isLoggingOut || isDeletingAccount}
                                         onClick={() => setIsDeleteDialogOpen(true)}
@@ -162,6 +165,7 @@ export function Header() {
 
                     {(status === "unauthenticated" || status === "error") && (
                         <>
+                            {/* 未ログインと認証エラーでは、再試行できるログインボタンを残す。 */}
                             {status === "error" && errorMessage && (
                                 <span
                                     className="hidden max-w-56 truncate text-xs text-amber-300 md:inline"

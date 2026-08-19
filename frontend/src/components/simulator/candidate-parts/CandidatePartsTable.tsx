@@ -96,6 +96,7 @@ export function CandidatePartsTable({
     const enableContentVisibility = filteredAndSortedParts.length >=
         CONTENT_VISIBILITY_THRESHOLD
     // 検索条件が変わっても適合判定を再計算せず、パーツ選択時だけ更新
+    // 規格判定はフィルター結果ではなく元の候補一覧を対象にし、行表示時の参照をO(1)にする。
     const compatibilityByPartId = useMemo(() => {
         const result = new Map<number, CompatibilityResult | null>()
 
@@ -109,8 +110,10 @@ export function CandidatePartsTable({
         return result
     }, [activeSlot, parts, selectedParts])
 
+    // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする。
     // 選択不可状態
     if (blockedMessage) {
+        // 一体型パーツなどでカテゴリー全体が占有されている場合は、表を出さず解除導線を優先する。
         return (
             <CandidatePartsBlockedMessage
                 message={blockedMessage}
@@ -124,6 +127,7 @@ export function CandidatePartsTable({
 
     // 読み込み状態
     if (isLoading) {
+        // 候補一覧がまだない間に空表示と誤認させない。
         return (
             <CandidatePartsTableMessage
                 message="パーツを読み込んでいます..."
@@ -134,6 +138,7 @@ export function CandidatePartsTable({
 
     // API取得エラー
     if (errorMessage) {
+        // 取得失敗時は古い候補を表示せず、再試行可能なエラー表示へ切り替える。
         return (
             <CandidatePartsTableMessage
                 message={errorMessage}

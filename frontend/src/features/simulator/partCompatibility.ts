@@ -27,6 +27,7 @@ type EqualityRule = {
 }
 
 const EQUALITY_RULES: EqualityRule[] = [
+    // 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する。
     {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
     {
         categories: ["frame", "handlebar"],
@@ -68,6 +69,8 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     wheel_diameter: "ホイール径",
 }
 
+// API内部キーを候補表で読める日本語へ変換する。
+
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "6_bolt": "6ボルト",
     center_lock: "センターロック",
@@ -81,6 +84,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
 }
 
 function getCategoryKey(part: Part, slotKey: string) {
+    // APIにcategoryKeyがない旧データでも、スロットキーから判定対象を補完する。
     return part.categoryKey ?? getPartSlotCategoryKey(slotKey)
 }
 
@@ -89,6 +93,7 @@ function hasCategoryPair(
     secondCategory: string,
     expectedCategories: readonly [string, string],
 ) {
+    // 同じカテゴリー同士を誤って関連判定しないよう、異なる2カテゴリーだけを対象にする。
     return (
         expectedCategories.includes(firstCategory) &&
         expectedCategories.includes(secondCategory) &&
@@ -97,6 +102,7 @@ function hasCategoryPair(
 }
 
 function appliesToPosition(targetSlot: PartSlot, selectedSlotKey: string) {
+    // singleは前後共通、front/rearは同じ位置だけを比較対象にする。
     const selectedPosition = getPartSlotPosition(selectedSlotKey)
 
     return (
@@ -107,6 +113,7 @@ function appliesToPosition(targetSlot: PartSlot, selectedSlotKey: string) {
 }
 
 function getSpecification(part: Part, key: string) {
+    // 規格が未登録の場合はundefinedのまま返し、適合不明として扱えるようにする。
     return part.specifications?.[key]
 }
 
@@ -124,6 +131,7 @@ function compareTireAndTube(tire: Part, tube: Part) {
         !Number.isFinite(minWidth) ||
         !Number.isFinite(maxWidth)
     ) {
+        // 規格不足は安全側に倒し、適合と断定せず利用者へ確認を促す。
         return {status: "unknown" as const, reasons: ["タイヤとチューブのサイズ情報が不足しています"]}
     }
 
@@ -148,10 +156,12 @@ function compareTireAndTube(tire: Part, tube: Part) {
 }
 
 export function getSpecificationLabel(key: string) {
+    // 未知の規格キーも捨てず、APIキーをフォールバック表示する。
     return SPECIFICATION_LABELS[key] ?? key
 }
 
 export function getSpecificationValueLabel(key: string, value: string) {
+    // 定義済みの値は日本語化し、mm系だけ単位を補って表示する。
     if (SPECIFICATION_VALUE_LABELS[value]) {
         return SPECIFICATION_VALUE_LABELS[value]
     }
@@ -160,10 +170,12 @@ export function getSpecificationValueLabel(key: string, value: string) {
 }
 
 export function getPartPackageUnit(part: Part) {
+    // 販売単位が欠損した旧データは単品として扱う。
     return part.specifications?.package_unit ?? "single"
 }
 
 export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
+    // 前後スロットに同じペア商品が入っていても、価格・重量を一度だけ加算する。
     const countedPairIds = new Set<number>()
 
     return Object.values(selectedParts).reduce(
@@ -190,6 +202,7 @@ export function evaluatePartCompatibility(
     targetSlot: PartSlot,
     selectedParts: SelectedParts,
 ): CompatibilityResult | null {
+    // 候補パーツを現在の選択状態と比較し、理由・解除対象・選択可否をまとめて返す。
     const reasons: string[] = []
     const conflictingSlotKeys = new Set<string>()
     let hasRelevantSelection = false
@@ -203,6 +216,7 @@ export function evaluatePartCompatibility(
         targetSlot.position !== "single" &&
         allowedPosition !== targetSlot.position
     ) {
+        // 前輪・後輪専用品を反対側へ登録できないよう、候補表示の段階で選択を止める。
         return {
             status: "incompatible",
             reasons: [`${getSpecificationValueLabel("allowed_position", allowedPosition)}の製品です`],
@@ -212,6 +226,7 @@ export function evaluatePartCompatibility(
     }
 
     for (const [selectedSlotKey, selectedPart] of Object.entries(selectedParts)) {
+        // 同じスロット自身は比較せず、別位置にある関連パーツだけを適合判定する。
         if (selectedSlotKey === targetSlot.key || !appliesToPosition(targetSlot, selectedSlotKey)) {
             continue
         }
@@ -220,6 +235,7 @@ export function evaluatePartCompatibility(
         const selectedCategory = getCategoryKey(selectedPart, selectedSlotKey)
 
         if (hasCategoryPair(candidateCategory, selectedCategory, ["tire", "inner_tube"])) {
+            // タイヤとチューブだけは径・幅の範囲を専用関数で判定する。
             hasRelevantSelection = true
             const tire = candidateCategory === "tire" ? candidate : selectedPart
             const tube = candidateCategory === "inner_tube" ? candidate : selectedPart
@@ -239,6 +255,7 @@ export function evaluatePartCompatibility(
         }
 
         for (const rule of EQUALITY_RULES) {
+            // その他の関連カテゴリーは、規格値の一致・不足・不一致を共通ルールで評価する。
             if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
                 continue
             }
@@ -273,6 +290,7 @@ export function evaluatePartCompatibility(
     }
 
     if (selectionBlocked || conflictingSlotKeys.size > 0) {
+        // 保護対象の不一致や解除が必要な競合は、候補行を非互換として表示する。
         return {
             status: "incompatible",
             reasons,
@@ -282,6 +300,7 @@ export function evaluatePartCompatibility(
     }
 
     if (!hasRelevantSelection) {
+        // 比較対象の規格がない候補には、誤って適合バッジを付けない。
         return null
     }
 

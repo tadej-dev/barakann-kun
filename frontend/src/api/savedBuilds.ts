@@ -12,6 +12,8 @@ const MAX_PARTS_PER_BUILD = 100
 const MAX_SAVED_BUILD_ID_LENGTH = 200
 const MAX_TIMESTAMP_LENGTH = 64
 
+// 固定構成4件を含む上限と、1構成あたりの入力・表示サイズをAPIと共有する。
+
 // D1へ保存する構成内パーツの入力
 export type SavedBuildPartInput = {
     slotKey: string
@@ -64,6 +66,7 @@ async function throwApiError(
     response: Response,
     fallbackMessage: string,
 ): Promise<never> {
+    // APIのエラー本文は形式が保証されないため、読める項目だけを画面用例外へ移す。
     let message = fallbackMessage
     let code: string | null = null
     let partIds: number[] = []
@@ -123,6 +126,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
         typeof value !== "object" ||
         value === null
     ) {
+        // ID・名称・version・日時・partsがそろわない構成は全体を無効として扱う。
         throw new SavedBuildApiError(
             "保存構成のレスポンスを解釈できませんでした",
         )
@@ -146,6 +150,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
     }
 
     const parsedParts = parts.flatMap((part) => {
+        // 不正なパーツ要素は後段で件数差分として検出し、部分的な構成を受け付けない。
         if (typeof part !== "object" || part === null) {
             return []
         }
@@ -173,6 +178,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
         parsedParts.length !== parts.length ||
         new Set(parsedParts.map((part) => part.slotKey)).size !== parsedParts.length
     ) {
+        // 重複スロットを許すと復元時の選択結果が不定になるため、一覧を返さない。
         throw new SavedBuildApiError(
             "保存構成のパーツ情報を解釈できませんでした",
         )
@@ -190,6 +196,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
 
 // 一覧レスポンスも1件ずつ検証し、不正な要素を黙って欠落させない
 function parseSavedBuildList(value: unknown): SavedBuild[] {
+    // API側の上限を超える一覧を受け取った場合は、表示だけでなくレスポンス自体を拒否する。
     if (
         !Array.isArray(value) ||
         value.length > MAX_SAVED_BUILDS - FIXED_CONFIG_COUNT
@@ -202,6 +209,7 @@ function parseSavedBuildList(value: unknown): SavedBuild[] {
     const builds = value.map(parseSavedBuild)
 
     if (new Set(builds.map((build) => build.id)).size !== builds.length) {
+        // 同じIDが複数あると更新・削除対象を誤るため、重複を検出する。
         throw new SavedBuildApiError(
             "保存構成一覧のレスポンスに重複した構成があります",
         )
@@ -214,6 +222,7 @@ function parseSavedBuildList(value: unknown): SavedBuild[] {
 export async function fetchSavedBuilds(
     signal?: AbortSignal,
 ): Promise<SavedBuild[]> {
+    // 一覧取得はCookieセッションだけを使い、レスポンスは構造検証後に返す。
     const response = await fetch("/api/builds", {
         credentials: "same-origin",
         signal,
@@ -221,6 +230,7 @@ export async function fetchSavedBuilds(
     })
 
     if (!response.ok) {
+        // 409競合や503マイグレーション未適用を、呼び出し元で分岐できる例外へ変換する。
         return throwApiError(response, "保存構成一覧の取得に失敗しました")
     }
 
@@ -235,6 +245,7 @@ export async function createSavedBuild(
 ): Promise<SavedBuild> {
     // D1の保存APIはCookie認証に加えてCSRFトークンを要求する
     const csrfToken = await fetchCsrfToken()
+    // 作成操作では、入力名と選択中スロットを同じリクエストへまとめる。
     const response = await fetch("/api/builds", {
         method: "POST",
         credentials: "same-origin",
@@ -247,6 +258,7 @@ export async function createSavedBuild(
     })
 
     if (!response.ok) {
+        // 上限超過・不正パーツ・マイグレーション未適用をコード付きで返す。
         return throwApiError(response, "構成の保存に失敗しました")
     }
 
@@ -260,6 +272,7 @@ export async function updateSavedBuild(
     name: string,
     parts: SavedBuildPartInput[],
 ): Promise<SavedBuild> {
+    // versionを含めたPUTで、別端末の編集を検知できるようにする。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
         method: "PUT",
@@ -284,6 +297,7 @@ export async function renameSavedBuild(
     version: number,
     name: string,
 ): Promise<SavedBuild> {
+    // パーツを送らず名前だけをPATCHし、保存済みスナップショットを維持する。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
         method: "PATCH",
@@ -307,6 +321,7 @@ export async function deleteSavedBuild(
     buildId: string,
     version: number,
 ): Promise<void> {
+    // version一致をサーバー側で確認し、古い画面からの削除を防ぐ。
     const csrfToken = await fetchCsrfToken()
     const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
         method: "DELETE",

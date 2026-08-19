@@ -6,6 +6,7 @@ const configOrderItemsSchema = z
     .min(4)
     .max(24)
     .superRefine((items, context) => {
+        // 同じ構成キーが複数含まれていないか集合を使って確認する
         const seen = new Set<string>()
 
         for (const [index, item] of items.entries()) {
@@ -23,6 +24,7 @@ const configOrderItemsSchema = z
 
 // 構成表示順の保存リクエストを検証
 export function parseConfigOrderPayload(value: unknown) {
+    // 例外を投げずルート側で400応答へ変換できる結果を返す
     return z.object({
         items: configOrderItemsSchema,
     }).safeParse(value)

@@ -45,6 +45,7 @@ export function isMissingConfigSlotSchemaError(error: unknown): boolean {
         return true
     }
 
+    // D1がSQLiteエラーをcauseへ包む場合もあるため原因を再帰的に確認する
     return isMissingConfigSlotSchemaError(
         (error as Error & {cause?: unknown}).cause,
     )
@@ -118,9 +119,11 @@ function createDefaultSlot(configId: ConfigSlotId): ConfigSlot {
 
 // D1上の固定構成を扱うリポジトリ
 export class D1ConfigSlotRepository implements ConfigSlotRepository {
+    // 構成1〜4の所有者確認と世代管理をこの層へ集約する
     constructor(private readonly database: D1Database) {}
 
     async list(userId: string): Promise<ConfigSlot[]> {
+        // 保存済みの固定構成だけをパーツと合わせて一括取得する
         const rows = await queryRows<ConfigSlotRow>(
             this.database,
             `SELECT id, config_slot, name, version, updated_at
@@ -139,6 +142,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         return CONFIG_SLOT_IDS.map((configId) => {
             const row = rowsByConfigId.get(configId)
 
+            // 未保存の番号も画面に表示できるよう既定スロットを補う
             return row
                 ? this.toConfigSlot(row, partsByBuildId)
                 : createDefaultSlot(configId)
@@ -154,6 +158,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         const now = new Date().toISOString()
 
         if (version === 0) {
+            // 初回の名前変更では同じ番号が未作成の場合だけ行を追加する
             const id = crypto.randomUUID()
             const result = await this.database.prepare(
                 `INSERT INTO saved_builds (
@@ -178,9 +183,11 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
             ).run()
 
             if (result.meta.changes === 0) {
+                // 別端末が先に作成していた場合は現在値から競合を判定する
                 return this.currentMutationResult(userId, configId)
             }
         } else {
+            // 既存スロットはversionと更新日時の両方を使って競合を検出する
             const current = await this.findRow(userId, configId)
 
             if (!current) {
@@ -216,10 +223,12 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         name: string,
         parts: SavedBuildPartInput[],
     ): Promise<ConfigSlotMutationResult> {
+        // 価格と重量はクライアント値ではなく現在のパーツマスターから取得する
         const snapshots = await this.loadPartSnapshots(parts)
         const now = new Date().toISOString()
 
         if (version === 0) {
+            // 初回保存では構成本体と選択パーツを同じD1バッチへまとめる
             const id = crypto.randomUUID()
             const statements = [
                 this.database.prepare(
@@ -259,6 +268,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
                 return this.currentMutationResult(userId, configId)
             }
         } else {
+            // 更新成功時だけ同じ新世代へパーツを入れ替える
             const nextVersion = version + 1
             const current = await this.findRow(userId, configId)
 
@@ -325,6 +335,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         version: number,
     ): Promise<ConfigSlotMutationResult> {
         if (version === 0) {
+            // DBにないスロットのクリアは書き込みなしで空構成を返す
             const current = await this.findRow(userId, configId)
 
             return current
@@ -340,6 +351,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
 
         const nextVersion = version + 1
         const now = new Date().toISOString()
+        // 世代を進めてから同じ世代を確認できた場合だけパーツを削除する
         const results = await this.database.batch([
             this.database.prepare(
                 `UPDATE saved_builds
@@ -450,6 +462,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         return parts.map((part) => {
             const snapshot = snapshots.get(part.partId)
 
+            // 事前検証後にスナップショットが欠けた場合も保存を中断する
             if (!snapshot) {
                 throw new MissingSavedBuildPartsError([part.partId])
             }
@@ -496,6 +509,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         buildIds: string[],
     ): Promise<Map<string, SavedBuildPart[]>> {
         if (buildIds.length === 0) {
+            // 空のIN句を作らずD1への不要な問い合わせも避ける
             return new Map()
         }
 
@@ -510,6 +524,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         const partsByBuildId = new Map<string, SavedBuildPart[]>()
 
         for (const row of rows) {
+            // 一括取得したパーツを保存構成IDごとの配列へまとめ直す
             const parts = partsByBuildId.get(row.saved_build_id) ?? []
             parts.push({
                 slotKey: row.slot_key,

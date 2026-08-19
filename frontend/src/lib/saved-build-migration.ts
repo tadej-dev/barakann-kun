@@ -377,6 +377,7 @@ export async function migrateLocalSimulatorState(
             result.created.push({configId, build})
         } catch (error) {
             if (signal?.aborted) {
+                // 画面遷移やログアウトによる中断は失敗件数に変換せず、そのまま呼び出し元へ返す。
                 throw error
             }
 
@@ -393,6 +394,7 @@ export async function migrateLocalSimulatorState(
         result.failed.length === 0 &&
         getNonEmptyConfigIds(state).length > 0
     ) {
+        // 1件でも失敗した場合は、次回ログイン時に残りを再試行できるよう完了扱いにしない。
         markMigrationComplete(userId)
     }
 

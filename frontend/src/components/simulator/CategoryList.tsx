@@ -26,6 +26,7 @@ export function CategoryList({
                     const isActive = category.key === activeCategory
                     const isBlocked = blockedCategoryKeys.has(category.key)
 
+                    // 占有中のカテゴリーもクリック可能にし、候補表側の解除ダイアログへ誘導する。
                     return (
                         <button
                             key={category.id}

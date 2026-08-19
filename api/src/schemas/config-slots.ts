@@ -14,6 +14,7 @@ const configSlotPartSchema = z.object({
         .min(1)
         .max(100)
         .regex(/^[a-z][a-z0-9_-]*(:(front|rear))?$/),
+    // D1へ渡す前に正の安全な整数へ限定する
     partId: z.number().int().positive().safe(),
 })
 
@@ -22,6 +23,7 @@ const configSlotPartsSchema = z
     .array(configSlotPartSchema)
     .max(100)
     .superRefine((parts, context) => {
+        // 1つのスロットに複数パーツが保存されないよう重複を確認する
         const slotKeys = new Set<string>()
 
         for (const [index, part] of parts.entries()) {
@@ -39,6 +41,7 @@ const configSlotPartsSchema = z
 
 // 構成IDのURLパラメーターを検証
 export function parseConfigSlotId(value: string) {
+    // 任意文字列を固定スロットの1から4だけに絞り込む
     return configSlotIdSchema.safeParse(value)
 }
 
@@ -47,6 +50,7 @@ const configSlotVersionSchema = z.number().int().nonnegative().safe()
 
 // 構成名の変更リクエストを検証
 export function parseRenameConfigSlotPayload(value: unknown) {
+    // 未保存を示すversion 0も名前変更の初回保存として許可する
     return z.object({
         name: configSlotNameSchema,
         version: configSlotVersionSchema,
@@ -55,6 +59,7 @@ export function parseRenameConfigSlotPayload(value: unknown) {
 
 // 構成名と選択パーツの保存リクエストを検証
 export function parseSaveConfigSlotPayload(value: unknown) {
+    // 名前と世代とパーツをまとめて検証して部分的な解釈を防ぐ
     return z.object({
         name: configSlotNameSchema,
         version: configSlotVersionSchema,
@@ -64,6 +69,7 @@ export function parseSaveConfigSlotPayload(value: unknown) {
 
 // 構成クリアのリクエストを検証
 export function parseClearConfigSlotPayload(value: unknown) {
+    // クリア時にも世代を要求して古い画面からの操作を検出する
     return z.object({
         version: configSlotVersionSchema,
     }).safeParse(value)

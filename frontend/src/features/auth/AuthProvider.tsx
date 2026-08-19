@@ -46,6 +46,7 @@ export function AuthProvider({children}: AuthProviderProps) {
 
     // セッションAPIの再取得
     const refreshSession = useCallback(async (signal?: AbortSignal) => {
+        // 競合するセッション取得のうち、最後に開始したリクエストだけを画面へ反映する。
         const requestId = ++sessionRequestIdRef.current
 
         setAuthState((current) => ({
@@ -61,16 +62,19 @@ export function AuthProvider({children}: AuthProviderProps) {
                 signal?.aborted ||
                 sessionRequestIdRef.current !== requestId
             ) {
+                // アンマウント後、または後続リクエスト開始後の応答は古い状態なので破棄する。
                 return
             }
 
             if (session.authenticated) {
+                // 認証済みの場合だけユーザー情報を保持し、未認証状態の残値を消す。
                 setAuthState({
                     status: "authenticated",
                     user: session.user,
                     errorMessage: null,
                 })
             } else {
+                // セッションがない場合は、前回のユーザー情報を画面へ残さない。
                 setAuthState({
                     status: "unauthenticated",
                     user: null,
@@ -82,6 +86,7 @@ export function AuthProvider({children}: AuthProviderProps) {
                 signal?.aborted ||
                 sessionRequestIdRef.current !== requestId
             ) {
+                // 失敗した応答も、古いリクエストなら現在のエラー表示を上書きしない。
                 return
             }
 
@@ -101,6 +106,7 @@ export function AuthProvider({children}: AuthProviderProps) {
         try {
             const loginUrl = await startGoogleLogin(getCurrentCallbackUrl())
 
+            // URL取得後の遷移はAuth.js/Google側へ任せ、戻り先はAPIが発行した値を使う。
             window.location.assign(loginUrl)
         } catch (error) {
             setAuthState((current) => ({
@@ -120,6 +126,7 @@ export function AuthProvider({children}: AuthProviderProps) {
 
         try {
             await logoutAuthSession()
+            // Cookie削除後のサーバー状態を再取得し、全画面の表示を同じ状態へ揃える。
             await refreshSession()
         } catch (error) {
             setAuthState((current) => ({
@@ -165,6 +172,7 @@ export function AuthProvider({children}: AuthProviderProps) {
     useEffect(() => {
         const controller = new AbortController()
 
+        // ページを離れた後にセッション応答がstate更新しないよう、取得を中断する。
         void refreshSession(controller.signal)
 
         return () => controller.abort()

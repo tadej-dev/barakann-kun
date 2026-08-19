@@ -21,7 +21,9 @@ function createMetadata(
     return {variantName, specifications}
 }
 
+// ブランド名の除去条件と、バリエーション列を表示する条件を確認する。
 describe("getPartDisplayName", () => {
+    // 一覧ではブランド列を別表示するため、製品名から先頭の重複を除く。
     it("製品名の先頭にあるブランド名を除去する", () => {
         expect(getPartDisplayName(
             createPart(
@@ -31,6 +33,7 @@ describe("getPartDisplayName", () => {
         )).toBe("Ultegra CS-R8100")
     })
 
+    // バリエーションを除いたモデル名がある場合は、正規化済み名称を優先する。
     it("modelNameを優先して表示する", () => {
         expect(getPartDisplayName(
             createPart(
@@ -41,24 +44,28 @@ describe("getPartDisplayName", () => {
         )).toBe("S5")
     })
 
+    // DB表記の大文字小文字差で、同じブランドが二重表示されないようにする。
     it("ブランド名の大文字小文字が異なっても除去する", () => {
         expect(getPartDisplayName(
             createPart("sram Rival AXS", "SRAM"),
         )).toBe("Rival AXS")
     })
 
+    // 製品名の途中にブランド文字列があるだけなら、意味を変えずに残す。
     it("ブランド名が先頭にない製品名はそのまま表示する", () => {
         expect(getPartDisplayName(
             createPart("SuperSix EVO", "Cannondale"),
         )).toBe("SuperSix EVO")
     })
 
+    // 完全一致を除去すると名称が消えるため、最低限元の製品名を表示する。
     it("ブランド名と製品名が同じ場合は空文字にしない", () => {
         expect(getPartDisplayName(
             createPart("Shimano", "Shimano"),
         )).toBe("Shimano")
     })
 
+    // 表示材料がないときは、候補テーブルのバリエーション列自体を省略する。
     it("バリエーションと仕様がすべて空なら列を非表示にする", () => {
         expect(hasPartVariantColumn([
             createMetadata(),
@@ -66,6 +73,7 @@ describe("getPartDisplayName", () => {
         ])).toBe(false)
     })
 
+    // variant_nameが空でも規格情報があれば、列を残して仕様を表示する。
     it("仕様がある場合はバリエーション列を表示する", () => {
         expect(hasPartVariantColumn([
             createMetadata(null, {wheel_diameter: "700C"}),

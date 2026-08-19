@@ -112,6 +112,7 @@ function savedBuildLimitExceeded(context: SavedBuildContext) {
 
 // 保存構成一覧を取得
 savedBuildsRoute.get("/", async (context) => {
+    // 保存構成はユーザー固有データなのでセッションから所有者を取得する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -121,6 +122,7 @@ savedBuildsRoute.get("/", async (context) => {
     let builds: SavedBuild[]
 
     try {
+        // 固定スロットを除いた追加構成の一覧取得はRepositoryへ任せる
         builds = await context.var.savedBuildRepository.list(userId)
     } catch (error) {
         const response = migrationResponse(context, error)
@@ -137,6 +139,7 @@ savedBuildsRoute.get("/", async (context) => {
 
 // 保存構成を新規作成
 savedBuildsRoute.post("/", async (context) => {
+    // 作成先のユーザーは本文ではなくセッションから確定する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -145,6 +148,7 @@ savedBuildsRoute.post("/", async (context) => {
 
     const payload = await readJson(context)
 
+    // 新規作成はサーバー状態を変更するためCSRF検証を行う
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -156,6 +160,7 @@ savedBuildsRoute.post("/", async (context) => {
     }
 
     try {
+        // 早期応答用に件数を確認し実際の上限判定はD1側でも行う
         const savedBuildCount = await context.var.savedBuildRepository.count(userId)
 
         if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
@@ -170,6 +175,7 @@ savedBuildsRoute.post("/", async (context) => {
 
         return context.json(build, 201)
     } catch (error) {
+        // 利用者が修正できるパーツ不正は400応答へ変換する
         if (error instanceof MissingSavedBuildPartsError) {
             return invalidParts(context, error)
         }
@@ -185,6 +191,7 @@ savedBuildsRoute.post("/", async (context) => {
         }
 
         if (error instanceof SavedBuildLimitExceededError) {
+            // 同時作成によって上限へ達した場合も事前確認と同じ応答にする
             return savedBuildLimitExceeded(context)
         }
 
@@ -194,6 +201,7 @@ savedBuildsRoute.post("/", async (context) => {
 
 // 保存構成を1件取得
 savedBuildsRoute.get("/:buildId", async (context) => {
+    // 個別構成もログイン中の所有者へ限定して取得する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -202,6 +210,7 @@ savedBuildsRoute.get("/:buildId", async (context) => {
 
     const buildId = context.req.param("buildId")
 
+    // UUID形式でない値をD1の検索条件へ渡す前に拒否する
     if (!parseSavedBuildId(buildId).success) {
         return invalidBuildId(context)
     }
@@ -224,6 +233,7 @@ savedBuildsRoute.get("/:buildId", async (context) => {
     }
 
     if (!build) {
+        // 他ユーザーのIDを指定した場合も存在を推測できない404応答にする
         return context.json(
             {
                 error: {
@@ -240,6 +250,7 @@ savedBuildsRoute.get("/:buildId", async (context) => {
 
 // 保存構成をversion一致時だけ更新
 savedBuildsRoute.put("/:buildId", async (context) => {
+    // 更新対象はセッション所有者の追加構成に限定する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -254,6 +265,7 @@ savedBuildsRoute.put("/:buildId", async (context) => {
 
     const payload = await readJson(context)
 
+    // パーツと名前の一括更新前にCSRFトークンを照合する
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -265,6 +277,7 @@ savedBuildsRoute.put("/:buildId", async (context) => {
     }
 
     try {
+        // Repositoryへversionを渡して他端末の先行更新を検出する
         const result = await context.var.savedBuildRepository.update(
             userId,
             buildId,
@@ -273,6 +286,7 @@ savedBuildsRoute.put("/:buildId", async (context) => {
             parsedPayload.data.parts,
         )
 
+        // 対象なしと世代競合を分けて画面の次の処理を判断できるようにする
         if (result.kind === "not_found") {
             return context.json(
                 {
@@ -319,6 +333,7 @@ savedBuildsRoute.put("/:buildId", async (context) => {
 
 // パーツの保存時点情報を維持したまま名称だけを変更
 savedBuildsRoute.patch("/:buildId", async (context) => {
+    // 名前変更もセッション所有者の追加構成だけに許可する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -333,6 +348,7 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
 
     const payload = await readJson(context)
 
+    // パーツを変更しない操作でもCSRFとversionの検証を行う
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -346,6 +362,7 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
     let result: RenameSavedBuildResult
 
     try {
+        // Repositoryで所有者と世代が一致した場合だけ名称を変更する
         result = await context.var.savedBuildRepository.rename(
             userId,
             buildId,
@@ -363,6 +380,7 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
     }
 
     if (result.kind === "not_found") {
+        // 所有していない構成IDも対象なしとして同じ404応答にする
         return context.json(
             {
                 error: {
@@ -391,6 +409,7 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
 
 // 保存構成をversion一致時だけ削除
 savedBuildsRoute.delete("/:buildId", async (context) => {
+    // 削除対象はセッション所有者の追加構成に限定する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -405,6 +424,7 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
 
     const payload = await readJson(context)
 
+    // 削除は元に戻せないためCSRFとversionの両方を検証する
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -418,6 +438,7 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
     let result: DeleteSavedBuildResult
 
     try {
+        // Repositoryで所有者と世代が一致した場合だけ削除する
         result = await context.var.savedBuildRepository.delete(
             userId,
             buildId,
@@ -446,6 +467,7 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
     }
 
     if (result.kind === "conflict") {
+        // 古い画面から最新の構成を削除しないよう競合を明示する
         return context.json(
             {
                 error: {

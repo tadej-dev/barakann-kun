@@ -1,5 +1,6 @@
 // プライバシーポリシー画面
 export function PrivacyPage() {
+    // 規約本文はAPIから取得せず、ビルド済みの静的コンテンツとして提供する。
     return (
         <div className="bg-slate-50 text-slate-900">
             <main className="mx-auto max-w-4xl px-6 py-12">
@@ -18,6 +19,7 @@ export function PrivacyPage() {
                 </div>
 
                 <article className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+                    {/* 認証とサービス提供で取り扱う情報の概要 */}
                     <div className="mb-8 rounded-lg bg-slate-50 p-4 text-sm leading-7 text-slate-600">
                         <p className="mt-1">
                             本サービスでは、Googleアカウントによるログイン機能を提供しています。
@@ -25,6 +27,7 @@ export function PrivacyPage() {
                         </p>
                     </div>
 
+                    {/* Googleログインや利用状況から取得する情報 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第1条（取得する情報）
@@ -41,6 +44,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* ブラウザ内に保持する構成データと移行時の扱い */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第2条（localStorageの利用）
@@ -62,6 +66,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 取得情報を利用する目的 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第3条（利用目的）
@@ -80,6 +85,7 @@ export function PrivacyPage() {
                         </ul>
                     </section>
 
+                    {/* 法令に基づく場合を除く第三者提供の制限 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第4条（第三者提供）
@@ -90,6 +96,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* Google認証やホスティング等の外部サービス */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第5条（外部サービスの利用）
@@ -105,6 +112,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* ログイン状態の維持等に使うCookie類 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第6条（Cookie等の利用）
@@ -121,6 +129,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 取得情報の安全管理とアカウント削除時の消去 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第7条（情報の管理）
@@ -137,6 +146,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* ポリシーを変更する場合の扱い */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第8条（プライバシーポリシーの変更）
@@ -148,6 +158,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 問い合わせ窓口に関する案内 */}
                     <section>
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第9条（お問い合わせ）

@@ -52,6 +52,7 @@ function CandidatePartsTableRowComponent({
     onSelect,
     onSelectBoth,
 }: CandidatePartsTableRowProps) {
+    // 行内で使う付属品・規格情報を先に整形し、JSXでは表示条件だけを扱う。
     const includedItems = part.includedItems ?? []
     const specifications = Object.entries(part.specifications ?? {})
     const isSelectionBlocked = compatibility?.selectionBlocked ?? false
@@ -93,6 +94,7 @@ function CandidatePartsTableRowComponent({
             }}
             onKeyDown={handleKeyDown}
         >
+            {/* 行全体を選択対象にし、前後一括などの補助操作だけイベント伝播を止める。 */}
             <TableCell className="font-medium">
                 {part.brandName ?? "-"}
             </TableCell>

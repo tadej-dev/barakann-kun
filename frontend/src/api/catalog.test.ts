@@ -25,9 +25,11 @@ const PART = {
     specifications: {},
 }
 
+// カタログAPIが不正なJSON・数値を受け取った場合に、画面へ流さず拒否することを確認する。
 describe("catalog API", () => {
     afterEach(() => vi.unstubAllGlobals())
 
+    // 正常なカテゴリー配列は、そのままUIで利用できる型へ変換される。
     it("カテゴリー一覧を検証して返す", async () => {
         const fetchMock = vi.fn(async () => jsonResponse([{
             id: 1,
@@ -43,6 +45,7 @@ describe("catalog API", () => {
         }])
     })
 
+    // 配列以外のJSONは、成功ステータスでも壊れたカタログとして拒否する。
     it("カテゴリー一覧の不正なJSONを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({items: []})))
 
@@ -51,6 +54,7 @@ describe("catalog API", () => {
         )
     })
 
+    // Content-Typeや本文が期待形式でない場合に、画面へ曖昧な値を渡さない。
     it("JSONでない成功レスポンスを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json")))
 
@@ -59,6 +63,7 @@ describe("catalog API", () => {
         )
     })
 
+    // 重量・価格などの数値がNaNなら、合計計算へ進めずレスポンスを拒否する。
     it("パーツ一覧の不正な数値を拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
             ...PART,
@@ -70,6 +75,7 @@ describe("catalog API", () => {
         )
     })
 
+    // 保存構成の復元で使うID検索が、期待するクエリとレスポンス検証を行う。
     it("ID指定のパーツ一覧を検証する", async () => {
         const fetchMock = vi.fn(async () => jsonResponse([PART]))
         vi.stubGlobal("fetch", fetchMock)

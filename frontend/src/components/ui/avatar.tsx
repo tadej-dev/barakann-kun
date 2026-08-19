@@ -2,7 +2,9 @@ import {Avatar as AvatarPrimitive} from "@base-ui/react/avatar"
 
 import {cn} from "@/lib/utils"
 
+// Base UIのアバター部品を共通サイズ・画像切り抜きでラップする。
 function Avatar({className, ...props}: AvatarPrimitive.Root.Props) {
+    // Rootで画像とFallbackを同じ円形領域に収める。
     return (
         <AvatarPrimitive.Root
             data-slot="avatar"
@@ -16,6 +18,7 @@ function Avatar({className, ...props}: AvatarPrimitive.Root.Props) {
 }
 
 function AvatarImage({className, ...props}: AvatarPrimitive.Image.Props) {
+    // 画像は正方形・coverで切り抜き、レイアウトを崩さずに表示する。
     return (
         <AvatarPrimitive.Image
             data-slot="avatar-image"
@@ -26,6 +29,7 @@ function AvatarImage({className, ...props}: AvatarPrimitive.Image.Props) {
 }
 
 function AvatarFallback({className, ...props}: AvatarPrimitive.Fallback.Props) {
+    // 画像が未設定・読み込み失敗のときは、親で生成した頭文字を表示する。
     return (
         <AvatarPrimitive.Fallback
             data-slot="avatar-fallback"

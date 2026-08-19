@@ -21,6 +21,7 @@ export function BrandSelect({
                             selectedBrand,
                             onBrandChange,
                             }: BrandSelectProps) {
+    // nullを「全メーカー」に対応させ、Selectの未選択表示を日本語の案内文へ置き換える。
     const items = [
         {
             label: "メーカーを選択",

@@ -20,6 +20,7 @@ export function CandidatePartsTableHeader({
 }: CandidatePartsTableHeaderProps) {
     // 並び順アイコン
     function sortIcon(column: CandidatePartsSortKey) {
+        // 現在の列だけ昇順・降順を表示し、それ以外は未選択状態のアイコンにする。
         if (sortDescriptor.column !== column) {
             return <ChevronsUpDown aria-hidden="true" className="size-3.5" />
         }
@@ -29,6 +30,7 @@ export function CandidatePartsTableHeader({
             : <ArrowDown aria-hidden="true" className="size-3.5" />
     }
 
+    // 列幅とvariant列の有無を行本体と合わせ、ヘッダーとデータのずれを防ぐ。
     return (
         <TableHeader className="bg-muted/70">
             <TableRow className="hover:bg-transparent">

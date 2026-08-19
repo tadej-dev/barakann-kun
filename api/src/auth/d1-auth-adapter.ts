@@ -82,6 +82,7 @@ function displayName(name: string | null | undefined, email: string): string {
 
 // D1を利用するAuth.jsデータベースアダプター
 export function createD1AuthAdapter(database: D1Database): Adapter {
+    // 複数のAdapterメソッドで同じユーザー列を使うためSQLを共有する
     const selectUserSql = `
         SELECT id, display_name, email, image_url
         FROM users
@@ -93,6 +94,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
     `
 
     const loadUser = async (id: string): Promise<AdapterUser | null> => {
+        // D1のユーザー行をAuth.jsが要求する形式へ変換して返す
         const row = await firstRow<UserRow>(
             database,
             `${selectUserSql} WHERE id = ?`,
@@ -106,6 +108,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         providerAccountId: string,
         provider: string,
     ): Promise<AdapterAccount | null> => {
+        // プロバイダー内のアカウントIDから紐づくアプリユーザーを探す
         const row = await firstRow<AccountRow>(
             database,
             `SELECT user_id, provider, provider_account_id
@@ -128,6 +131,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
 
     return {
         async createUser(user) {
+            // メールアドレスの大文字小文字による重複を防いでから保存する
             const email = normalizeEmail(user.email)
             const id = user.id || crypto.randomUUID()
             const name = displayName(user.name, email)
@@ -160,6 +164,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async getUserByEmail(email) {
+            // 作成時と同じ正規化規則を適用してユーザーを検索する
             const normalizedEmail = normalizeEmail(email)
             const row = await firstRow<UserRow>(
                 database,
@@ -171,6 +176,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async getUserByAccount({provider, providerAccountId}) {
+            // OAuthアカウントの組み合わせからログイン対象のユーザーを取得する
             const row = await firstRow<UserRow>(
                 database,
                 `${selectUserSql}
@@ -185,6 +191,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async updateUser(user) {
+            // Auth.jsから未指定の項目は現在値を残して部分更新する
             const currentUser = await loadUser(user.id)
 
             if (!currentUser) {
@@ -219,6 +226,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async deleteUser(userId) {
+            // 削除前のユーザーを返せるよう現在値を先に取得する
             const user = await loadUser(userId)
 
             if (!user) {
@@ -265,6 +273,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async createSession(session) {
+            // Cookieの平文トークンを保存せずSHA-256ハッシュだけをD1へ保存する
             const tokenHash = await hashSessionToken(session.sessionToken)
             const timestamp = new Date().toISOString()
 
@@ -320,6 +329,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async updateSession(session) {
+            // 有効な現在セッションだけを対象に期限を更新する
             const tokenHash = await hashSessionToken(session.sessionToken)
             const currentSession = await firstRow<SessionRow>(
                 database,
@@ -349,6 +359,7 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         },
 
         async deleteSession(sessionToken) {
+            // ログアウト対象を平文ではなく保存済みハッシュで特定する
             const tokenHash = await hashSessionToken(sessionToken)
             const currentSession = await firstRow<SessionRow>(
                 database,

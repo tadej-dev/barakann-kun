@@ -54,6 +54,7 @@ function clearSessionCookies(context: AccountContext) {
 
 // ログイン中の本人のアカウントを削除
 accountRoute.delete("/", async (context) => {
+    // 削除対象は本文で受け取らずログイン中のユーザーに固定する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -62,6 +63,7 @@ accountRoute.delete("/", async (context) => {
 
     const payload = await readJson(context)
 
+    // アカウント削除は状態変更のためCSRFトークンを検証する
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -74,6 +76,7 @@ accountRoute.delete("/", async (context) => {
         return accountNotFound(context)
     }
 
+    // D1の削除後にブラウザへ残っているセッションCookieも無効化する
     clearSessionCookies(context)
 
     return context.body(null, 204)

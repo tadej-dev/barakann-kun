@@ -39,6 +39,7 @@ export function SavedBuildMigrationDialog({
     onDismiss,
     onNameChange,
 }: SavedBuildMigrationDialogProps) {
+    // 移行条件は親画面で判定し、閉じている間は入力欄やダイアログを描画しない。
     if (!open) {
         return null
     }
@@ -51,6 +52,8 @@ export function SavedBuildMigrationDialog({
         return name.length === 0 || name.length > MAX_CONFIG_NAME_LENGTH
     })
 
+    // 保存中は入力と閉じる操作を止め、複数回送信や移行結果の取り違えを防ぐ。
+    // resultがある場合は構成ごとの成功・スキップ・失敗を分けて表示し、再試行判断に使えるようにする。
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"

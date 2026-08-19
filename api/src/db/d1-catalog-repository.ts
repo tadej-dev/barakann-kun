@@ -76,6 +76,7 @@ async function queryRows<T>(
 
 // D1を利用したカタログリポジトリ
 export class D1CatalogRepository implements CatalogRepository {
+    // 公開カタログの読み取りSQLをAPIルートから分離する
     constructor(private readonly database: D1Database) {}
 
     async findCategories(): Promise<Category[]> {
@@ -152,6 +153,7 @@ export class D1CatalogRepository implements CatalogRepository {
         const specifications = new Map<number, Record<string, string>>()
 
         for (const partIdBatch of chunk(partIds, RELATED_QUERY_BATCH_SIZE)) {
+            // D1のバインド変数上限を超えない単位で関連情報を取得する
             // 関連テーブルは同じID群を使って並列取得
             const parameters = placeholders(partIdBatch.length)
             const [itemRows, blockedRows, specificationRows] = await Promise.all([
@@ -219,6 +221,7 @@ export class D1CatalogRepository implements CatalogRepository {
             }
         }
 
+        // 関連行がないパーツも空配列や空オブジェクトを付けて返す
         // DBのスネークケースをAPIのキャメルケースへ変換
         return rows.map((row) => ({
             id: row.id,

@@ -137,6 +137,7 @@ function mutationResponse(
 
 // ログインユーザーの構成1〜4を取得
 configSlotsRoute.get("/", async (context) => {
+    // 固定構成はユーザー固有データなので認証済みの所有者だけ取得する
     const userId = await getUserId(context)
 
     if (!userId) {
@@ -146,6 +147,7 @@ configSlotsRoute.get("/", async (context) => {
     let slots: ConfigSlot[]
 
     try {
+        // スキーマ未適用だけを利用者向けの503応答へ変換する
         slots = await context.var.configSlotRepository.list(userId)
     } catch (error) {
         const response = migrationResponse(context, error)
@@ -169,6 +171,7 @@ type ValidConfigSlotRequest = {
 async function getConfigSlotRequest(
     context: ConfigSlotContext,
 ): Promise<ValidConfigSlotRequest | Response> {
+    // 各変更ルートで共通となる認証と構成番号の検証をまとめる
     const userId = await getUserId(context)
     const parsedConfigId = parseConfigSlotId(
         context.req.param("configId") ?? "",
@@ -187,6 +190,7 @@ async function getConfigSlotRequest(
 
 // 構成名だけを変更
 configSlotsRoute.patch("/:configId", async (context) => {
+    // URLの構成番号とログインユーザーを共通処理で確定する
     const request = await getConfigSlotRequest(context)
 
     if (request instanceof Response) {
@@ -195,6 +199,7 @@ configSlotsRoute.patch("/:configId", async (context) => {
 
     const payload = await readJson(context)
 
+    // 名前変更は別端末へ同期されるためCSRF検証を行う
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -208,6 +213,7 @@ configSlotsRoute.patch("/:configId", async (context) => {
     let result: ConfigSlotMutationResult
 
     try {
+        // versionを渡して別端末による先行更新を検出する
         result = await context.var.configSlotRepository.rename(
             request.userId,
             request.configId,
@@ -229,6 +235,7 @@ configSlotsRoute.patch("/:configId", async (context) => {
 
 // 現在の選択パーツと名前を固定構成へ保存・上書き
 configSlotsRoute.put("/:configId", async (context) => {
+    // URLの構成番号とログインユーザーを共通処理で確定する
     const request = await getConfigSlotRequest(context)
 
     if (request instanceof Response) {
@@ -237,6 +244,7 @@ configSlotsRoute.put("/:configId", async (context) => {
 
     const payload = await readJson(context)
 
+    // 自動保存のリクエストでも毎回CSRFトークンを照合する
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -248,6 +256,7 @@ configSlotsRoute.put("/:configId", async (context) => {
     }
 
     try {
+        // 価格や重量はRepositoryがパーツマスターから取得し直す
         const result = await context.var.configSlotRepository.save(
             request.userId,
             request.configId,
@@ -258,6 +267,7 @@ configSlotsRoute.put("/:configId", async (context) => {
 
         return mutationResponse(context, result)
     } catch (error) {
+        // パーツ不正とスキーマ未適用を利用者が区別できる応答へ変換する
         if (
             error instanceof MissingSavedBuildPartsError ||
             error instanceof InvalidSavedBuildPartsError
@@ -277,6 +287,7 @@ configSlotsRoute.put("/:configId", async (context) => {
 
 // 現在の選択パーツを空にし、構成名は維持
 configSlotsRoute.delete("/:configId", async (context) => {
+    // URLの構成番号とログインユーザーを共通処理で確定する
     const request = await getConfigSlotRequest(context)
 
     if (request instanceof Response) {
@@ -285,6 +296,7 @@ configSlotsRoute.delete("/:configId", async (context) => {
 
     const payload = await readJson(context)
 
+    // 構成クリアは状態変更のためCSRFトークンを照合する
     if (!(await hasValidCsrfToken(context, payload))) {
         return invalidCsrf(context)
     }
@@ -298,6 +310,7 @@ configSlotsRoute.delete("/:configId", async (context) => {
     let result: ConfigSlotMutationResult
 
     try {
+        // version一致時だけパーツを空にして古い画面からの上書きを防ぐ
         result = await context.var.configSlotRepository.clear(
             request.userId,
             request.configId,
