@@ -3,6 +3,7 @@ import {GripVertical} from "lucide-react"
 import NumberFlow from "@number-flow/react"
 import type {Format} from "@number-flow/react"
 
+import {BuildDiagnosisPanel} from "@/components/simulator/BuildDiagnosisPanel"
 import {ConfigList} from "@/components/simulator/ConfigList"
 import {
     Sortable,
@@ -23,8 +24,11 @@ import type {
 } from "@/features/simulator/simulatorTypes"
 import type {SavedBuild} from "@/api/savedBuilds"
 import type {ConfigSlot} from "@/api/configSlots"
+import type {PartSlot} from "@/features/simulator/partSlots"
+import type {Category} from "@/types/category"
 
 type SummaryCardsProps = {
+    categories: Category[]
     totalPrice: number
     totalWeight: number
     activeConfigId: ConfigId
@@ -42,11 +46,17 @@ type SummaryCardsProps = {
     onClearActiveConfig: () => void
     onClearConfig: (configId: ConfigId) => Promise<void>
     onRestoreConfigSlot: (slot: ConfigSlot) => Promise<void>
+    onSlotChange: (slot: PartSlot) => void
 }
 
-type SummaryCardId = "price" | "weight" | "config"
+type SummaryCardId = "price" | "weight" | "config" | "diagnosis"
 
-const initialCardOrder: SummaryCardId[] = ["price", "weight", "config"]
+const initialCardOrder: SummaryCardId[] = [
+    "price",
+    "weight",
+    "config",
+    "diagnosis",
+]
 
 type SummaryCard = {
     title: string
@@ -56,6 +66,7 @@ type SummaryCard = {
 }
 
 export function SummaryCards({
+                                 categories,
                                  totalPrice,
                                  totalWeight,
                                  activeConfigId,
@@ -73,13 +84,14 @@ export function SummaryCards({
                                  onClearActiveConfig,
                                  onClearConfig,
                                  onRestoreConfigSlot,
+                                 onSlotChange,
                              }: SummaryCardsProps) {
     // カード順は画面内だけで管理し、数値計算や構成データの保存責務とは分離する。
     const [cardOrder, setCardOrder] =
         useState<SummaryCardId[]>(initialCardOrder)
 
-    // 金額・重量は同じカード描画器へ渡し、configだけは構成一覧専用のUIとして扱う。
-    const cards: Record<Exclude<SummaryCardId, "config">, SummaryCard> = {
+    // 金額・重量は同じカード描画器へ渡し、構成選択と構成診断は専用UIとして扱う。
+    const cards: Record<"price" | "weight", SummaryCard> = {
         price: {
             title: "合計金額",
             value: totalPrice,
@@ -106,18 +118,15 @@ export function SummaryCards({
             onValueChange={setCardOrder}
             getItemValue={(cardId) => cardId}
             strategy="grid"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
+            className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-2"
         >
             {cardOrder.map((cardId) => {
-                // 構成カードは幅広のレイアウトを使うため、通常の数値カードとは描画を分ける。
+                // 構成選択は専用の操作を持つため、通常の数値カードとは描画を分ける。
                 if (cardId === "config") {
                     return (
-                        <SortableItem
-                            key={cardId}
-                            value={cardId}
-                            className="lg:col-span-2"
-                        >
+                        <SortableItem key={cardId} value={cardId}>
                             <ConfigList
+                                categories={categories}
                                 activeConfigId={activeConfigId}
                                 activeSavedBuildId={activeSavedBuildId}
                                 configStates={configStates}
@@ -133,6 +142,18 @@ export function SummaryCards({
                                 onClearActiveConfig={onClearActiveConfig}
                                 onClearConfig={onClearConfig}
                                 onRestoreConfigSlot={onRestoreConfigSlot}
+                            />
+                        </SortableItem>
+                    )
+                }
+
+                if (cardId === "diagnosis") {
+                    return (
+                        <SortableItem key={cardId} value={cardId}>
+                            <BuildDiagnosisPanel
+                                categories={categories}
+                                selectedParts={selectedParts}
+                                onSlotChange={onSlotChange}
                             />
                         </SortableItem>
                     )

@@ -164,6 +164,25 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["brake_caliper:front"])
     })
 
+    // ホイール側へ追加した取付規格を使い、6ボルトローターとの不一致を検出する。
+    it("ホイールとローターの取付方式が異なる場合は競合として扱う", () => {
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rotor_mount: "center_lock",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {
+            rotor_mount: "6_bolt",
+        })
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toContain("ローター取付方式が一致しません")
+    })
+
     // 同じペア商品を前後スロットに置いても、価格・重量を二重計上しない。
     it("前後セット商品の合計は1回だけ加算する", () => {
         const pair = createPart(1, "Pair", "tire", {

@@ -18,12 +18,15 @@ import {
     type DeleteSavedBuildResult,
     type RenameSavedBuildResult,
     type SavedBuild,
+    type UpdateSavedBuildResult,
 } from "../db/saved-build-repository"
 import {
     parseCreateSavedBuildPayload,
     parseDeleteSavedBuildPayload,
     parseRenameSavedBuildPayload,
     parseSavedBuildId,
+    parseSavedBuildShareToken,
+    parseSavedBuildSharingPayload,
     parseUpdateSavedBuildPayload,
 } from "../schemas/saved-builds"
 
@@ -38,6 +41,19 @@ function invalidBuildId(context: SavedBuildContext) {
             error: {
                 code: "INVALID_SAVED_BUILD_ID",
                 message: "保存構成IDの形式が正しくありません",
+            },
+        },
+        400,
+    )
+}
+
+// 公開トークンは固定長の16進数だけを受け付ける
+function invalidShareToken(context: SavedBuildContext) {
+    return context.json(
+        {
+            error: {
+                code: "INVALID_SHARE_TOKEN",
+                message: "共有URLの形式が正しくありません",
             },
         },
         400,
@@ -197,6 +213,53 @@ savedBuildsRoute.post("/", async (context) => {
 
         throw error
     }
+})
+
+// 公開設定された構成を所有者情報なしで取得
+savedBuildsRoute.get("/public/:shareToken", async (context) => {
+    const shareToken = context.req.param("shareToken")
+
+    if (!parseSavedBuildShareToken(shareToken).success) {
+        return invalidShareToken(context)
+    }
+
+    let build: SavedBuild | null
+
+    try {
+        build = await context.var.savedBuildRepository.findPublicByToken(
+            shareToken,
+        )
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
+
+    if (!build) {
+        // 公開停止済みと存在しないトークンを同じ応答にして状態を推測させない
+        return context.json(
+            {
+                error: {
+                    code: "SHARED_BUILD_NOT_FOUND",
+                    message: "共有された構成が見つかりません",
+                },
+            },
+            404,
+        )
+    }
+
+    // 公開応答には所有者向けID・version・共有トークン・作成日時を含めない
+    // 共有停止後にブラウザや中継キャッシュから古い構成を再表示させない
+    context.header("Cache-Control", "no-store")
+
+    return context.json({
+        name: build.name,
+        parts: build.parts,
+    })
 })
 
 // 保存構成を1件取得
@@ -381,6 +444,78 @@ savedBuildsRoute.patch("/:buildId", async (context) => {
 
     if (result.kind === "not_found") {
         // 所有していない構成IDも対象なしとして同じ404応答にする
+        return context.json(
+            {
+                error: {
+                    code: "SAVED_BUILD_NOT_FOUND",
+                    message: "保存構成が見つかりません",
+                },
+            },
+            404,
+        )
+    }
+
+    if (result.kind === "conflict") {
+        return context.json(
+            {
+                error: {
+                    code: "SAVED_BUILD_CONFLICT",
+                    message: "保存構成が先に更新されています。最新状態を取得してください",
+                },
+            },
+            409,
+        )
+    }
+
+    return context.json(result.build)
+})
+
+// 保存構成の読み取り専用共有を開始または停止
+savedBuildsRoute.patch("/:buildId/sharing", async (context) => {
+    const userId = await getUserId(context)
+
+    if (!userId) {
+        return unauthenticated(context)
+    }
+
+    const buildId = context.req.param("buildId")
+
+    if (!parseSavedBuildId(buildId).success) {
+        return invalidBuildId(context)
+    }
+
+    const payload = await readJson(context)
+
+    if (!(await hasValidCsrfToken(context, payload))) {
+        return invalidCsrf(context)
+    }
+
+    const parsedPayload = parseSavedBuildSharingPayload(payload)
+
+    if (!parsedPayload.success) {
+        return invalidPayload(context)
+    }
+
+    let result: UpdateSavedBuildResult
+
+    try {
+        result = await context.var.savedBuildRepository.setSharing(
+            userId,
+            buildId,
+            parsedPayload.data.version,
+            parsedPayload.data.enabled,
+        )
+    } catch (error) {
+        const response = migrationResponse(context, error)
+
+        if (response) {
+            return response
+        }
+
+        throw error
+    }
+
+    if (result.kind === "not_found") {
         return context.json(
             {
                 error: {

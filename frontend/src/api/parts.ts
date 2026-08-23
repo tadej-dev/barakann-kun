@@ -6,6 +6,8 @@ import {
 } from "@/api/catalogResponse"
 import type {Part} from "@/types/part"
 
+const MAX_PART_IDS_PER_REQUEST = 100
+
 export async function fetchParts(
     category: string,
     signal?: AbortSignal,
@@ -33,25 +35,42 @@ export async function fetchPartsByIds(
     ids: number[],
     signal?: AbortSignal,
 ): Promise<Part[]> {
-    // 保存構成の復元時は、必要なIDだけをまとめて取得して通信回数を抑える。
-    const params = new URLSearchParams()
+    // 比較画面で100件を超えてもAPI上限内のチャンクへ分割して並列取得する
+    const uniqueIds = Array.from(new Set(ids))
 
-    for (const id of ids) {
-        // 同じクエリキーを繰り返し、バックエンドの複数ID入力形式に合わせる。
-        params.append("ids", String(id))
+    if (uniqueIds.length === 0) {
+        return []
     }
 
-    const response = await fetch(`/api/parts/by-ids?${params}`, {
-        signal,
-        headers: {Accept: "application/json"},
-    })
+    const chunks = Array.from(
+        {length: Math.ceil(uniqueIds.length / MAX_PART_IDS_PER_REQUEST)},
+        (_, index) => uniqueIds.slice(
+            index * MAX_PART_IDS_PER_REQUEST,
+            (index + 1) * MAX_PART_IDS_PER_REQUEST,
+        ),
+    )
+    const responses = await Promise.all(chunks.map(async (chunk) => {
+        const params = new URLSearchParams()
 
-    if (!response.ok) {
-        throw new Error("保存済みパーツの取得に失敗しました")
-    }
+        for (const id of chunk) {
+            // 同じクエリキーを繰り返し、バックエンドの複数ID入力形式に合わせる
+            params.append("ids", String(id))
+        }
 
-    return parseParts(await readCatalogJson(
-        response,
-        "パーツ一覧のレスポンスを解釈できませんでした",
-    ))
+        const response = await fetch(`/api/parts/by-ids?${params}`, {
+            signal,
+            headers: {Accept: "application/json"},
+        })
+
+        if (!response.ok) {
+            throw new Error("保存済みパーツの取得に失敗しました")
+        }
+
+        return parseParts(await readCatalogJson(
+            response,
+            "パーツ一覧のレスポンスを解釈できませんでした",
+        ))
+    }))
+
+    return responses.flat()
 }

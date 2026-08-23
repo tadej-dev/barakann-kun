@@ -18,6 +18,7 @@ export type ConfigSlot = {
     name: string
     version: number
     updatedAt: string | null
+    shareToken: string | null
     parts: SavedBuildPart[]
 }
 
@@ -41,7 +42,7 @@ export function isMissingConfigSlotSchemaError(error: unknown): boolean {
         return false
     }
 
-    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot)/i.test(error.message)) {
+    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot|share_token)/i.test(error.message)) {
         return true
     }
 
@@ -72,6 +73,12 @@ export interface ConfigSlotRepository {
         configId: ConfigSlotId,
         version: number,
     ): Promise<ConfigSlotMutationResult>
+    setSharing(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+        enabled: boolean,
+    ): Promise<ConfigSlotMutationResult>
 }
 
 type ConfigSlotRow = {
@@ -80,6 +87,7 @@ type ConfigSlotRow = {
     name: string
     version: number
     updated_at: string
+    share_token: string | null
 }
 
 type ConfigSlotPartRow = {
@@ -113,6 +121,7 @@ function createDefaultSlot(configId: ConfigSlotId): ConfigSlot {
         name: `構成${configId}`,
         version: 0,
         updatedAt: null,
+        shareToken: null,
         parts: [],
     }
 }
@@ -126,7 +135,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         // 保存済みの固定構成だけをパーツと合わせて一括取得する
         const rows = await queryRows<ConfigSlotRow>(
             this.database,
-            `SELECT id, config_slot, name, version, updated_at
+            `SELECT id, config_slot, name, version, updated_at, share_token
              FROM saved_builds
              WHERE user_id = ? AND config_slot IS NOT NULL
              ORDER BY config_slot ASC`,
@@ -386,6 +395,86 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
         return this.updatedMutationResult(userId, configId)
     }
 
+    async setSharing(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+        enabled: boolean,
+    ): Promise<ConfigSlotMutationResult> {
+        const shareToken = enabled
+            ? crypto.randomUUID().replaceAll("-", "")
+            : null
+        const now = new Date().toISOString()
+
+        if (version === 0) {
+            const current = await this.findRow(userId, configId)
+
+            if (current) {
+                return {kind: "conflict"}
+            }
+
+            if (!enabled) {
+                return {kind: "updated", slot: createDefaultSlot(configId)}
+            }
+
+            // 未保存の標準枠は、共有トークンを保持できる行を初回共有時に作成する
+            const id = crypto.randomUUID()
+            const result = await this.database.prepare(
+                `INSERT INTO saved_builds (
+                     id, user_id, config_slot, name, version, share_token,
+                     created_at, updated_at
+                 )
+                 SELECT ?, ?, ?, ?, 1, ?, ?, ?
+                 WHERE NOT EXISTS (
+                     SELECT 1
+                     FROM saved_builds
+                     WHERE user_id = ? AND config_slot = ?
+                 )`,
+            ).bind(
+                id,
+                userId,
+                configId,
+                `構成${configId}`,
+                shareToken,
+                now,
+                now,
+                userId,
+                configId,
+            ).run()
+
+            if (result.meta.changes === 0) {
+                return this.currentMutationResult(userId, configId)
+            }
+        } else {
+            const current = await this.findRow(userId, configId)
+
+            if (!current) {
+                return {kind: "not_found"}
+            }
+
+            // 所有者・固定枠番号・version・更新日時をすべて一致させて共有状態を変更する
+            const result = await this.database.prepare(
+                `UPDATE saved_builds
+                 SET share_token = ?, version = version + 1, updated_at = ?
+                 WHERE user_id = ? AND config_slot = ? AND version = ?
+                   AND updated_at = ?`,
+            ).bind(
+                shareToken,
+                now,
+                userId,
+                configId,
+                version,
+                current.updated_at,
+            ).run()
+
+            if (result.meta.changes === 0) {
+                return this.currentMutationResult(userId, configId)
+            }
+        }
+
+        return this.updatedMutationResult(userId, configId)
+    }
+
     // 固定構成の現在値を競合・所有者エラーの判定へ利用
     private async currentMutationResult(
         userId: string,
@@ -419,7 +508,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
     ): Promise<ConfigSlotRow | null> {
         const rows = await queryRows<ConfigSlotRow>(
             this.database,
-            `SELECT id, config_slot, name, version, updated_at
+            `SELECT id, config_slot, name, version, updated_at, share_token
              FROM saved_builds
              WHERE user_id = ? AND config_slot = ?`,
             [userId, configId],
@@ -554,6 +643,7 @@ export class D1ConfigSlotRepository implements ConfigSlotRepository {
             name: row.name,
             version: row.version,
             updatedAt: row.updated_at,
+            shareToken: row.share_token,
             parts: partsByBuildId.get(row.id) ?? [],
         }
     }

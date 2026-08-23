@@ -3,6 +3,9 @@ import {z} from "zod"
 // D1で生成する保存構成IDの形式
 const savedBuildIdSchema = z.string().uuid()
 
+// UUIDから区切り文字を除いた公開トークンの形式
+const savedBuildShareTokenSchema = z.string().regex(/^[a-f0-9]{32}$/)
+
 // 構成名に許可する文字数
 const savedBuildNameSchema = z.string().trim().min(1).max(50)
 
@@ -76,8 +79,21 @@ export function parseDeleteSavedBuildPayload(value: unknown) {
     }).safeParse(value)
 }
 
+// 共有開始・停止でもversionを使って別端末の先行更新を検出
+export function parseSavedBuildSharingPayload(value: unknown) {
+    return z.object({
+        version: z.number().int().positive().safe(),
+        enabled: z.boolean(),
+    }).safeParse(value)
+}
+
 // URLパラメーターの保存構成IDを検証
 export function parseSavedBuildId(value: string) {
     // 公開IDとして使用しているUUID形式だけを受け付ける
     return savedBuildIdSchema.safeParse(value)
+}
+
+// 公開URLから受け取った値をD1へ渡す前に固定長の16進数へ限定
+export function parseSavedBuildShareToken(value: string) {
+    return savedBuildShareTokenSchema.safeParse(value)
 }

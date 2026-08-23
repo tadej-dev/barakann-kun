@@ -74,3 +74,12 @@ export function parseClearConfigSlotPayload(value: unknown) {
         version: configSlotVersionSchema,
     }).safeParse(value)
 }
+
+// 固定構成の共有開始・停止リクエストを検証
+export function parseConfigSlotSharingPayload(value: unknown) {
+    // 共有設定もversion付きで更新し、別端末の変更を上書きしない
+    return z.object({
+        version: configSlotVersionSchema,
+        enabled: z.boolean(),
+    }).safeParse(value)
+}

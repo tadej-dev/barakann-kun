@@ -21,6 +21,7 @@ type SavedBuildRow = {
     version: number
     created_at: string
     updated_at: string
+    share_token: string | null
 }
 
 type SavedBuildPartRow = {
@@ -74,7 +75,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // 固定スロットは別APIで扱うため追加構成だけを取得する
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at
+            `SELECT id, name, version, created_at, updated_at, share_token
              FROM saved_builds
              WHERE user_id = ? AND config_slot IS NULL
              ORDER BY updated_at DESC, id ASC`,
@@ -91,12 +92,26 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // IDと所有者を同時に指定して他ユーザーの構成を取得させない
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at
+            `SELECT id, name, version, created_at, updated_at, share_token
              FROM saved_builds
              WHERE user_id = ? AND id = ? AND config_slot IS NULL`,
             [userId, buildId],
         )
 
+        const builds = await this.attachParts(buildRows)
+
+        return builds[0] ?? null
+    }
+
+    async findPublicByToken(shareToken: string): Promise<SavedBuild | null> {
+        // 公開トークンが一致する標準枠・追加構成を所有者情報なしで取得する
+        const buildRows = await queryRows<SavedBuildRow>(
+            this.database,
+            `SELECT id, name, version, created_at, updated_at, share_token
+             FROM saved_builds
+             WHERE share_token = ?`,
+            [shareToken],
+        )
         const builds = await this.attachParts(buildRows)
 
         return builds[0] ?? null
@@ -294,6 +309,41 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         return {kind: "updated", build}
     }
 
+    async setSharing(
+        userId: string,
+        buildId: string,
+        version: number,
+        enabled: boolean,
+    ): Promise<UpdateSavedBuildResult> {
+        // 公開開始時だけ推測困難な128bitトークンを生成し、停止時は即時無効化する
+        const shareToken = enabled
+            ? crypto.randomUUID().replaceAll("-", "")
+            : null
+        const now = new Date().toISOString()
+        const result = await this.database.prepare(
+            `UPDATE saved_builds
+             SET share_token = ?, version = version + 1, updated_at = ?
+             WHERE id = ? AND user_id = ? AND config_slot IS NULL
+               AND version = ?`,
+        ).bind(shareToken, now, buildId, userId, version).run()
+
+        if (result.meta.changes === 0) {
+            const currentBuild = await this.findById(userId, buildId)
+
+            return currentBuild
+                ? {kind: "conflict"}
+                : {kind: "not_found"}
+        }
+
+        const build = await this.findById(userId, buildId)
+
+        if (!build) {
+            throw new Error("保存構成の共有設定結果を取得できませんでした")
+        }
+
+        return {kind: "updated", build}
+    }
+
     async delete(
         userId: string,
         buildId: string,
@@ -359,6 +409,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
+            shareToken: row.share_token,
             parts: partsByBuildId.get(row.id) ?? [],
         }))
     }

@@ -1,13 +1,21 @@
 import {
     Ellipsis,
+    Copy,
     GripVertical,
+    Link,
     Pencil,
     Plus,
     Save,
     Trash2,
+    Unlink,
 } from "lucide-react"
 import {AlertDialog} from "@base-ui/react/alert-dialog"
+import {useState} from "react"
 
+import {
+    BuildComparisonDialog,
+    type ComparisonBuild,
+} from "@/components/simulator/BuildComparisonDialog"
 import {
     Sortable,
     SortableItem,
@@ -40,6 +48,11 @@ import {Input} from "@/components/ui/input"
 import {Checkbox} from "@/components/ui/checkbox"
 import {Badge} from "@/components/ui/badge"
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
     Accordion,
     AccordionContent,
     AccordionItem,
@@ -50,6 +63,7 @@ import {
     type SavedBuild,
 } from "@/api/savedBuilds"
 import type {ConfigSlot} from "@/api/configSlots"
+import type {Category} from "@/types/category"
 import {
     CONFIG_IDS,
     type ConfigId,
@@ -63,6 +77,7 @@ import {
 
 // 構成一覧のプロパティ
 type ConfigListProps = {
+    categories: Category[] // 比較画面のスロット表示名
     activeConfigId: ConfigId // 選択中の構成ID
     activeSavedBuildId: string | null // 選択中の追加構成ID
     configStates: ConfigStates // 構成1〜4の選択パーツ
@@ -82,6 +97,7 @@ type ConfigListProps = {
 
 // 構成選択欄
 export function ConfigList({
+                               categories,
                                activeConfigId,
                                activeSavedBuildId,
                                configStates,
@@ -123,6 +139,8 @@ export function ConfigList({
         reloadConfigOrder,
         reloadSavedBuilds,
         saveToSavedBuild,
+        setConfigSlotSharing,
+        setSavedBuildSharing,
         savedBuildDialog,
         savedBuildDialogContent,
         savedBuildDialogName,
@@ -174,6 +192,87 @@ export function ConfigList({
             })}
         </div>
     )
+    const comparisonBuilds: ComparisonBuild[] = isAuthenticated
+        ? orderedItems.map((item) => item.kind === "slot"
+            ? {
+                key: item.key,
+                name: item.slot.name,
+                parts: item.slot.parts,
+            }
+            : {
+                key: item.key,
+                name: item.build.name,
+                parts: item.build.parts,
+            })
+        : CONFIG_IDS.map((configId) => ({
+            key: `config:${configId}`,
+            name: `構成${configId}`,
+            parts: Object.entries(configStates[configId]).map(([
+                slotKey,
+                part,
+            ]) => ({
+                slotKey,
+                partId: part.id,
+                price: part.price,
+                weight: part.weight,
+            })),
+        }))
+    const [shareNotice, setShareNotice] = useState("")
+
+    async function copyShareUrl(shareToken: string) {
+        const shareUrl = `${window.location.origin}/shared/${shareToken}`
+
+        try {
+            await navigator.clipboard.writeText(shareUrl)
+            setShareNotice("共有URLをコピーしました")
+        } catch {
+            // Clipboard APIを利用できない環境ではURLを画面に表示して手動コピーを可能にする
+            setShareNotice(`共有URL: ${shareUrl}`)
+        }
+    }
+
+    async function startSharing(build: SavedBuild) {
+        try {
+            const updated = await setSavedBuildSharing(build, true)
+
+            if (updated.shareToken) {
+                await copyShareUrl(updated.shareToken)
+            }
+        } catch {
+            // APIエラーは構成一覧下部の共通エラーへ表示する
+        }
+    }
+
+    async function startConfigSlotSharing(slot: ConfigSlot) {
+        try {
+            const updated = await setConfigSlotSharing(slot, true)
+
+            if (updated.shareToken) {
+                await copyShareUrl(updated.shareToken)
+            }
+        } catch {
+            // APIエラーは構成一覧下部の共通エラーへ表示する
+        }
+    }
+
+    async function stopConfigSlotSharing(slot: ConfigSlot) {
+        try {
+            await setConfigSlotSharing(slot, false)
+            setShareNotice("共有を停止しました")
+        } catch {
+            // APIエラーは構成一覧下部の共通エラーへ表示する
+        }
+    }
+
+    async function stopSharing(build: SavedBuild) {
+        try {
+            await setSavedBuildSharing(build, false)
+            setShareNotice("共有を停止しました")
+        } catch {
+            // APIエラーは構成一覧下部の共通エラーへ表示する
+        }
+    }
+
     return (
         <Card className="h-full border border-b-0">
             <Accordion multiple={false} defaultValue={["config-list"]}>
@@ -202,10 +301,14 @@ export function ConfigList({
                                 </span>
 
                                 <div
-                                    className="ml-auto flex shrink-0 items-center gap-1"
+                                    className="ml-auto flex shrink-0 items-center gap-2"
                                     onClick={(event) => event.stopPropagation()}
                                     onKeyDown={(event) => event.stopPropagation()}
                                 >
+                            <BuildComparisonDialog
+                                builds={comparisonBuilds}
+                                categories={categories}
+                            />
                             {isAuthenticated && (
                                 <>
                                     {/* 追加ボタンは保存枠の上限、削除ボタンは選択件数に応じて操作可否を決める。 */}
@@ -365,16 +468,25 @@ export function ConfigList({
                                                     />
                                                     </SortableItemHandle>
 
-                                                    <button
-                                                        type="button"
-                                                        className="min-w-0 flex-1 text-left"
-                                                        aria-label={`${slot.name}を選択`}
-                                                        aria-selected={isActive}
-                                                    >
-                                                        <span className="block min-w-0 whitespace-normal break-words text-sm font-semibold text-slate-900">
+                                                    <Tooltip>
+                                                        <TooltipTrigger
+                                                            render={
+                                                                <button
+                                                                    type="button"
+                                                                    className="min-w-0 flex-1 text-left"
+                                                                    aria-label={`${slot.name}を選択`}
+                                                                    aria-selected={isActive}
+                                                                />
+                                                            }
+                                                        >
+                                                            <span className="line-clamp-2 min-w-0 text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">
+                                                                {slot.name}
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="[overflow-wrap:anywhere]">
                                                             {slot.name}
-                                                        </span>
-                                                    </button>
+                                                        </TooltipContent>
+                                                    </Tooltip>
 
                                                     <div
                                                         className="flex shrink-0 items-center gap-2"
@@ -414,6 +526,32 @@ export function ConfigList({
                                                                         <Pencil />
                                                                         名前変更
                                                                     </DropdownMenuItem>
+                                                                    {slot.shareToken ? (
+                                                                        <>
+                                                                            <DropdownMenuItem
+                                                                                disabled={isOperating}
+                                                                                onClick={() => void copyShareUrl(slot.shareToken!)}
+                                                                            >
+                                                                                <Copy />
+                                                                                共有URLをコピー
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem
+                                                                                disabled={isOperating}
+                                                                                onClick={() => void stopConfigSlotSharing(slot)}
+                                                                            >
+                                                                                <Unlink />
+                                                                                共有を停止
+                                                                            </DropdownMenuItem>
+                                                                        </>
+                                                                    ) : (
+                                                                        <DropdownMenuItem
+                                                                            disabled={isOperating}
+                                                                            onClick={() => void startConfigSlotSharing(slot)}
+                                                                        >
+                                                                            <Link />
+                                                                            共有URLを作成
+                                                                        </DropdownMenuItem>
+                                                                    )}
                                                                     <DropdownMenuSeparator />
                                                                     <DropdownMenuItem
                                                                         variant="destructive"
@@ -482,17 +620,26 @@ export function ConfigList({
                                                 />
                                                 </SortableItemHandle>
 
-                                                <button
-                                                    type="button"
-                                                    className="min-w-0 flex-1 text-left"
-                                                    aria-label={`${build.name}を選択`}
-                                                    aria-selected={isActive}
-                                                    disabled={isOperating}
-                                                >
-                                                    <span className="block min-w-0 whitespace-normal break-words text-sm font-semibold text-slate-900">
+                                                <Tooltip>
+                                                    <TooltipTrigger
+                                                        render={
+                                                            <button
+                                                                type="button"
+                                                                className="min-w-0 flex-1 text-left"
+                                                                aria-label={`${build.name}を選択`}
+                                                                aria-selected={isActive}
+                                                                disabled={isOperating}
+                                                            />
+                                                        }
+                                                    >
+                                                        <span className="line-clamp-2 min-w-0 text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">
+                                                            {build.name}
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="[overflow-wrap:anywhere]">
                                                         {build.name}
-                                                    </span>
-                                                </button>
+                                                    </TooltipContent>
+                                                </Tooltip>
 
                                                 <div
                                                     className="flex shrink-0 items-center gap-2"
@@ -542,6 +689,29 @@ export function ConfigList({
                                                                     <Pencil />
                                                                     名前変更
                                                                 </DropdownMenuItem>
+                                                                {build.shareToken ? (
+                                                                    <>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => void copyShareUrl(build.shareToken!)}
+                                                                        >
+                                                                            <Copy />
+                                                                            共有URLをコピー
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => void stopSharing(build)}
+                                                                        >
+                                                                            <Unlink />
+                                                                            共有を停止
+                                                                        </DropdownMenuItem>
+                                                                    </>
+                                                                ) : (
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => void startSharing(build)}
+                                                                    >
+                                                                        <Link />
+                                                                        共有URLを作成
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
                                                                     variant="destructive"
@@ -578,6 +748,25 @@ export function ConfigList({
                                 })}
                             </Sortable>
                                     </div>
+
+                                    {shareNotice && (
+                                        <div
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+                                            role="status"
+                                        >
+                                            <span className="min-w-0 break-all">
+                                                {shareNotice}
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                size="xs"
+                                                variant="ghost"
+                                                onClick={() => setShareNotice("")}
+                                            >
+                                                閉じる
+                                            </Button>
+                                        </div>
+                                    )}
 
                                     {/* API失敗を一覧の外へ逃がさず、再読み込み可能な状態として表示する。 */}
                                     {(errorMessage ||

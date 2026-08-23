@@ -130,6 +130,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         version: 1,
         createdAt: "2026-08-05T00:00:00.000Z",
         updatedAt: "2026-08-05T00:00:00.000Z",
+        shareToken: null,
         parts: [{
             slotKey: "frame",
             partId: 1,
@@ -161,6 +162,11 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             : null
     }
 
+    async findPublicByToken(shareToken: string): Promise<SavedBuild | null> {
+        return this.builds.find((build) =>
+            build.shareToken === shareToken) ?? null
+    }
+
     async create(
         userId: string,
         name: string,
@@ -175,6 +181,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             version: 1,
             createdAt: "2026-08-05T00:00:00.000Z",
             updatedAt: "2026-08-05T00:00:00.000Z",
+            shareToken: null,
             parts: parts.map((part) => ({
                 ...part,
                 price: 200000,
@@ -242,6 +249,34 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }
     }
 
+    async setSharing(
+        userId: string,
+        buildId: string,
+        version: number,
+        enabled: boolean,
+    ): Promise<UpdateSavedBuildResult> {
+        this.lastUserId = userId
+
+        if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
+            return {kind: "not_found"}
+        }
+
+        if (version !== 1) {
+            return {kind: "conflict"}
+        }
+
+        return {
+            kind: "updated",
+            build: {
+                ...this.builds[0],
+                version: 2,
+                shareToken: enabled
+                    ? "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    : null,
+            },
+        }
+    }
+
     async delete(
         userId: string,
         buildId: string,
@@ -276,6 +311,7 @@ class TestConfigSlotRepository implements ConfigSlotRepository {
         name: `構成${configId}`,
         version: 0,
         updatedAt: null,
+        shareToken: null,
         parts: [],
     }))
 
@@ -374,6 +410,37 @@ class TestConfigSlotRepository implements ConfigSlotRepository {
 
         return {kind: "updated", slot}
     }
+
+    async setSharing(
+        userId: string,
+        configId: ConfigSlotId,
+        version: number,
+        enabled: boolean,
+    ): Promise<ConfigSlotMutationResult> {
+        if (userId !== "user-1") {
+            return {kind: "not_found"}
+        }
+
+        const slot = this.slots.find((candidate) => candidate.configId === configId)
+
+        if (!slot) {
+            return {kind: "not_found"}
+        }
+
+        if (slot.version !== version) {
+            return {kind: "conflict"}
+        }
+
+        Object.assign(slot, {
+            version: version + 1,
+            updatedAt: "2026-08-16T00:00:00.000Z",
+            shareToken: enabled
+                ? "cccccccccccccccccccccccccccccccc"
+                : null,
+        })
+
+        return {kind: "updated", slot}
+    }
 }
 
 // 構成表示順APIのルート検証用リポジトリ
@@ -414,6 +481,10 @@ class ConcurrentSavedBuildRepository implements SavedBuildRepository {
         return null
     }
 
+    async findPublicByToken(): Promise<SavedBuild | null> {
+        return null
+    }
+
     async create(): Promise<SavedBuild> {
         throw new Error("テスト対象外の処理です")
     }
@@ -439,6 +510,7 @@ class ConcurrentSavedBuildRepository implements SavedBuildRepository {
                 version: this.version,
                 createdAt: "2026-08-06T00:00:00.000Z",
                 updatedAt: "2026-08-06T00:00:00.000Z",
+                shareToken: null,
                 parts: parts.map((part) => ({
                     ...part,
                     price: 100,
@@ -449,6 +521,10 @@ class ConcurrentSavedBuildRepository implements SavedBuildRepository {
     }
 
     async rename(): Promise<RenameSavedBuildResult> {
+        return {kind: "not_found"}
+    }
+
+    async setSharing(): Promise<UpdateSavedBuildResult> {
         return {kind: "not_found"}
     }
 
@@ -888,6 +964,30 @@ describe("config slot API", () => {
             name: "遠征用",
             version: 3,
             parts: [],
+        })
+
+        const sharingResponse = await app.request(
+            "/api/config-slots/1/sharing",
+            {
+                method: "PATCH",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    version: 3,
+                    enabled: true,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(sharingResponse.status).toBe(200)
+        expect(await sharingResponse.json()).toMatchObject({
+            configId: "1",
+            version: 4,
+            shareToken: "cccccccccccccccccccccccccccccccc",
         })
     })
 
@@ -1458,6 +1558,83 @@ describe("saved builds API", () => {
             version: 2,
         })
         expect(savedBuildRepository.lastParts).toEqual([])
+    })
+
+    it("enables read-only sharing with CSRF and version checks", async () => {
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
+        const response = await app.request(
+            "/api/builds/11111111-1111-4111-8111-111111111111/sharing",
+            {
+                method: "PATCH",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    version: 1,
+                    enabled: true,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({
+            version: 2,
+            shareToken: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        })
+        expect(savedBuildRepository.lastUserId).toBe("user-1")
+    })
+
+    it("serves only a build with an active public token without login", async () => {
+        const publicRepository = new TestSavedBuildRepository()
+        publicRepository.builds[0]!.shareToken =
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        const publicApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: publicRepository,
+        })
+        const response = await publicApp.request(
+            "/api/builds/public/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            {},
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(200)
+        expect(response.headers.get("cache-control")).toBe("no-store")
+        expect(await response.json()).toEqual({
+            name: "テスト構成",
+            parts: publicRepository.builds[0]!.parts,
+        })
+    })
+
+    it("does not reveal whether an invalid public token existed", async () => {
+        const response = await app.request(
+            "/api/builds/public/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            {},
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(404)
+        expect(await response.json()).toMatchObject({
+            error: {code: "SHARED_BUILD_NOT_FOUND"},
+        })
+    })
+
+    it("rejects malformed public tokens before repository lookup", async () => {
+        const response = await app.request(
+            "/api/builds/public/not-a-token",
+            {},
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({
+            error: {code: "INVALID_SHARE_TOKEN"},
+        })
     })
 
     it("returns one success and one conflict for concurrent updates", async () => {

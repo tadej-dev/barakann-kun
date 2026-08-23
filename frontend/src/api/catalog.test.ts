@@ -88,4 +88,19 @@ describe("catalog API", () => {
             }),
         )
     })
+
+    // 比較対象が増えてもバックエンドの1リクエスト100件上限を超えないよう分割する。
+    it("100件を超えるIDはAPI上限に合わせて分割取得する", async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(jsonResponse([PART]))
+            .mockResolvedValueOnce(jsonResponse([]))
+        vi.stubGlobal("fetch", fetchMock)
+
+        await expect(fetchPartsByIds(
+            Array.from({length: 101}, (_, index) => index + 1),
+        )).resolves.toEqual([PART])
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(fetchMock.mock.calls[0]?.[0]).toContain("ids=100")
+        expect(fetchMock.mock.calls[1]?.[0]).toContain("ids=101")
+    })
 })

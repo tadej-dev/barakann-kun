@@ -6,11 +6,12 @@ import {
     fetchSavedBuilds,
     renameSavedBuild,
     updateSavedBuild,
+    updateSavedBuildSharing,
     type SavedBuild,
     type SavedBuildPartInput,
 } from "@/api/savedBuilds"
 
-type SavedBuildOperation = "create" | "rename" | "update" | "delete"
+type SavedBuildOperation = "create" | "rename" | "update" | "delete" | "share"
 
 type UseSavedBuildsOptions = {
     enabled: boolean
@@ -288,6 +289,32 @@ export function useSavedBuilds({
         })
     }, [runOperation, userId])
 
+    const setSharing = useCallback(async (
+        build: SavedBuild,
+        enabled: boolean,
+    ) => {
+        const requestUserId = userId
+
+        return runOperation("share", async () => {
+            // 共有設定の応答でversionとtokenを同時に更新し、次の操作の競合を防ぐ
+            const updated = await updateSavedBuildSharing(
+                build.id,
+                build.version,
+                enabled,
+            )
+
+            if (currentUserIdRef.current === requestUserId) {
+                setBuilds((current) => [
+                    updated,
+                    ...current.filter((candidate) =>
+                        candidate.id !== updated.id),
+                ])
+            }
+
+            return updated
+        })
+    }, [runOperation, userId])
+
     const hasCurrentUserData = enabled && Boolean(userId) &&
         loadedUserId === userId && loadedReloadKey === reloadKey
     const hasCurrentError = Boolean(errorMessage) &&
@@ -309,6 +336,7 @@ export function useSavedBuilds({
         reload,
         remove,
         rename,
+        setSharing,
         update,
     }
 }

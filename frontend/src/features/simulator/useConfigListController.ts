@@ -113,6 +113,7 @@ export function useConfigListController({
         rename,
         reload: reloadConfigSlots,
         save,
+        setSharing: setConfigSlotSharing,
         slots,
     } = useConfigSlots({
         enabled: isAuthenticated,
@@ -140,6 +141,7 @@ export function useConfigListController({
         reload: reloadSavedBuilds,
         remove: removeSavedBuild,
         rename: renameSavedBuild,
+        setSharing: setSavedBuildSharing,
         update: updateSavedBuild,
     } = useSavedBuilds({
         enabled: isAuthenticated,
@@ -906,6 +908,8 @@ export function useConfigListController({
         reloadConfigOrder,
         reloadSavedBuilds,
         saveToSavedBuild,
+        setConfigSlotSharing,
+        setSavedBuildSharing,
         savedBuildDialog,
         savedBuildDialogContent: getSavedBuildDialogContent(),
         savedBuildDialogName,

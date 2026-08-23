@@ -43,6 +43,7 @@ export function Simulator({
 
                 <section className="min-w-0 overflow-hidden rounded-lg border border-slate-300 bg-white p-4">
                     <SummaryCards
+                        categories={categories}
                         totalPrice={controller.totalPrice}
                         totalWeight={controller.totalWeight}
                         activeConfigId={controller.activeConfigId}
@@ -59,6 +60,7 @@ export function Simulator({
                         onClearActiveConfig={controller.clearActiveConfig}
                         onClearConfig={controller.clearConfig}
                         onRestoreConfigSlot={controller.restoreConfigSlot}
+                        onSlotChange={controller.changeSlot}
                         savedBuildsReloadKey={savedBuildsReloadKey}
                     />
 

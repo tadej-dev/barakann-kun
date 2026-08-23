@@ -24,6 +24,7 @@ export type ConfigSlot = {
     name: string
     version: number
     updatedAt: string | null
+    shareToken: string | null
     parts: SavedBuildPart[]
 }
 
@@ -98,6 +99,7 @@ function parseConfigSlot(value: unknown): ConfigSlot {
 
     const record = value as Record<string, unknown>
     const parts = record.parts
+    const shareToken = record.shareToken ?? null
 
     if (
         typeof record.configId !== "string" ||
@@ -109,6 +111,10 @@ function parseConfigSlot(value: unknown): ConfigSlot {
         (record.updatedAt !== null && typeof record.updatedAt !== "string") ||
         (typeof record.updatedAt === "string" &&
             (record.updatedAt.length === 0 || record.updatedAt.length > 64)) ||
+        (shareToken !== null && (
+            typeof shareToken !== "string" ||
+            !/^[a-f0-9]{32}$/.test(shareToken)
+        )) ||
         !Array.isArray(parts) ||
         parts.length > MAX_PARTS_PER_CONFIG_SLOT
     ) {
@@ -158,6 +164,7 @@ function parseConfigSlot(value: unknown): ConfigSlot {
         name: record.name,
         version: record.version,
         updatedAt: record.updatedAt,
+        shareToken,
         parts: parsedParts,
     }
 }
@@ -294,6 +301,33 @@ export async function clearConfigSlot(
 
     if (!response.ok) {
         return throwApiError(response, "構成のクリアに失敗しました")
+    }
+
+    return parseConfigSlot(await response.json())
+}
+
+// 固定構成の公開URLを発行または無効化
+export async function updateConfigSlotSharing(
+    configId: ConfigId,
+    version: number,
+    enabled: boolean,
+): Promise<ConfigSlot> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(
+        `/api/config-slots/${encodeURIComponent(configId)}/sharing`,
+        {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({version, enabled, csrfToken}),
+        },
+    )
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の共有設定に失敗しました")
     }
 
     return parseConfigSlot(await response.json())

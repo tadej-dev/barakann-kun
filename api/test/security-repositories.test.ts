@@ -143,6 +143,18 @@ describe("security-sensitive D1 queries", () => {
         expect(statements[0]?.parameters).toEqual(["user-3"])
     })
 
+    it("公開トークンでは標準枠と追加構成の両方を検索する", async () => {
+        const {database, statements} = createDatabaseStub()
+        const repository = new D1SavedBuildRepository(database)
+        const shareToken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+        await expect(repository.findPublicByToken(shareToken)).resolves.toBeNull()
+
+        expect(statements[0]?.sql).toContain("WHERE share_token = ?")
+        expect(statements[0]?.sql).not.toContain("config_slot IS NULL")
+        expect(statements[0]?.parameters).toEqual([shareToken])
+    })
+
     it("表示順テーブル未適用時は既定順へフォールバックする", async () => {
         const database = {
             prepare(sql: string) {

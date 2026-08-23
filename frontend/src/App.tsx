@@ -8,6 +8,7 @@ import { Footer } from "@/components/layout/Footer"
 import { Header } from "@/components/layout/Header"
 import { PrivacyPage } from "@/pages/PrivacyPage"
 import { SimulatorPage } from "@/pages/SimulatorPage"
+import { SharedBuildPage } from "@/pages/SharedBuildPage"
 import { TermsPage } from "@/pages/TermsPage"
 
 // アプリケーション本体
@@ -27,6 +28,10 @@ function App() {
                     />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
+                    <Route
+                        path="/shared/:shareToken"
+                        element={<SharedBuildPage />}
+                    />
                     {/* 未知のURLは利用者が迷わないようシミュレーターへ戻す。 */}
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

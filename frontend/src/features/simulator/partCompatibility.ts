@@ -1,4 +1,5 @@
 import {
+    createPartSlot,
     getPartSlotCategoryKey,
     getPartSlotPosition,
     type PartSlot,
@@ -29,6 +30,10 @@ type EqualityRule = {
 const EQUALITY_RULES: EqualityRule[] = [
     // 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する。
     {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
+    {categories: ["wheel", "tire"], specificationKey: "wheel_diameter", label: "ホイール径"},
+    {categories: ["wheel", "disc_rotor"], specificationKey: "rotor_mount", label: "ローター取付方式"},
+    {categories: ["wheel", "cassette"], specificationKey: "freehub_body", label: "フリーボディ"},
+    {categories: ["crankset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
     {
         categories: ["frame", "handlebar"],
         specificationKey: "cockpit_interface",
@@ -55,16 +60,22 @@ const EQUALITY_RULES: EqualityRule[] = [
 const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
     bb_standard: "BB規格",
+    brake_mount: "ブレーキマウント",
+    cleat_system: "クリート規格",
     cockpit_interface: "コックピット規格",
     crank_spindle: "クランク軸規格",
+    drivetrain_speed: "対応段数",
     freehub_body: "フリーボディ",
+    handlebar_clamp_mm: "ハンドルクランプ径",
     max_tire_width_mm: "対応タイヤ幅（最大）",
     min_tire_width_mm: "対応タイヤ幅（最小）",
     package_unit: "販売単位",
     pad_family: "パッド形状",
     rotor_diameter_mm: "ローター径",
     rotor_mount: "ローター取付方式",
+    saddle_rail: "サドルレール規格",
     seatpost_diameter_mm: "シートポスト径",
+    shift_system: "変速方式",
     tire_width_mm: "タイヤ幅",
     wheel_diameter: "ホイール径",
 }
@@ -73,14 +84,47 @@ const SPECIFICATION_LABELS: Record<string, string> = {
 
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "6_bolt": "6ボルト",
+    argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
+    bb386: "BB386",
+    bb86: "BB86",
+    campagnolo_n3w: "Campagnolo N3W",
+    campagnolo_protech: "Campagnolo Pro-Tech",
+    campagnolo_ultra_torque: "Campagnolo Ultra-Torque",
+    carbon_7x9: "カーボン 7×9mm",
+    carbon_7x9_3: "カーボン 7×9.3mm",
+    carbon_7x9_6: "カーボン 7×9.6mm",
     center_lock: "センターロック",
     campagnolo_db310: "Campagnolo DB-310形状",
+    dub: "SRAM DUB",
+    electronic_wireless: "無線電動",
+    felt_gravel_integrated: "Felt Gravel一体型専用",
+    flat_mount: "フラットマウント",
     front: "前輪専用",
+    hollowtech_ii: "Shimano HOLLOWTECH II",
+    hope_rx4: "HOPE RX4形状",
+    look_keo: "LOOK KEO",
+    look_aero_combo: "LOOK Aero Combo専用",
+    mechanical: "機械式",
     pair: "前後セット",
+    pf30: "PF30",
+    post_mount: "ポストマウント",
     rear: "後輪専用",
+    rotor_30: "Rotor 30mm",
+    shimano_hg: "Shimano HG",
+    shimano_k_type: "Shimano Kタイプ",
     shimano_road_flat_mount: "Shimano ロード用フラットマウント形状",
+    shimano_spd_sl: "Shimano SPD-SL",
     single: "1個単位",
+    sram_xdr: "SRAM XDR",
     sram_road_axs: "SRAM Road AXS形状",
+    standard_1_1_8: "1-1/8インチ標準コラム",
+    t47_85_5: "T47 85.5mm",
+    t47a: "T47A（76.75mm）",
+    time_iclic: "TIME ICLIC",
+    trp_hyrd: "TRP HY/RD形状",
+    trp_spyre: "TRP Spyre形状",
+    van_rysel_rcr_f: "Van Rysel RCR-F専用",
+    xelius_drs: "Lapierre Xelius DRS専用",
 }
 
 function getCategoryKey(part: Part, slotKey: string) {
@@ -310,4 +354,55 @@ export function evaluatePartCompatibility(
         conflictingSlotKeys: [],
         selectionBlocked: false,
     }
+}
+
+export type SelectedPartsCompatibilityIssue = {
+    status: "unknown" | "incompatible"
+    reasons: string[]
+    slotKeys: string[]
+}
+
+// 選択済み構成を候補選択時と同じ規格ルールで再評価
+export function evaluateSelectedPartsCompatibility(
+    selectedParts: SelectedParts,
+): SelectedPartsCompatibilityIssue[] {
+    const issues = new Map<string, SelectedPartsCompatibilityIssue>()
+
+    for (const [slotKey, part] of Object.entries(selectedParts)) {
+        const otherParts = Object.fromEntries(
+            Object.entries(selectedParts).filter(([otherSlotKey]) =>
+                otherSlotKey !== slotKey),
+        )
+        const result = evaluatePartCompatibility(
+            part,
+            createPartSlot(
+                getPartSlotCategoryKey(slotKey),
+                getPartSlotPosition(slotKey),
+            ),
+            otherParts,
+        )
+
+        if (!result || result.status === "compatible") {
+            continue
+        }
+
+        const relatedSlotKeys = Array.from(new Set([
+            slotKey,
+            ...result.conflictingSlotKeys,
+        ])).sort()
+        const reasons = Array.from(new Set(result.reasons)).sort()
+        const key = `${relatedSlotKeys.join("|")}::${reasons.join("|")}`
+        const existing = issues.get(key)
+
+        // 同じパーツ組み合わせを両方向から評価した結果は重要度の高い方へまとめる
+        if (!existing || result.status === "incompatible") {
+            issues.set(key, {
+                status: result.status,
+                reasons,
+                slotKeys: relatedSlotKeys,
+            })
+        }
+    }
+
+    return Array.from(issues.values())
 }

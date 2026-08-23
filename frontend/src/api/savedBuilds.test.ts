@@ -2,9 +2,11 @@ import {afterEach, describe, expect, it, vi} from "vitest"
 
 import {
     deleteSavedBuild,
+    fetchPublicSavedBuild,
     fetchSavedBuilds,
     renameSavedBuild,
     updateSavedBuild,
+    updateSavedBuildSharing,
 } from "@/api/savedBuilds"
 
 const BUILD = {
@@ -13,6 +15,7 @@ const BUILD = {
     version: 1,
     createdAt: "2026-08-10T00:00:00.000Z",
     updatedAt: "2026-08-10T00:00:00.000Z",
+    shareToken: null,
     parts: [{
         slotKey: "frame",
         partId: 1,
@@ -104,6 +107,43 @@ describe("savedBuilds API", () => {
                     csrfToken: "csrf-token",
                 }),
             }),
+        )
+    })
+
+    // 共有開始は変更系としてCSRFとversionを送り、公開取得はログインなしで行う。
+    it("共有設定と公開構成取得を別のAPI契約で扱う", async () => {
+        const shared = {
+            ...BUILD,
+            version: 2,
+            shareToken: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        }
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(csrfResponse())
+            .mockResolvedValueOnce(jsonResponse(shared))
+            .mockResolvedValueOnce(jsonResponse(shared))
+        vi.stubGlobal("fetch", fetchMock)
+
+        await expect(updateSavedBuildSharing(BUILD.id, 1, true))
+            .resolves.toEqual(shared)
+        await expect(fetchPublicSavedBuild(shared.shareToken))
+            .resolves.toEqual({name: shared.name, parts: shared.parts})
+
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            2,
+            `/api/builds/${BUILD.id}/sharing`,
+            expect.objectContaining({
+                method: "PATCH",
+                body: JSON.stringify({
+                    version: 1,
+                    enabled: true,
+                    csrfToken: "csrf-token",
+                }),
+            }),
+        )
+        expect(fetchMock).toHaveBeenNthCalledWith(
+            3,
+            `/api/builds/public/${shared.shareToken}`,
+            expect.objectContaining({credentials: "same-origin"}),
         )
     })
 
