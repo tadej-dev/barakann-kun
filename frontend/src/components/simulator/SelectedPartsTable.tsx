@@ -10,6 +10,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import {getFrameCockpitStatus} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotPositionLabel,
     getPartSlots,
@@ -31,6 +32,25 @@ const priceFormatter = new Intl.NumberFormat("ja-JP", {
     currency: "JPY",
     maximumFractionDigits: 0,
 })
+
+const frameCockpitBadges = {
+    included: {
+        label: "コックピット付属",
+        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    },
+    dedicated: {
+        label: "専用コックピット必須",
+        className: "border-amber-300 bg-amber-50 text-amber-700",
+    },
+    standard: {
+        label: "標準コックピット対応",
+        className: "border-sky-300 bg-sky-50 text-sky-700",
+    },
+    unknown: {
+        label: "コックピット規格未確認",
+        className: "border-slate-300 bg-slate-50 text-slate-600",
+    },
+}
 
 export function SelectedPartsTable({
                                        categories,
@@ -89,6 +109,12 @@ export function SelectedPartsTable({
                             const isBlocked = blockedCategoryKeys.has(
                                 category.key,
                             )
+                            const frameCockpitStatus = part
+                                ? getFrameCockpitStatus(part)
+                                : null
+                            const frameCockpitBadge = frameCockpitStatus
+                                ? frameCockpitBadges[frameCockpitStatus]
+                                : null
 
                             return (
                                 <TableRow
@@ -149,6 +175,17 @@ export function SelectedPartsTable({
                                                 ) && (
                                                     <Badge className="bg-sky-100 text-sky-800">
                                                         ステム一体型
+                                                    </Badge>
+                                                )}
+
+                                            {part &&
+                                                !isBlocked &&
+                                                frameCockpitBadge && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={frameCockpitBadge.className}
+                                                    >
+                                                        {frameCockpitBadge.label}
                                                     </Badge>
                                                 )}
                                         </div>

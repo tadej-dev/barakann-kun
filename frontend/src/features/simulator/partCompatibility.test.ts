@@ -13,6 +13,7 @@ function createPart(
     name: string,
     categoryKey: string,
     specifications: Record<string, string>,
+    blockedCategoryKeys: string[] = [],
 ): Part {
     return {
         id,
@@ -22,7 +23,7 @@ function createPart(
         brandName: "Test Brand",
         weight: 100,
         price: 1000,
-        blockedCategoryKeys: [],
+        blockedCategoryKeys,
     }
 }
 
@@ -115,6 +116,7 @@ describe("evaluatePartCompatibility", () => {
     it("フレームと規格が異なる候補はフレームを解除せず選択不可にする", () => {
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
         })
         const handlebar = createPart(2, "Handlebar", "handlebar", {
             cockpit_interface: "standard_road",
@@ -131,8 +133,8 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual([])
     })
 
-    // まだ規格情報が整備されていない組み合わせは、判定UIを表示しない。
-    it("規格情報が両方にない将来用ルールは判定結果を表示しない", () => {
+    // フレーム規格が未登録でも自由に適合とはせず、確認が必要な状態を表示する。
+    it("コックピット規格がないフレームは未確認として扱う", () => {
         const frame = createPart(1, "Frame", "frame", {})
         const handlebar = createPart(2, "Handlebar", "handlebar", {})
 
@@ -142,7 +144,120 @@ describe("evaluatePartCompatibility", () => {
             {frame},
         )
 
+        expect(result?.status).toBe("unknown")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // 専用フレームでは、規格値が欠けた汎用品を選択できないようにする。
+    it("専用フレームに対する適合未確認のハンドルは選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {})
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 標準フレームと通常ハンドルの間にはステムが入るため、直接の規格比較をしない。
+    it("標準フレームと通常ハンドルは直接比較しない", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            handlebar_clamp_mm: "31.8",
+        })
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
         expect(result).toBeNull()
+    })
+
+    // 専用ステムが付属する場合も、通常ハンドルは付属ステムのクランプ径で判定する。
+    it("専用ステム付属フレームと通常ハンドルはクランプ径で適合判定する", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "focus_cis",
+            cockpit_connection: "stem",
+            handlebar_clamp_mm: "31.8",
+        }, ["stem"])
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            handlebar_clamp_mm: "31.8",
+        })
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // 一体型専用フレームでは、規格値がある通常ハンドルでも選択を許可しない。
+    it("一体型専用フレームでは通常ハンドルを選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "colnago_cc01",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            handlebar_clamp_mm: "31.8",
+        })
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 通常ハンドルはフレーム規格ではなく、接続相手となるステムのクランプ径で判定する。
+    it("通常ハンドルとステムはクランプ径で適合判定する", () => {
+        const stem = createPart(1, "Stem", "stem", {
+            handlebar_clamp_mm: "31.8",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            handlebar_clamp_mm: "35",
+        })
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {stem},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["stem"])
+    })
+
+    // 付属コックピット枠を持つフレームでは、別売ハンドルを追加できない。
+    it("コックピット付属フレームでは別のハンドルを選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {})
+        frame.blockedCategoryKeys = ["handlebar", "stem"]
+        const handlebar = createPart(2, "Handlebar", "handlebar", {})
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
     })
 
     // キャリパーとパッドの規格が違えば、相互に対応しない候補として扱う。

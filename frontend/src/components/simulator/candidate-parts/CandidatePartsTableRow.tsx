@@ -5,6 +5,7 @@ import {buttonVariants} from "@/components/ui/button"
 import { TableCell, TableRow } from "@/components/ui/table"
 import {
     getPartPackageUnit,
+    getFrameCockpitStatus,
     getSpecificationLabel,
     getSpecificationValueLabel,
     type CompatibilityResult,
@@ -41,6 +42,25 @@ const compatibilityLabels = {
     incompatible: "非互換",
 }
 
+const frameCockpitBadges = {
+    included: {
+        label: "コックピット付属",
+        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    },
+    dedicated: {
+        label: "専用コックピット必須",
+        className: "border-amber-300 bg-amber-50 text-amber-700",
+    },
+    standard: {
+        label: "標準コックピット対応",
+        className: "border-sky-300 bg-sky-50 text-sky-700",
+    },
+    unknown: {
+        label: "コックピット規格未確認",
+        className: "border-slate-300 bg-slate-50 text-slate-600",
+    },
+}
+
 // 候補パーツ表の行
 function CandidatePartsTableRowComponent({
     part,
@@ -56,6 +76,10 @@ function CandidatePartsTableRowComponent({
     const includedItems = part.includedItems ?? []
     const specifications = Object.entries(part.specifications ?? {})
     const isSelectionBlocked = compatibility?.selectionBlocked ?? false
+    const frameCockpitStatus = getFrameCockpitStatus(part)
+    const frameCockpitBadge = frameCockpitStatus
+        ? frameCockpitBadges[frameCockpitStatus]
+        : null
 
     // キーボードによるパーツ選択処理
     function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
@@ -109,6 +133,15 @@ function CandidatePartsTableRowComponent({
                         {(part.blockedCategoryKeys ?? []).includes("stem") && (
                             <Badge className="bg-sky-100 text-sky-800">
                                 ステム一体型
+                            </Badge>
+                        )}
+
+                        {frameCockpitBadge && (
+                            <Badge
+                                variant="outline"
+                                className={frameCockpitBadge.className}
+                            >
+                                {frameCockpitBadge.label}
                             </Badge>
                         )}
 
