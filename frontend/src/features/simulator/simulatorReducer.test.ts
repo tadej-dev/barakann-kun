@@ -33,6 +33,35 @@ describe("simulatorReducer", () => {
         )
     })
 
+    // 固定構成へ切り替えた後は、前の構成で選んでいたカテゴリーを引き継がない。
+    it("固定構成を切り替えるとフレーム選択へ戻る", () => {
+        let state = createInitialSimulatorState("frame")
+
+        state = simulatorReducer(state, {
+            type: "changeSlot",
+            slot: createPartSlot("wheel"),
+        })
+        state = simulatorReducer(state, {
+            type: "changeConfig",
+            configId: "2",
+        })
+
+        expect(state.activeSlot).toEqual(createPartSlot("frame"))
+    })
+
+    // 追加構成へ切り替えた後も、規格の基準となるフレームから選択を始める。
+    it("追加構成を切り替えるとフレーム選択へ戻る", () => {
+        let state = createInitialSimulatorState("wheel")
+
+        state = simulatorReducer(state, {
+            type: "selectSavedBuild",
+            buildId: "build-1",
+            parts: {},
+        })
+
+        expect(state.activeSlot).toEqual(createPartSlot("frame"))
+    })
+
     // 追加構成をアクティブにした後の選択は、固定枠ではなくその構成へ保存する。
     it("追加構成を選択すると、その構成へパーツ選択を反映する", () => {
         const frame = createPart(1, "Frame")

@@ -121,6 +121,7 @@ export function simulatorReducer(
                 activeConfigId: action.configId, // 選択中構成の更新
                 activeSavedBuildId: null, // 固定構成を選択したので追加構成を解除
                 savedBuildParts: {}, // 次回の追加構成選択に備えて一時状態を初期化
+                activeSlot: getPartSlots("frame")[0], // 構成を切り替えたのでフレーム選択へ戻す
             }
 
         case "selectSavedBuild":
@@ -129,6 +130,7 @@ export function simulatorReducer(
                 ...state, // 現在状態の引き継ぎ
                 activeSavedBuildId: action.buildId, // 選択中追加構成の更新
                 savedBuildParts: action.parts, // APIから取得したパーツを編集対象へ設定
+                activeSlot: getPartSlots("frame")[0], // 構成を切り替えたのでフレーム選択へ戻す
             }
 
         case "restoreConfigSlot":

@@ -46,10 +46,6 @@ const frameCockpitBadges = {
         label: "標準コックピット対応",
         className: "border-sky-300 bg-sky-50 text-sky-700",
     },
-    unknown: {
-        label: "コックピット規格未確認",
-        className: "border-slate-300 bg-slate-50 text-slate-600",
-    },
 }
 
 export function SelectedPartsTable({
@@ -112,7 +108,8 @@ export function SelectedPartsTable({
                             const frameCockpitStatus = part
                                 ? getFrameCockpitStatus(part)
                                 : null
-                            const frameCockpitBadge = frameCockpitStatus
+                            // 規格未確認(unknown)のバッジは表示しない
+                            const frameCockpitBadge = frameCockpitStatus && frameCockpitStatus !== "unknown"
                                 ? frameCockpitBadges[frameCockpitStatus]
                                 : null
 

@@ -237,4 +237,77 @@ describe("security-sensitive D1 queries", () => {
             }],
         } satisfies Partial<InvalidSavedBuildPartsError>)
     })
+
+    it("保存時にフレームとコックピットの規格不一致を拒否する", async () => {
+        const database = {
+            prepare(sql: string) {
+                return {
+                    bind() {
+                        return {
+                            all: async () => {
+                                if (sql.includes("FROM parts")) {
+                                    return {
+                                        results: [
+                                            {
+                                                id: 1,
+                                                price: 100,
+                                                weight: 100,
+                                                category_key: "frame",
+                                                allowed_position: null,
+                                            },
+                                            {
+                                                id: 2,
+                                                price: 200,
+                                                weight: 200,
+                                                category_key: "handlebar",
+                                                allowed_position: null,
+                                            },
+                                        ],
+                                    }
+                                }
+
+                                if (sql.includes("FROM part_specifications")) {
+                                    return {
+                                        results: [
+                                            {
+                                                part_id: 1,
+                                                spec_key: "cockpit_interface",
+                                                spec_value: "canyon_cp0018",
+                                            },
+                                            {
+                                                part_id: 1,
+                                                spec_key: "cockpit_connection",
+                                                spec_value: "integrated_only",
+                                            },
+                                            {
+                                                part_id: 2,
+                                                spec_key: "cockpit_interface",
+                                                spec_value: "standard_1_1_8",
+                                            },
+                                        ],
+                                    }
+                                }
+
+                                return {results: []}
+                            },
+                        }
+                    },
+                }
+            },
+        } as unknown as D1Database
+
+        await expect(loadValidatedPartSnapshots(database, [
+            {slotKey: "frame", partId: 1},
+            {slotKey: "handlebar", partId: 2},
+        ])).rejects.toMatchObject({
+            name: "InvalidSavedBuildPartsError",
+            issues: [{
+                slotKey: "frame",
+                partId: 1,
+                reason: "compatibility",
+                relatedPartId: 2,
+            }],
+            partIds: [1, 2],
+        } satisfies Partial<InvalidSavedBuildPartsError>)
+    })
 })

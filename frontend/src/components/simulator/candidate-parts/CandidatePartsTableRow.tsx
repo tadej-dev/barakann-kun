@@ -55,10 +55,6 @@ const frameCockpitBadges = {
         label: "標準コックピット対応",
         className: "border-sky-300 bg-sky-50 text-sky-700",
     },
-    unknown: {
-        label: "コックピット規格未確認",
-        className: "border-slate-300 bg-slate-50 text-slate-600",
-    },
 }
 
 // 候補パーツ表の行
@@ -77,7 +73,8 @@ function CandidatePartsTableRowComponent({
     const specifications = Object.entries(part.specifications ?? {})
     const isSelectionBlocked = compatibility?.selectionBlocked ?? false
     const frameCockpitStatus = getFrameCockpitStatus(part)
-    const frameCockpitBadge = frameCockpitStatus
+    // 規格未確認(unknown)のバッジは表示しない
+    const frameCockpitBadge = frameCockpitStatus && frameCockpitStatus !== "unknown"
         ? frameCockpitBadges[frameCockpitStatus]
         : null
 
@@ -179,6 +176,11 @@ function CandidatePartsTableRowComponent({
                     {canSelectBoth && (
                         <button
                             type="button"
+                            disabled={isSelectionBlocked}
+                            aria-disabled={isSelectionBlocked}
+                            title={isSelectionBlocked
+                                ? "規格が一致しないため選択できません"
+                                : undefined}
                             className={`${buttonVariants({variant: "outline", size: "sm"})} mt-1 w-fit`}
                             onClick={(event) => {
                                 event.stopPropagation()

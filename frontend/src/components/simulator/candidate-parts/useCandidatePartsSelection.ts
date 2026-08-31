@@ -26,6 +26,7 @@ export function useCandidatePartsSelection(
         slotKeys: string[]
         removeSlotKeys: string[]
         removedPartNames: string[]
+        unknownReasons: string[]
     } | null>(null)
     const categorySlots = useMemo(
         () => getPartSlots(activeSlot.categoryKey),
@@ -50,6 +51,13 @@ export function useCandidatePartsSelection(
         const conflictSlotKeys = compatibilityResults.flatMap(
             (result) => result?.conflictingSlotKeys ?? [],
         )
+        const unknownReasons = Array.from(
+            new Set(
+                compatibilityResults.flatMap((result) =>
+                    result?.status === "unknown" ? result.reasons : [],
+                ),
+            ),
+        )
         const overwrittenSlotKeys = selectBoth || packageUnit === "pair"
             ? targetSlots
                 .map((slot) => slot.key)
@@ -64,8 +72,8 @@ export function useCandidatePartsSelection(
             ...overwrittenSlotKeys,
         ]))
 
-        if (removeSlotKeys.length === 0) {
-            // 既存選択を解除する必要がない場合は、確認なしで即時反映する。
+        if (removeSlotKeys.length === 0 && unknownReasons.length === 0) {
+            // 既存選択との競合も規格未確認もない候補は確認なしで即時反映する
             onSelect(part, targetSlots.map((slot) => slot.key))
             return
         }
@@ -85,6 +93,7 @@ export function useCandidatePartsSelection(
                     })
                     .filter((name): name is string => Boolean(name)),
             )),
+            unknownReasons,
         })
     }, [activeSlot, categorySlots, onSelect, selectedParts])
 

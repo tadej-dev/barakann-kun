@@ -37,6 +37,7 @@ export function Simulator({
                         categories={categories}
                         activeCategory={controller.activeCategory}
                         blockedCategoryKeys={controller.blockedCategoryKeys}
+                        frameSelected={Boolean(controller.selectedParts.frame)}
                         onCategoryChange={controller.changeCategory}
                     />
                 </aside>
@@ -60,7 +61,6 @@ export function Simulator({
                         onClearActiveConfig={controller.clearActiveConfig}
                         onClearConfig={controller.clearConfig}
                         onRestoreConfigSlot={controller.restoreConfigSlot}
-                        onSlotChange={controller.changeSlot}
                         savedBuildsReloadKey={savedBuildsReloadKey}
                     />
 
@@ -92,6 +92,8 @@ export function Simulator({
                             blockingCategoryNames={controller.blockingCategoryNames}
                             blockingPartNames={controller.blockingPartNames}
                             slotPositionLabel={controller.slotPositionLabel}
+                            frameSelected={Boolean(controller.selectedParts.frame)}
+                            onSelectFrame={() => controller.changeCategory("frame")}
                             onSelect={controller.onSelectPart}
                             onRemoveBlockingParts={controller.onRemoveBlockingParts}
                         />

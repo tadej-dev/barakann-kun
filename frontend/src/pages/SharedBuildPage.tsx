@@ -14,7 +14,6 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import {diagnoseBuild} from "@/features/simulator/buildDiagnosis"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {getPartPackageUnit} from "@/features/simulator/partCompatibility"
 import {
@@ -23,7 +22,6 @@ import {
     getPartSlotPositionLabel,
     getPartSlots,
 } from "@/features/simulator/partSlots"
-import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Category} from "@/types/category"
 import type {Part} from "@/types/part"
 import {fetchCategories} from "@/api/categories"
@@ -112,19 +110,6 @@ export function SharedBuildPage() {
         part.id,
         part,
     ])), [parts])
-    const selectedParts = useMemo(() => {
-        const selections: SelectedParts = {}
-
-        for (const snapshot of build?.parts ?? []) {
-            const part = partsById.get(snapshot.partId)
-
-            if (part) {
-                selections[snapshot.slotKey] = part
-            }
-        }
-
-        return selections
-    }, [build, partsById])
     const categoriesByKey = new Map(categories.map((category) => [
         category.key,
         category.displayName,
@@ -159,7 +144,6 @@ export function SharedBuildPage() {
             return first.slotKey.localeCompare(second.slotKey)
         })
     }, [build, categories])
-    const diagnosis = diagnoseBuild(selectedParts, categories)
     const totals = build
         ? calculateSnapshotTotals(build, partsById)
         : {price: 0, weight: 0}
@@ -214,7 +198,7 @@ export function SharedBuildPage() {
                 </p>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                     <CardHeader><CardTitle className="text-sm text-muted-foreground">合計金額</CardTitle></CardHeader>
                     <CardContent className="text-2xl font-bold tabular-nums">
@@ -225,21 +209,6 @@ export function SharedBuildPage() {
                     <CardHeader><CardTitle className="text-sm text-muted-foreground">完成重量</CardTitle></CardHeader>
                     <CardContent className="text-2xl font-bold tabular-nums">
                         {totals.weight.toLocaleString("ja-JP")} g
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader><CardTitle className="text-sm text-muted-foreground">構成診断</CardTitle></CardHeader>
-                    <CardContent>
-                        <Badge variant={diagnosis.incompatibleCount > 0
-                            ? "destructive"
-                            : "secondary"}
-                        >
-                            {diagnosis.incompatibleCount > 0
-                                ? `不一致 ${diagnosis.incompatibleCount}件`
-                                : diagnosis.missingCount > 0
-                                    ? `未選択 ${diagnosis.missingCount}件`
-                                    : "確認済み"}
-                        </Badge>
                     </CardContent>
                 </Card>
             </div>

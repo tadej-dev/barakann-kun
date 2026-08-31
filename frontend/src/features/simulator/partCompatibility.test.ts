@@ -133,6 +133,25 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual([])
     })
 
+    // 既存パーツを解除してしまうフレーム変更は、候補の段階で選択不可にする。
+    it("既存シートポストと径が異なるフレームは選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            seatpost_diameter_mm: "27.2",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_diameter_mm: "31.6",
+        })
+
+        const result = evaluatePartCompatibility(
+            frame,
+            createPartSlot("frame"),
+            {seatpost},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
     // フレーム規格が未登録でも自由に適合とはせず、確認が必要な状態を表示する。
     it("コックピット規格がないフレームは未確認として扱う", () => {
         const frame = createPart(1, "Frame", "frame", {})
@@ -258,6 +277,22 @@ describe("evaluatePartCompatibility", () => {
 
         expect(result?.status).toBe("incompatible")
         expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 一体型ハンドルを選ぶときは、既存ステムを黙って解除せず確認対象にする。
+    it("一体型ハンドルと既存ステムの同時選択を確認対象にする", () => {
+        const stem = createPart(1, "Stem", "stem", {})
+        const handlebar = createPart(2, "Integrated Handlebar", "handlebar", {}, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {stem},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(false)
+        expect(result?.conflictingSlotKeys).toEqual(["stem"])
     })
 
     // キャリパーとパッドの規格が違えば、相互に対応しない候補として扱う。

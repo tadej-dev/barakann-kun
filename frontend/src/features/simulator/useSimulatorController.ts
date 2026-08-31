@@ -11,12 +11,18 @@ import {fetchParts, fetchPartsByIds} from "@/api/parts"
 import type {ConfigSlot} from "@/api/configSlots"
 import type {SavedBuild} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
-import {calculateSelectedPartsTotals} from "@/features/simulator/partCompatibility"
+import {
+    calculateSelectedPartsTotals,
+    evaluatePartCompatibility,
+    evaluateSelectedPartsCompatibility,
+} from "@/features/simulator/partCompatibility"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
     getPartSlotCategoryKey,
+    getPartSlotPosition,
     getPartSlotPositionLabel,
     getPartSlots,
+    createPartSlot,
     type PartSlot,
 } from "@/features/simulator/partSlots"
 import {
@@ -120,6 +126,24 @@ function restoreSavedBuildParts(
     return restoredParts
 }
 
+// 復元経路からも既知の規格不一致を持つ構成を編集状態へ入れない
+function assertRestoredPartsAreCompatible(
+    parts: SelectedParts,
+    buildName: string,
+) {
+    const issue = evaluateSelectedPartsCompatibility(parts).find(
+        (candidate) => candidate.status === "incompatible",
+    )
+
+    if (!issue) {
+        return
+    }
+
+    throw new Error(
+        `「${buildName}」には規格が一致しないパーツが含まれています。${issue.reasons.join("、")}`,
+    )
+}
+
 // 取得済みパーツをIDで再利用できるようキャッシュへ登録
 function cacheParts(cache: Map<number, Part>, parts: Part[]) {
     // APIの返却順に依存せず、IDをキーにして候補取得と保存構成復元で共有する。
@@ -214,9 +238,13 @@ export function useSimulatorController({
     }, [loadSavedBuildParts])
 
     // シミュレーターの状態管理
+    // カタログの返却順が変わっても、規格判定の基準となるフレームから開始する
+    const initialCategory = categories.some((category) => category.key === "frame")
+        ? "frame"
+        : categories[0]?.key ?? ""
     const [simulatorState, dispatch] = useReducer(
         simulatorReducer,
-        categories[0]?.key ?? "",
+        initialCategory,
         (initialCategory) => {
             // 初期状態
             const initialState = createInitialSimulatorState(
@@ -293,6 +321,14 @@ export function useSimulatorController({
                         ),
                     ]),
                 ) as ConfigStates
+
+                for (const configId of CONFIG_IDS) {
+                    // 古いlocalStorageからの復元でも、既知の不一致を現行状態へ持ち込まない
+                    assertRestoredPartsAreCompatible(
+                        restoredConfigs[configId],
+                        `構成${configId}`,
+                    )
+                }
 
                 dispatch({
                     type: "restore",
@@ -499,11 +535,16 @@ export function useSimulatorController({
                 partCacheRef.current,
                 true,
             )
-            dispatch({
-                type: "selectSavedBuild",
-                buildId: build.id,
-                parts: cachedParts,
-            })
+
+            if (Object.keys(cachedParts).length === build.parts.length) {
+                // 全パーツがキャッシュ済みの場合だけ、検証済みの状態を先に表示する
+                assertRestoredPartsAreCompatible(cachedParts, build.name)
+                dispatch({
+                    type: "selectSavedBuild",
+                    buildId: build.id,
+                    parts: cachedParts,
+                })
+            }
 
             await loadSavedBuildParts(build)
 
@@ -517,6 +558,7 @@ export function useSimulatorController({
                 partCacheRef.current,
                 false,
             )
+            assertRestoredPartsAreCompatible(restoredParts, build.name)
             dispatch({
                 type: "selectSavedBuild",
                 buildId: build.id,
@@ -563,14 +605,16 @@ export function useSimulatorController({
                 return
             }
 
+            const restoredParts = restoreSavedBuildParts(
+                buildSnapshot,
+                partCacheRef.current,
+                false,
+            )
+            assertRestoredPartsAreCompatible(restoredParts, slot.name)
             dispatch({
                 type: "restoreConfigSlot",
                 configId: slot.configId,
-                parts: restoreSavedBuildParts(
-                    buildSnapshot,
-                    partCacheRef.current,
-                    false,
-                ),
+                parts: restoredParts,
             })
         } catch (error) {
             if (requestId === savedBuildSelectionRequestRef.current) {
@@ -598,13 +642,17 @@ export function useSimulatorController({
 
     // カテゴリー変更処理
     const changeCategory = useCallback((category: string) => {
+        if (!selectedParts.frame && category !== "frame") {
+            return
+        }
+
         // 同じカテゴリーなら現在位置を維持し、別カテゴリーなら先頭スロットを選ぶ。
         const nextSlot = activeCategory === category
             ? activeSlot
             : getPartSlots(category)[0]
 
         changeSlot(nextSlot)
-    }, [activeCategory, activeSlot, changeSlot])
+    }, [activeCategory, activeSlot, changeSlot, selectedParts])
 
     // パーツ選択処理
     const onSelectPart = useCallback((
@@ -612,14 +660,57 @@ export function useSimulatorController({
         slotKeys?: string[],
         removeSlotKeys?: string[],
     ) => {
-        // 候補表から受け取った選択・解除対象をReducerへ一度に渡す。
+        const targetSlotKeys = slotKeys ?? [activeSlot.key]
+
+        // 候補表以外の呼び出し元からも、フレーム未選択・既知の不一致を通さない
+        if (
+            targetSlotKeys.some((slotKey) =>
+                getPartSlotCategoryKey(slotKey) !== "frame") &&
+            !selectedParts.frame
+        ) {
+            return
+        }
+
+        const compatibilityResults = targetSlotKeys.map((slotKey) => {
+            const result = evaluatePartCompatibility(
+                part,
+                createPartSlot(
+                    getPartSlotCategoryKey(slotKey),
+                    getPartSlotPosition(slotKey),
+                ),
+                selectedParts,
+            )
+
+            return result
+        })
+        const hasBlockedCompatibility = compatibilityResults.some((result) =>
+            result?.selectionBlocked === true,
+        )
+
+        if (hasBlockedCompatibility) {
+            return
+        }
+
+        const requestedRemovals = new Set(removeSlotKeys ?? [])
+        const hasUnconfirmedConflict = compatibilityResults.some((result) =>
+            result?.conflictingSlotKeys.some((slotKey) =>
+                !requestedRemovals.has(slotKey),
+            ),
+        )
+
+        if (hasUnconfirmedConflict) {
+            // 競合の解除を明示していない呼び出しでは、既存パーツを暗黙に削除しない
+            return
+        }
+
+        // 既知の競合を確認済みの解除対象と合わせ、Reducerへ一度に渡す
         dispatch({
             type: "selectPart",
             part,
-            slotKeys,
+            slotKeys: targetSlotKeys,
             removeSlotKeys,
         })
-    }, [dispatch])
+    }, [activeSlot.key, dispatch, selectedParts])
 
     // 現在カテゴリーを占有するパーツの解除処理
     const onRemoveBlockingParts = useCallback(() => {

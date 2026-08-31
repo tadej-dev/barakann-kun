@@ -487,6 +487,25 @@ export function evaluatePartCompatibility(
         const candidateCategory = candidate.categoryKey ?? targetSlot.categoryKey
         const selectedCategory = getCategoryKey(selectedPart, selectedSlotKey)
 
+        const candidateBlocksSelectedCategory =
+            (candidate.blockedCategoryKeys ?? []).includes(selectedCategory)
+        const selectedBlocksCandidateCategory =
+            (selectedPart.blockedCategoryKeys ?? []).includes(candidateCategory)
+
+        if (candidateBlocksSelectedCategory || selectedBlocksCandidateCategory) {
+            // 一体型パーツや付属コックピットとの二重選択を、候補選択時に解除確認へ回す。
+            hasRelevantSelection = true
+            reasons.push("別の選択パーツが対象カテゴリーを占有するため同時に選択できません")
+
+            if (candidateCategory === "frame" || selectedCategory === "frame") {
+                selectionBlocked = true
+            } else {
+                conflictingSlotKeys.add(selectedSlotKey)
+            }
+
+            continue
+        }
+
         const cockpitResult = compareCockpitParts(
             candidate,
             candidateCategory,
@@ -500,7 +519,10 @@ export function evaluatePartCompatibility(
             reasons.push(...cockpitResult.reasons)
 
             if (cockpitResult.status === "incompatible") {
-                if (selectedCategory === "frame") {
+                if (
+                    selectedCategory === "frame" ||
+                    candidateCategory === "frame"
+                ) {
                     selectionBlocked = true
                 } else {
                     conflictingSlotKeys.add(selectedSlotKey)
@@ -553,7 +575,10 @@ export function evaluatePartCompatibility(
                 hasUnknown = true
                 reasons.push(`${rule.label}が未確認です`)
             } else if (candidateValue !== selectedValue) {
-                if (selectedCategory === rule.protectedCategory) {
+                if (
+                    selectedCategory === rule.protectedCategory ||
+                    candidateCategory === rule.protectedCategory
+                ) {
                     selectionBlocked = true
                     reasons.push(
                         `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,

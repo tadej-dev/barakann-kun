@@ -15,6 +15,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import {Badge} from "@/components/ui/badge"
+import {Button} from "@/components/ui/button"
 import {
     evaluatePartCompatibility,
     getPartPackageUnit,
@@ -40,6 +41,8 @@ type CandidatePartsTableProps = {
     blockingCategoryNames: string[] // 選択不可の原因となるカテゴリー名
     blockingPartNames: string[] // 選択不可の原因となるパーツ名
     slotPositionLabel?: string | null // 前後スロットの表示名
+    frameSelected: boolean // フレーム選択済みかどうか
+    onSelectFrame: () => void // フレーム選択へ戻る処理
     onSelect: (
         part: Part,
         slotKeys?: string[],
@@ -60,6 +63,8 @@ export function CandidatePartsTable({
                                         blockingCategoryNames,
                                         blockingPartNames,
                                         slotPositionLabel,
+                                        frameSelected,
+                                        onSelectFrame,
                                         onSelect,
                                         onRemoveBlockingParts,
                                     }: CandidatePartsTableProps) {
@@ -110,7 +115,25 @@ export function CandidatePartsTable({
         return result
     }, [activeSlot, parts, selectedParts])
 
-    // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする。
+    // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする
+    // フレームが未選択の間は、他カテゴリーの候補を操作させず基準パーツの選択へ戻す。
+    if (!frameSelected && activeSlot.categoryKey !== "frame") {
+        return (
+            <CandidatePartsTableMessage
+                message="規格の基準となるフレームを先に選択してください"
+                showVariantColumn={showVariantColumn}
+            >
+                <Button
+                    type="button"
+                    size="sm"
+                    onClick={onSelectFrame}
+                >
+                    フレームを選択
+                </Button>
+            </CandidatePartsTableMessage>
+        )
+    }
+
     // 選択不可状態
     if (blockedMessage) {
         // 一体型パーツなどでカテゴリー全体が占有されている場合は、表を出さず解除導線を優先する。
