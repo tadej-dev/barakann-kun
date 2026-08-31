@@ -19,6 +19,10 @@
 node_modules/
 .wrangler/
 
+# Local agent settings
+AGENTS.md
+opencode.json
+
 # Local database files and journals
 *.sqlite
 *.sqlite3
@@ -36,3 +40,4 @@ node_modules/
 # Generated build and test output
 dist/
 coverage/
+*.tsbuildinfo
