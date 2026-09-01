@@ -13,16 +13,13 @@ import type {SavedBuild} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
 import {
     calculateSelectedPartsTotals,
-    evaluatePartCompatibility,
     evaluateSelectedPartsCompatibility,
 } from "@/features/simulator/partCompatibility"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
     getPartSlotCategoryKey,
-    getPartSlotPosition,
     getPartSlotPositionLabel,
     getPartSlots,
-    createPartSlot,
     type PartSlot,
 } from "@/features/simulator/partSlots"
 import {
@@ -94,7 +91,6 @@ const EMPTY_SELECTED_PARTS: SelectedParts = {}
 function restoreSavedBuildParts(
     build: SavedBuild,
     partsById: ReadonlyMap<number, Part>,
-    allowMissing: boolean,
 ): SelectedParts {
     // 保存時のslotKeyをそのまま維持し、表示用の最新Partだけを差し替える。
     const restoredParts: SelectedParts = {}
@@ -102,12 +98,7 @@ function restoreSavedBuildParts(
     for (const savedPart of build.parts) {
         const part = partsById.get(savedPart.partId)
 
-        // 先読み段階では未取得パーツを許容し、選択確定時だけ欠落をエラーにする。
         if (!part) {
-            if (allowMissing) {
-                continue
-            }
-
             throw new Error(
                 `「${build.name}」に含まれるパーツを読み込めませんでした`,
             )
@@ -238,10 +229,8 @@ export function useSimulatorController({
     }, [loadSavedBuildParts])
 
     // シミュレーターの状態管理
-    // カタログの返却順が変わっても、規格判定の基準となるフレームから開始する
-    const initialCategory = categories.some((category) => category.key === "frame")
-        ? "frame"
-        : categories[0]?.key ?? ""
+    // 規格判定の基準となるフレームから選択を開始する
+    const initialCategory = "frame"
     const [simulatorState, dispatch] = useReducer(
         simulatorReducer,
         initialCategory,
@@ -522,30 +511,12 @@ export function useSimulatorController({
 
     // 保存済み追加構成のパーツを取得し、編集対象として読み込む
     const selectSavedBuild = useCallback(async (build: SavedBuild) => {
-        // 先にキャッシュ済み部分を表示し、全パーツ取得後に完全な状態へ置き換える。
         const requestId = ++savedBuildSelectionRequestRef.current
 
         setIsSavedBuildLoading(true)
         setSavedBuildError("")
 
         try {
-            // 通信を待たずに選択中の色を切り替え、カードの反応を先に表示
-            const cachedParts = restoreSavedBuildParts(
-                build,
-                partCacheRef.current,
-                true,
-            )
-
-            if (Object.keys(cachedParts).length === build.parts.length) {
-                // 全パーツがキャッシュ済みの場合だけ、検証済みの状態を先に表示する
-                assertRestoredPartsAreCompatible(cachedParts, build.name)
-                dispatch({
-                    type: "selectSavedBuild",
-                    buildId: build.id,
-                    parts: cachedParts,
-                })
-            }
-
             await loadSavedBuildParts(build)
 
             // 取得中に別の構成が選ばれた場合、古い構成で選択状態を上書きしない。
@@ -556,7 +527,6 @@ export function useSimulatorController({
             const restoredParts = restoreSavedBuildParts(
                 build,
                 partCacheRef.current,
-                false,
             )
             assertRestoredPartsAreCompatible(restoredParts, build.name)
             dispatch({
@@ -608,7 +578,6 @@ export function useSimulatorController({
             const restoredParts = restoreSavedBuildParts(
                 buildSnapshot,
                 partCacheRef.current,
-                false,
             )
             assertRestoredPartsAreCompatible(restoredParts, slot.name)
             dispatch({
@@ -642,17 +611,13 @@ export function useSimulatorController({
 
     // カテゴリー変更処理
     const changeCategory = useCallback((category: string) => {
-        if (!selectedParts.frame && category !== "frame") {
-            return
-        }
-
         // 同じカテゴリーなら現在位置を維持し、別カテゴリーなら先頭スロットを選ぶ。
         const nextSlot = activeCategory === category
             ? activeSlot
             : getPartSlots(category)[0]
 
         changeSlot(nextSlot)
-    }, [activeCategory, activeSlot, changeSlot, selectedParts])
+    }, [activeCategory, activeSlot, changeSlot])
 
     // パーツ選択処理
     const onSelectPart = useCallback((
@@ -660,57 +625,14 @@ export function useSimulatorController({
         slotKeys?: string[],
         removeSlotKeys?: string[],
     ) => {
-        const targetSlotKeys = slotKeys ?? [activeSlot.key]
-
-        // 候補表以外の呼び出し元からも、フレーム未選択・既知の不一致を通さない
-        if (
-            targetSlotKeys.some((slotKey) =>
-                getPartSlotCategoryKey(slotKey) !== "frame") &&
-            !selectedParts.frame
-        ) {
-            return
-        }
-
-        const compatibilityResults = targetSlotKeys.map((slotKey) => {
-            const result = evaluatePartCompatibility(
-                part,
-                createPartSlot(
-                    getPartSlotCategoryKey(slotKey),
-                    getPartSlotPosition(slotKey),
-                ),
-                selectedParts,
-            )
-
-            return result
-        })
-        const hasBlockedCompatibility = compatibilityResults.some((result) =>
-            result?.selectionBlocked === true,
-        )
-
-        if (hasBlockedCompatibility) {
-            return
-        }
-
-        const requestedRemovals = new Set(removeSlotKeys ?? [])
-        const hasUnconfirmedConflict = compatibilityResults.some((result) =>
-            result?.conflictingSlotKeys.some((slotKey) =>
-                !requestedRemovals.has(slotKey),
-            ),
-        )
-
-        if (hasUnconfirmedConflict) {
-            // 競合の解除を明示していない呼び出しでは、既存パーツを暗黙に削除しない
-            return
-        }
-
-        // 既知の競合を確認済みの解除対象と合わせ、Reducerへ一度に渡す
+        // 候補表から受け取った選択・解除対象をReducerへ一度に渡す。
         dispatch({
             type: "selectPart",
             part,
-            slotKeys: targetSlotKeys,
+            slotKeys,
             removeSlotKeys,
         })
-    }, [activeSlot.key, dispatch, selectedParts])
+    }, [dispatch])
 
     // 現在カテゴリーを占有するパーツの解除処理
     const onRemoveBlockingParts = useCallback(() => {

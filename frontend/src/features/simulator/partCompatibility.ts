@@ -1,16 +1,20 @@
 import {
-    createPartSlot,
+    appliesToPosition,
+    compareParts,
+    findCompatibilityIssues,
+    getFrameCockpitStatus,
+} from "../../../../shared/part-compatibility-core"
+import type {
+    CompatibilityStatus,
+} from "../../../../shared/part-compatibility-core"
+import {
     getPartSlotCategoryKey,
-    getPartSlotPosition,
     type PartSlot,
 } from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
-export type CompatibilityStatus =
-    | "compatible"
-    | "unknown"
-    | "incompatible"
+export {getFrameCockpitStatus}
 
 export type CompatibilityResult = {
     status: CompatibilityStatus
@@ -18,37 +22,6 @@ export type CompatibilityResult = {
     conflictingSlotKeys: string[]
     selectionBlocked: boolean
 }
-
-type EqualityRule = {
-    categories: readonly [string, string]
-    specificationKey: string
-    label: string
-    protectedCategory?: string
-    protectedCategoryLabel?: string
-}
-
-const EQUALITY_RULES: EqualityRule[] = [
-    // 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する。
-    {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
-    {categories: ["wheel", "tire"], specificationKey: "wheel_diameter", label: "ホイール径"},
-    {categories: ["wheel", "disc_rotor"], specificationKey: "rotor_mount", label: "ローター取付方式"},
-    {categories: ["wheel", "cassette"], specificationKey: "freehub_body", label: "フリーボディ"},
-    {categories: ["crankset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
-    {
-        categories: ["frame", "seatpost"],
-        specificationKey: "seatpost_diameter_mm",
-        label: "シートポスト径",
-        protectedCategory: "frame",
-        protectedCategoryLabel: "フレーム",
-    },
-    {
-        categories: ["frame", "bottom_bracket"],
-        specificationKey: "bb_standard",
-        label: "BB規格",
-        protectedCategory: "frame",
-        protectedCategoryLabel: "フレーム",
-    },
-]
 
 const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
@@ -148,264 +121,9 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     xelius_drs: "Lapierre Xelius DRS専用",
 }
 
-const STANDARD_COCKPIT_INTERFACE = "standard_1_1_8"
-
-export type FrameCockpitStatus =
-    | "included"
-    | "dedicated"
-    | "standard"
-    | "unknown"
-
-type PairCompatibilityResult = {
-    status: CompatibilityStatus
-    reasons: string[]
-}
-
 function getCategoryKey(part: Part, slotKey: string) {
     // APIにcategoryKeyがない旧データでも、スロットキーから判定対象を補完する。
     return part.categoryKey ?? getPartSlotCategoryKey(slotKey)
-}
-
-function hasCategoryPair(
-    firstCategory: string,
-    secondCategory: string,
-    expectedCategories: readonly [string, string],
-) {
-    // 同じカテゴリー同士を誤って関連判定しないよう、異なる2カテゴリーだけを対象にする。
-    return (
-        expectedCategories.includes(firstCategory) &&
-        expectedCategories.includes(secondCategory) &&
-        firstCategory !== secondCategory
-    )
-}
-
-function appliesToPosition(targetSlot: PartSlot, selectedSlotKey: string) {
-    // singleは前後共通、front/rearは同じ位置だけを比較対象にする。
-    const selectedPosition = getPartSlotPosition(selectedSlotKey)
-
-    return (
-        targetSlot.position === "single" ||
-        selectedPosition === "single" ||
-        targetSlot.position === selectedPosition
-    )
-}
-
-function getSpecification(part: Part, key: string) {
-    // 規格が未登録の場合はundefinedのまま返し、適合不明として扱えるようにする。
-    return part.specifications?.[key]
-}
-
-function isIntegratedHandlebar(part: Part) {
-    // ステムカテゴリーを占有するハンドルは、フレームへ直接接続する一体型コックピットとして扱う。
-    return (
-        part.categoryKey === "handlebar" &&
-        (part.blockedCategoryKeys ?? []).includes("stem")
-    )
-}
-
-export function getFrameCockpitStatus(frame: Part): FrameCockpitStatus | null {
-    if (frame.categoryKey !== "frame") {
-        return null
-    }
-
-    // ハンドル選択枠を占有するフレームは、専用コックピットが商品に含まれる。
-    if ((frame.blockedCategoryKeys ?? []).includes("handlebar")) {
-        return "included"
-    }
-
-    const cockpitInterface = getSpecification(frame, "cockpit_interface")
-
-    if (!cockpitInterface) {
-        return "unknown"
-    }
-
-    return cockpitInterface === STANDARD_COCKPIT_INTERFACE
-        ? "standard"
-        : "dedicated"
-}
-
-function compareCockpitInterface(
-    frame: Part,
-    connectedPart: Part,
-): PairCompatibilityResult {
-    const frameStatus = getFrameCockpitStatus(frame)
-
-    if (frameStatus === "included") {
-        return {
-            status: "incompatible",
-            reasons: ["フレームにコックピットが付属するため、別のハンドルやステムは選択できません"],
-        }
-    }
-
-    if (frameStatus === "unknown") {
-        return {
-            status: "unknown",
-            reasons: ["フレームのコックピット規格が未確認です"],
-        }
-    }
-
-    const frameInterface = getSpecification(frame, "cockpit_interface")
-    const connectedInterface = getSpecification(connectedPart, "cockpit_interface")
-
-    if (!connectedInterface) {
-        // 専用品は規格不明の候補へ逃がさず、適合が確認できた製品だけを選択可能にする。
-        return frameStatus === "dedicated"
-            ? {
-                status: "incompatible",
-                reasons: ["専用コックピットへの適合が確認できない製品です"],
-            }
-            : {
-                status: "unknown",
-                reasons: ["コックピット規格が未確認です"],
-            }
-    }
-
-    if (frameInterface !== connectedInterface) {
-        return {
-            status: "incompatible",
-            reasons: ["コックピット規格が一致しません"],
-        }
-    }
-
-    return {
-        status: "compatible",
-        reasons: ["コックピット規格が適合します"],
-    }
-}
-
-function compareHandlebarClamp(
-    firstPart: Part,
-    secondPart: Part,
-): PairCompatibilityResult {
-    const firstClamp = getSpecification(firstPart, "handlebar_clamp_mm")
-    const secondClamp = getSpecification(secondPart, "handlebar_clamp_mm")
-
-    if (!firstClamp || !secondClamp) {
-        return {
-            status: "unknown",
-            reasons: ["ハンドルクランプ径が未確認です"],
-        }
-    }
-
-    return firstClamp === secondClamp
-        ? {
-            status: "compatible",
-            reasons: ["ハンドルクランプ径が適合します"],
-        }
-        : {
-            status: "incompatible",
-            reasons: ["ハンドルクランプ径が一致しません"],
-        }
-}
-
-function compareCockpitParts(
-    candidate: Part,
-    candidateCategory: string,
-    selectedPart: Part,
-    selectedCategory: string,
-): PairCompatibilityResult | null {
-    if (hasCategoryPair(candidateCategory, selectedCategory, ["frame", "handlebar"])) {
-        const frame = candidateCategory === "frame" ? candidate : selectedPart
-        const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
-        const frameStatus = getFrameCockpitStatus(frame)
-        const cockpitConnection = getSpecification(frame, "cockpit_connection")
-
-        if (frameStatus === "included") {
-            return compareCockpitInterface(frame, handlebar)
-        }
-
-        if (frameStatus === "unknown") {
-            return compareCockpitInterface(frame, handlebar)
-        }
-
-        if (isIntegratedHandlebar(handlebar)) {
-            return compareCockpitInterface(frame, handlebar)
-        }
-
-        // 付属する専用ステムへ通常ハンドルを組み付ける車種は、フレームに登録したクランプ径で判定する。
-        if ((frame.blockedCategoryKeys ?? []).includes("stem")) {
-            return compareHandlebarClamp(frame, handlebar)
-        }
-
-        if (cockpitConnection === "integrated_only") {
-            return {
-                status: "incompatible",
-                reasons: ["一体型コックピット専用フレームのため、通常ハンドルは選択できません"],
-            }
-        }
-
-        // 通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する。
-        return null
-    }
-
-    if (hasCategoryPair(candidateCategory, selectedCategory, ["frame", "stem"])) {
-        const frame = candidateCategory === "frame" ? candidate : selectedPart
-        const stem = candidateCategory === "stem" ? candidate : selectedPart
-        const cockpitConnection = getSpecification(frame, "cockpit_connection")
-
-        if (
-            (frame.blockedCategoryKeys ?? []).includes("stem") ||
-            cockpitConnection === "integrated_only"
-        ) {
-            return {
-                status: "incompatible",
-                reasons: ["このフレームでは別のステムを選択できません"],
-            }
-        }
-
-        return compareCockpitInterface(frame, stem)
-    }
-
-    if (hasCategoryPair(candidateCategory, selectedCategory, ["stem", "handlebar"])) {
-        const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
-
-        // 一体型ハンドルはステムを置き換えるため、クランプ径ではなくカテゴリー排他で処理する。
-        if (isIntegratedHandlebar(handlebar)) {
-            return null
-        }
-
-        return compareHandlebarClamp(candidate, selectedPart)
-    }
-
-    return null
-}
-
-function compareTireAndTube(tire: Part, tube: Part) {
-    const tireDiameter = getSpecification(tire, "wheel_diameter")
-    const tubeDiameter = getSpecification(tube, "wheel_diameter")
-    const tireWidth = Number(getSpecification(tire, "tire_width_mm"))
-    const minWidth = Number(getSpecification(tube, "min_tire_width_mm"))
-    const maxWidth = Number(getSpecification(tube, "max_tire_width_mm"))
-
-    if (
-        !tireDiameter ||
-        !tubeDiameter ||
-        !Number.isFinite(tireWidth) ||
-        !Number.isFinite(minWidth) ||
-        !Number.isFinite(maxWidth)
-    ) {
-        // 規格不足は安全側に倒し、適合と断定せず利用者へ確認を促す。
-        return {status: "unknown" as const, reasons: ["タイヤとチューブのサイズ情報が不足しています"]}
-    }
-
-    if (tireDiameter !== tubeDiameter) {
-        return {
-            status: "incompatible" as const,
-            reasons: [`ホイール径が一致しません（${tireDiameter} / ${tubeDiameter}）`],
-        }
-    }
-
-    if (tireWidth < minWidth || tireWidth > maxWidth) {
-        return {
-            status: "incompatible" as const,
-            reasons: [`${tireWidth}mmのタイヤはチューブの対応範囲${minWidth}〜${maxWidth}mm外です`],
-        }
-    }
-
-    return {
-        status: "compatible" as const,
-        reasons: [`${tireDiameter}・${tireWidth}mmで適合します`],
-    }
 }
 
 export function getSpecificationLabel(key: string) {
@@ -462,7 +180,7 @@ export function evaluatePartCompatibility(
     let hasUnknown = false
     let hasCompatible = false
     let selectionBlocked = false
-    const allowedPosition = getSpecification(candidate, "allowed_position")
+    const allowedPosition = candidate.specifications?.allowed_position
 
     if (
         allowedPosition &&
@@ -480,117 +198,39 @@ export function evaluatePartCompatibility(
 
     for (const [selectedSlotKey, selectedPart] of Object.entries(selectedParts)) {
         // 同じスロット自身は比較せず、別位置にある関連パーツだけを適合判定する。
-        if (selectedSlotKey === targetSlot.key || !appliesToPosition(targetSlot, selectedSlotKey)) {
+        if (selectedSlotKey === targetSlot.key || !appliesToPosition(targetSlot.key, selectedSlotKey)) {
             continue
         }
 
         const candidateCategory = candidate.categoryKey ?? targetSlot.categoryKey
         const selectedCategory = getCategoryKey(selectedPart, selectedSlotKey)
 
-        const candidateBlocksSelectedCategory =
-            (candidate.blockedCategoryKeys ?? []).includes(selectedCategory)
-        const selectedBlocksCandidateCategory =
-            (selectedPart.blockedCategoryKeys ?? []).includes(candidateCategory)
-
-        if (candidateBlocksSelectedCategory || selectedBlocksCandidateCategory) {
-            // 一体型パーツや付属コックピットとの二重選択を、候補選択時に解除確認へ回す。
-            hasRelevantSelection = true
-            reasons.push("別の選択パーツが対象カテゴリーを占有するため同時に選択できません")
-
-            if (candidateCategory === "frame" || selectedCategory === "frame") {
-                selectionBlocked = true
-            } else {
-                conflictingSlotKeys.add(selectedSlotKey)
-            }
-
-            continue
-        }
-
-        const cockpitResult = compareCockpitParts(
+        // ペア間の規格判定は候補選択と保存APIで共通のコアへ委ねる。
+        const result = compareParts(
             candidate,
             candidateCategory,
             selectedPart,
             selectedCategory,
         )
 
-        if (cockpitResult) {
+        if (!result) {
+            continue
+        }
+
+        hasRelevantSelection = true
+        reasons.push(...result.reasons)
+
+        if (result.status === "incompatible") {
             // フレームは基準パーツとして維持し、候補側が非互換なら選択を止める。
-            hasRelevantSelection = true
-            reasons.push(...cockpitResult.reasons)
-
-            if (cockpitResult.status === "incompatible") {
-                if (
-                    selectedCategory === "frame" ||
-                    candidateCategory === "frame"
-                ) {
-                    selectionBlocked = true
-                } else {
-                    conflictingSlotKeys.add(selectedSlotKey)
-                }
-            } else if (cockpitResult.status === "unknown") {
-                hasUnknown = true
+            if (candidateCategory === "frame" || selectedCategory === "frame") {
+                selectionBlocked = true
             } else {
-                hasCompatible = true
-            }
-
-            continue
-        }
-
-        if (hasCategoryPair(candidateCategory, selectedCategory, ["tire", "inner_tube"])) {
-            // タイヤとチューブだけは径・幅の範囲を専用関数で判定する。
-            hasRelevantSelection = true
-            const tire = candidateCategory === "tire" ? candidate : selectedPart
-            const tube = candidateCategory === "inner_tube" ? candidate : selectedPart
-            const result = compareTireAndTube(tire, tube)
-
-            reasons.push(...result.reasons)
-
-            if (result.status === "incompatible") {
                 conflictingSlotKeys.add(selectedSlotKey)
-            } else if (result.status === "unknown") {
-                hasUnknown = true
-            } else {
-                hasCompatible = true
             }
-
-            continue
-        }
-
-        for (const rule of EQUALITY_RULES) {
-            // その他の関連カテゴリーは、規格値の一致・不足・不一致を共通ルールで評価する。
-            if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
-                continue
-            }
-
-            const candidateValue = getSpecification(candidate, rule.specificationKey)
-            const selectedValue = getSpecification(selectedPart, rule.specificationKey)
-
-            if (!candidateValue && !selectedValue) {
-                continue
-            }
-
-            hasRelevantSelection = true
-
-            if (!candidateValue || !selectedValue) {
-                hasUnknown = true
-                reasons.push(`${rule.label}が未確認です`)
-            } else if (candidateValue !== selectedValue) {
-                if (
-                    selectedCategory === rule.protectedCategory ||
-                    candidateCategory === rule.protectedCategory
-                ) {
-                    selectionBlocked = true
-                    reasons.push(
-                        `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,
-                    )
-                } else {
-                    conflictingSlotKeys.add(selectedSlotKey)
-                    reasons.push(`${rule.label}が一致しません`)
-                }
-            } else {
-                hasCompatible = true
-                reasons.push(`${rule.label}が適合します`)
-            }
+        } else if (result.status === "unknown") {
+            hasUnknown = true
+        } else {
+            hasCompatible = true
         }
     }
 
@@ -627,43 +267,14 @@ export type SelectedPartsCompatibilityIssue = {
 export function evaluateSelectedPartsCompatibility(
     selectedParts: SelectedParts,
 ): SelectedPartsCompatibilityIssue[] {
-    const issues = new Map<string, SelectedPartsCompatibilityIssue>()
-
-    for (const [slotKey, part] of Object.entries(selectedParts)) {
-        const otherParts = Object.fromEntries(
-            Object.entries(selectedParts).filter(([otherSlotKey]) =>
-                otherSlotKey !== slotKey),
-        )
-        const result = evaluatePartCompatibility(
-            part,
-            createPartSlot(
-                getPartSlotCategoryKey(slotKey),
-                getPartSlotPosition(slotKey),
-            ),
-            otherParts,
-        )
-
-        if (!result || result.status === "compatible") {
-            continue
-        }
-
-        const relatedSlotKeys = Array.from(new Set([
+    return findCompatibilityIssues(
+        Object.entries(selectedParts).map(([slotKey, part]) => ({
             slotKey,
-            ...result.conflictingSlotKeys,
-        ])).sort()
-        const reasons = Array.from(new Set(result.reasons)).sort()
-        const key = `${relatedSlotKeys.join("|")}::${reasons.join("|")}`
-        const existing = issues.get(key)
-
-        // 同じパーツ組み合わせを両方向から評価した結果は重要度の高い方へまとめる
-        if (!existing || result.status === "incompatible") {
-            issues.set(key, {
-                status: result.status,
-                reasons,
-                slotKeys: relatedSlotKeys,
-            })
-        }
-    }
-
-    return Array.from(issues.values())
+            part,
+        })),
+    ).map((issue) => ({
+        status: issue.status,
+        reasons: issue.reasons,
+        slotKeys: issue.slotKeys,
+    }))
 }
