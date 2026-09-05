@@ -39,6 +39,29 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.partIds).toEqual([1, 2])
     })
 
+    // 専用フォーク(either接続・ステム非占有)でも、通常ハンドルはスルーせず不一致として検出する。
+    it("専用フォークと規格外の通常ハンドルを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {
+                    cockpit_interface: "cannondale_delta",
+                    cockpit_connection: "either",
+                }),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {
+                    handlebar_clamp_mm: "31.8",
+                }),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["frame", "handlebar"])
+        expect(issues[0]?.partIds).toEqual([1, 2])
+    })
+
     it("前輪と後輪の規格は混ぜずに判定する", () => {
         const issues = findIncompatiblePartPairs([
             {
