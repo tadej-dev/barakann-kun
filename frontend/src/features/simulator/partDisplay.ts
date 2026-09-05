@@ -1,5 +1,4 @@
-import type {Part, PartIncludedItem} from "@/types/part"
-import type {SelectedParts} from "@/features/simulator/simulatorTypes"
+import type {Part} from "@/types/part"
 
 // パーツ選択画面で表示する製品名
 export function getPartDisplayName(
@@ -28,24 +27,6 @@ export function getPartDisplayName(
     }
 
     return productName.slice(brandName.length).trim()
-}
-
-// 占有枠の表示名は、同じカテゴリーの付属品を持つ選択パーツから補う。
-export function findBlockedSlotItem(
-    selectedParts: SelectedParts,
-    categoryKey: string,
-): PartIncludedItem | null {
-    for (const part of Object.values(selectedParts)) {
-        const item = (part.includedItems ?? []).find(
-            (candidate) => candidate.categoryKey === categoryKey,
-        )
-
-        if (item) {
-            return item
-        }
-    }
-
-    return null
 }
 
 // バリエーション・仕様列の表示要否

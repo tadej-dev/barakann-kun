@@ -75,46 +75,6 @@ describe("catalog API", () => {
         )
     })
 
-    // 付属品の重量は完成重量の加算に使うため、そのまま受け取る。
-    it("付属品の重量を検証して返す", async () => {
-        vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
-            ...PART,
-            includedItems: [{
-                name: "Basso Fuga Integrated Handlebar",
-                quantity: 1,
-                categoryKey: "handlebar",
-                weight: 320,
-            }],
-        }])))
-
-        await expect(fetchParts("frame")).resolves.toEqual([{
-            ...PART,
-            includedItems: [{
-                name: "Basso Fuga Integrated Handlebar",
-                quantity: 1,
-                categoryKey: "handlebar",
-                weight: 320,
-            }],
-        }])
-    })
-
-    // 重量が負数なら、合計計算へ進めずレスポンスを拒否する。
-    it("付属品の不正な重量を拒否する", async () => {
-        vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
-            ...PART,
-            includedItems: [{
-                name: "Basso Fuga Integrated Handlebar",
-                quantity: 1,
-                categoryKey: "handlebar",
-                weight: -1,
-            }],
-        }])))
-
-        await expect(fetchParts("frame")).rejects.toThrow(
-            "パーツの付属品情報を解釈できませんでした",
-        )
-    })
-
     // 保存構成の復元で使うID検索が、期待するクエリとレスポンス検証を行う。
     it("ID指定のパーツ一覧を検証する", async () => {
         const fetchMock = vi.fn(async () => jsonResponse([PART]))

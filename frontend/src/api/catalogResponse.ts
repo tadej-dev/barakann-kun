@@ -55,8 +55,7 @@ function parseIncludedItem(value: unknown): PartIncludedItem {
         !isRecord(value) ||
         typeof value.name !== "string" ||
         !isPositiveSafeInteger(value.quantity) ||
-        (value.categoryKey !== null && typeof value.categoryKey !== "string") ||
-        !isNonNegativeFiniteNumber(value.weight)
+        (value.categoryKey !== null && typeof value.categoryKey !== "string")
     ) {
         throw new CatalogResponseError(
             "パーツの付属品情報を解釈できませんでした",
@@ -67,7 +66,6 @@ function parseIncludedItem(value: unknown): PartIncludedItem {
         name: value.name,
         quantity: value.quantity,
         categoryKey: value.categoryKey,
-        weight: value.weight,
     }
 }
 

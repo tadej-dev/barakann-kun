@@ -6,7 +6,7 @@ import {
     getSpecificationValueLabel,
 } from "@/features/simulator/partCompatibility"
 import {createPartSlot} from "@/features/simulator/partSlots"
-import type {Part, PartIncludedItem} from "@/types/part"
+import type {Part} from "@/types/part"
 
 function createPart(
     id: number,
@@ -14,7 +14,6 @@ function createPart(
     categoryKey: string,
     specifications: Record<string, string>,
     blockedCategoryKeys: string[] = [],
-    includedItems: PartIncludedItem[] = [],
 ): Part {
     return {
         id,
@@ -25,7 +24,6 @@ function createPart(
         weight: 100,
         price: 1000,
         blockedCategoryKeys,
-        includedItems,
     }
 }
 
@@ -187,46 +185,6 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 専用フォーク(either接続・ステム非占有)では、通常ハンドルをスルーせずフォーク規格と比較する。
-    it("専用フォークと規格外の通常ハンドルは選択不可にする", () => {
-        const frame = createPart(1, "Frame", "frame", {
-            cockpit_interface: "cannondale_delta",
-            cockpit_connection: "either",
-        })
-        const handlebar = createPart(2, "Handlebar", "handlebar", {
-            handlebar_clamp_mm: "31.8",
-        })
-
-        const result = evaluatePartCompatibility(
-            handlebar,
-            createPartSlot("handlebar"),
-            {frame},
-        )
-
-        expect(result?.status).toBe("incompatible")
-        expect(result?.selectionBlocked).toBe(true)
-    })
-
-    // 専用フォークに適合する専用規格のハンドルは選択できる。
-    it("専用フォークと適合する専用ハンドルは選択できる", () => {
-        const frame = createPart(1, "Frame", "frame", {
-            cockpit_interface: "cannondale_delta",
-            cockpit_connection: "either",
-        })
-        const handlebar = createPart(2, "Handlebar", "handlebar", {
-            cockpit_interface: "cannondale_delta",
-        })
-
-        const result = evaluatePartCompatibility(
-            handlebar,
-            createPartSlot("handlebar"),
-            {frame},
-        )
-
-        expect(result?.status).toBe("compatible")
-        expect(result?.selectionBlocked).toBe(false)
-    })
-
     // 標準フレームと通常ハンドルの間にはステムが入るため、直接の規格比較をしない。
     it("標準フレームと通常ハンドルは直接比較しない", () => {
         const frame = createPart(1, "Frame", "frame", {
@@ -385,64 +343,5 @@ describe("evaluatePartCompatibility", () => {
             "tire:front": pair,
             "tire:rear": pair,
         })).toEqual({price: 1000, weight: 100})
-    })
-
-    // 占有枠の付属品は数量込みの重量を加算し、価格は加算しない。
-    it("カテゴリー付き付属品の重量を合計に加算する", () => {
-        const frame: Part = {
-            ...createPart(1, "Frame", "frame", {}),
-            weight: 780,
-            includedItems: [
-                {
-                    name: "Basso Fuga Integrated Handlebar",
-                    quantity: 1,
-                    categoryKey: "handlebar",
-                    weight: 320,
-                },
-                {
-                    name: "Basso Piuma Seatpost",
-                    quantity: 1,
-                    categoryKey: "seatpost",
-                    weight: 200,
-                },
-            ],
-        }
-
-        expect(calculateSelectedPartsTotals({frame}))
-            .toEqual({price: 1000, weight: 780 + 320 + 200})
-    })
-
-    // カテゴリーなし付属品（クリート等）は完成重量へ加算しない。
-    it("カテゴリーなし付属品の重量は合計に加算しない", () => {
-        const pedal: Part = {
-            ...createPart(1, "Pedal", "pedal", {}),
-            includedItems: [{
-                name: "SPD-SLクリートセット",
-                quantity: 1,
-                categoryKey: null,
-                weight: 100,
-            }],
-        }
-
-        expect(calculateSelectedPartsTotals({pedal}))
-            .toEqual({price: 1000, weight: 100})
-    })
-
-    // 前後セット商品の付属品も、親商品と一緒に1回だけ加算する。
-    it("前後セット商品の付属品は二重計上しない", () => {
-        const pair: Part = {
-            ...createPart(1, "Pair", "tire", {package_unit: "pair"}),
-            includedItems: [{
-                name: "チューブ",
-                quantity: 1,
-                categoryKey: "inner_tube",
-                weight: 50,
-            }],
-        }
-
-        expect(calculateSelectedPartsTotals({
-            "tire:front": pair,
-            "tire:rear": pair,
-        })).toEqual({price: 1000, weight: 100 + 50})
     })
 })

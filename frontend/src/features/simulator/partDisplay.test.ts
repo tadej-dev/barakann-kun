@@ -1,12 +1,10 @@
 import {describe, expect, it} from "vitest"
 
 import {
-    findBlockedSlotItem,
     getPartDisplayName,
     hasPartVariantColumn,
 } from "@/features/simulator/partDisplay"
 import type {Part} from "@/types/part"
-import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 
 function createPart(
     name: string,
@@ -80,51 +78,5 @@ describe("getPartDisplayName", () => {
         expect(hasPartVariantColumn([
             createMetadata(null, {wheel_diameter: "700C"}),
         ])).toBe(true)
-    })
-})
-
-// 占有枠の表示名を、提供元パーツの付属品から補う処理を確認する。
-describe("findBlockedSlotItem", () => {
-    function createSelectedPart(
-        includedItems: Part["includedItems"],
-    ): Part {
-        return {
-            id: 534,
-            name: "Basso SV Frame Kit",
-            brandName: "Basso",
-            weight: 780,
-            price: 1155000,
-            blockedCategoryKeys: ["handlebar", "stem", "seatpost"],
-            includedItems,
-        }
-    }
-
-    // 占有カテゴリーと一致する付属品を提供元パーツから返す。
-    it("同じカテゴリーの付属品を返す", () => {
-        const selectedParts: SelectedParts = {
-            frame: createSelectedPart([{
-                name: "Basso Fuga Integrated Handlebar",
-                quantity: 1,
-                categoryKey: "handlebar",
-                weight: 320,
-            }]),
-        }
-
-        expect(findBlockedSlotItem(selectedParts, "handlebar"))
-            .toEqual({
-                name: "Basso Fuga Integrated Handlebar",
-                quantity: 1,
-                categoryKey: "handlebar",
-                weight: 320,
-            })
-    })
-
-    // 一致する付属品がなければ、呼び出し元で従来表示へ戻せるようnullを返す。
-    it("一致する付属品がなければnullを返す", () => {
-        const selectedParts: SelectedParts = {
-            frame: createSelectedPart([]),
-        }
-
-        expect(findBlockedSlotItem(selectedParts, "handlebar")).toBeNull()
     })
 })

@@ -161,19 +161,11 @@ export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
 
             return {
                 price: totals.price + part.price,
-                weight: totals.weight + part.weight +
-                    sumIncludedItemsWeight(part),
+                weight: totals.weight + part.weight,
             }
         },
         {price: 0, weight: 0},
     )
-}
-
-// カテゴリー付き付属品の重量を数量込みで合計する。価格は加算しない。
-export function sumIncludedItemsWeight(part: Part): number {
-    return (part.includedItems ?? [])
-        .filter((item) => item.categoryKey !== null)
-        .reduce((total, item) => total + item.quantity * item.weight, 0)
 }
 
 export function evaluatePartCompatibility(
