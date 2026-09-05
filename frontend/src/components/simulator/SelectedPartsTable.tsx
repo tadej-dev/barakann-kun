@@ -9,7 +9,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import {getPartDisplayName, findBlockedSlotItem} from "@/features/simulator/partDisplay"
 import {getFrameCockpitStatus} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotPositionLabel,
@@ -105,6 +105,13 @@ export function SelectedPartsTable({
                             const isBlocked = blockedCategoryKeys.has(
                                 category.key,
                             )
+                            // 占有枠には提供元パーツの付属品名を表示する。
+                            const blockedItem = isBlocked
+                                ? findBlockedSlotItem(selectedParts, category.key)
+                                : null
+                            const blockedItemWeight = blockedItem
+                                ? blockedItem.quantity * blockedItem.weight
+                                : 0
                             const frameCockpitStatus = part
                                 ? getFrameCockpitStatus(part)
                                 : null
@@ -159,11 +166,17 @@ export function SelectedPartsTable({
                                                 }`}
                                             >
                                                 {isBlocked
-                                                    ? "解除して選択できます"
+                                                    ? blockedItem?.name ?? "解除して選択できます"
                                                     : part
                                                     ? getPartDisplayName(part)
                                                     : "未選択"}
                                             </span>
+
+                                            {isBlocked && blockedItem && (
+                                                <Badge variant="outline">
+                                                    付属品
+                                                </Badge>
+                                            )}
 
                                             {part &&
                                                 !isBlocked &&
@@ -191,6 +204,8 @@ export function SelectedPartsTable({
                                     <TableCell className="text-left tabular-nums">
                                         {part && !isBlocked
                                             ? `${part.weight.toLocaleString("ja-JP")}g`
+                                            : isBlocked && blockedItemWeight > 0
+                                            ? `${blockedItemWeight.toLocaleString("ja-JP")}g`
                                             : "-"}
                                     </TableCell>
 
