@@ -15,7 +15,10 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
-import {getPartPackageUnit} from "@/features/simulator/partCompatibility"
+import {
+    getPartPackageUnit,
+    sumIncludedItemsWeight,
+} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotCategoryKey,
     getPartSlotPosition,
@@ -51,7 +54,8 @@ function calculateSnapshotTotals(
 
         return {
             price: totals.price + snapshot.price,
-            weight: totals.weight + snapshot.weight,
+            weight: totals.weight + snapshot.weight +
+                (part ? sumIncludedItemsWeight(part) : 0),
         }
     }, {price: 0, weight: 0})
 }

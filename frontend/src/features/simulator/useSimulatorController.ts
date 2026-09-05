@@ -311,12 +311,28 @@ export function useSimulatorController({
                     ]),
                 ) as ConfigStates
 
+                let hadIncompatibleState = false
+
                 for (const configId of CONFIG_IDS) {
                     // 古いlocalStorageからの復元でも、既知の不一致を現行状態へ持ち込まない
-                    assertRestoredPartsAreCompatible(
-                        restoredConfigs[configId],
-                        `構成${configId}`,
-                    )
+                    try {
+                        assertRestoredPartsAreCompatible(
+                            restoredConfigs[configId],
+                            `構成${configId}`,
+                        )
+                    } catch {
+                        // 互換性違反の構成は空にして復元を続行し、他構成の復元を妨げない
+                        restoredConfigs[configId] = {}
+                        hadIncompatibleState = true
+                    }
+                }
+
+                if (hadIncompatibleState) {
+                    // 破棄した構成を保存し直し、次回以降の復元失敗を防ぐ
+                    saveSimulatorState({
+                        activeConfigId: stateToRestore.activeConfigId,
+                        configs: restoredConfigs,
+                    })
                 }
 
                 dispatch({

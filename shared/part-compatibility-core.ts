@@ -186,24 +186,29 @@ function compareCockpitParts(
     selectedCategory: string,
 ): PairCompatibilityResult | null {
     if (hasCategoryPair(candidateCategory, selectedCategory, ["frame", "handlebar"])) {
+        // フォークは独立パーツでなくフレームのcockpit_interfaceとして扱う。
+        // ハンドルがフォーク(フレーム)へ直接付くか、ステムを介して付くかを分岐して判定する。
         const frame = candidateCategory === "frame" ? candidate : selectedPart
         const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
         const frameStatus = getFrameCockpitStatus(frame)
         const cockpitConnection = getSpecification(frame, "cockpit_connection")
 
+        // コックピット付属フレームや規格未確認フレームは、ハンドル側の規格値で比較する。
         if (frameStatus === "included" || frameStatus === "unknown") {
             return compareCockpitInterface(frame, handlebar)
         }
 
+        // 一体型ハンドルはステムを兼ねてフォークへ直結するため、フォーク規格と比較する。
         if (isIntegratedHandlebar(handlebar)) {
             return compareCockpitInterface(frame, handlebar)
         }
 
-        // 付属する専用ステムへ通常ハンドルを組み付ける車種は、フレームに登録したクランプ径で判定する。
+        // フレームに専用ステムが付属する車種では、そのステムへ通常ハンドルをクランプ径で組み付ける。
         if ((frame.blockedCategoryKeys ?? []).includes("stem")) {
             return compareHandlebarClamp(frame, handlebar)
         }
 
+        // 一体型コックピット専用フレームは、通常ハンドルを組み付けられない。
         if (cockpitConnection === "integrated_only") {
             return {
                 status: "incompatible",
@@ -211,7 +216,13 @@ function compareCockpitParts(
             }
         }
 
-        // 通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する。
+        // 専用フォーク(cockpit_interfaceが専用規格)のフレームは、ステムもハンドルも専用規格を要求する。
+        // 通常ハンドルをスルーせず、フォーク規格と一致するハンドルだけを許可する。
+        if (frameStatus === "dedicated") {
+            return compareCockpitInterface(frame, handlebar)
+        }
+
+        // 標準フォークの通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する。
         return null
     }
 

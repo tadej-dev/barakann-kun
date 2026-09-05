@@ -25,6 +25,7 @@ type IncludedItemRow = {
     item_name: string
     quantity: number
     category_key: string | null
+    weight: number
 }
 
 type BlockedCategoryRow = {
@@ -162,6 +163,7 @@ export class D1CatalogRepository implements CatalogRepository {
                     `SELECT items.part_id,
                             items.item_name,
                             items.quantity,
+                            items.weight,
                             categories.key AS category_key
                      FROM part_included_items AS items
                      LEFT JOIN categories
@@ -196,6 +198,7 @@ export class D1CatalogRepository implements CatalogRepository {
                     name: row.item_name,
                     quantity: row.quantity,
                     categoryKey: row.category_key,
+                    weight: row.weight,
                 })
                 includedItems.set(row.part_id, items)
 
