@@ -658,6 +658,7 @@ INSERT INTO parts (price, weight, brand_id, category_id, created_at, id, price_u
 INSERT INTO parts (price, weight, brand_id, category_id, created_at, id, price_updated_at, updated_at, model_name, name, variant_name, description) VALUES (396000, 850, 88, 1, CURRENT_TIMESTAMP, 538, '2026-08-22 00:00:00', CURRENT_TIMESTAMP, 'X-LAB AD9 Frameset', 'X-LAB AD9 Frameset', NULL, '専用エアロシートポスト付属。ハンドルは付属しません。重量はフレーム単体の公称代表値です');
 INSERT INTO parts (price, weight, brand_id, category_id, created_at, id, price_updated_at, updated_at, model_name, name, variant_name, description) VALUES (308000, 900, 89, 1, CURRENT_TIMESTAMP, 539, '2026-08-22 00:00:00', CURRENT_TIMESTAMP, 'Winspace M6 Frameset', 'Winspace M6 Frameset', NULL, '専用エアロシートポスト付属。重量はMサイズのフレーム単体公称値です');
 INSERT INTO parts (price, weight, brand_id, category_id, created_at, id, price_updated_at, updated_at, model_name, name, variant_name, description) VALUES (345000, 740, 90, 1, CURRENT_TIMESTAMP, 540, '2026-08-22 00:00:00', CURRENT_TIMESTAMP, 'Pardus Robin EVO Frameset', 'Pardus Robin EVO Frameset', NULL, '専用カーボンシートポスト付属。価格は国内販売店の参考価格、重量はMサイズのフレーム単体公称値です');
+INSERT INTO parts (price, weight, brand_id, category_id, created_at, id, price_updated_at, updated_at, model_name, name, variant_name, description) VALUES (880000, 687, 5, 1, CURRENT_TIMESTAMP, 541, '2026-09-06 00:00:00', CURRENT_TIMESTAMP, 'Specialized Tarmac SL9', 'Specialized Tarmac SL9', NULL, 'S-Works Rapide Post付属。重量はフレーム単体の公称値です');
 
 -- 選択不可カテゴリー
 INSERT INTO part_blocked_categories (category_id, part_id) VALUES (16, 1);
@@ -917,6 +918,7 @@ INSERT INTO part_blocked_categories (part_id, category_id) VALUES (537, 19);
 INSERT INTO part_blocked_categories (part_id, category_id) VALUES (538, 19);
 INSERT INTO part_blocked_categories (part_id, category_id) VALUES (539, 19);
 INSERT INTO part_blocked_categories (part_id, category_id) VALUES (540, 19);
+INSERT INTO part_blocked_categories (part_id, category_id) VALUES (541, 19);
 
 -- 付属品
 INSERT INTO part_included_items (quantity, created_at, id, included_category_id, part_id, updated_at, item_name) VALUES (1, CURRENT_TIMESTAMP, 1, 17, 87, CURRENT_TIMESTAMP, 'ステム');
@@ -991,6 +993,7 @@ INSERT INTO part_included_items (part_id, item_name, quantity, included_category
 INSERT INTO part_included_items (part_id, item_name, quantity, included_category_id, created_at, updated_at) VALUES (538, 'X-LAB AD9 Aero Carbon Seatpost', 1, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_included_items (part_id, item_name, quantity, included_category_id, created_at, updated_at) VALUES (539, 'Winspace M6 Aero Carbon Seatpost', 1, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_included_items (part_id, item_name, quantity, included_category_id, created_at, updated_at) VALUES (540, 'Pardus Robin EVO Carbon Seatpost', 1, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_included_items (part_id, item_name, quantity, included_category_id, created_at, updated_at) VALUES (541, 'S-Works Rapide Post', 1, 19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- 規格情報
 INSERT INTO part_specifications (created_at, id, part_id, updated_at, spec_key, spec_value) VALUES (CURRENT_TIMESTAMP, 1, 129, CURRENT_TIMESTAMP, 'wheel_diameter', '700C');
@@ -1626,3 +1629,5 @@ INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, upda
 INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at) VALUES (540, 'cockpit_interface', 'pardus_robin_evo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at) VALUES (540, 'cockpit_connection', 'integrated_only', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at) VALUES (540, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at) VALUES (541, 'cockpit_interface', 'standard_1_1_8', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (part_id, spec_key, spec_value, created_at, updated_at) VALUES (541, 'cockpit_connection', 'either', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

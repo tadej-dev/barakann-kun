@@ -86,6 +86,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     basso_sv_fuga: "Basso SV Fuga専用",
     bianchi_oltre_rc: "Bianchi Oltre RC専用",
     bianchi_specialissima_rc: "Bianchi Specialissima RC対応",
+    bsa: "BSA（ねじ切り）",
     cube_litening_c68x: "CUBE Litening C:68X専用",
     mechanical: "機械式",
     pair: "前後セット",

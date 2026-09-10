@@ -39,6 +39,14 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("Shimano ロード用フラットマウント形状")
     })
 
+    // BSAシェル規格を追加したBBの表示に対応する。
+    it("BSAシェル規格を表示名へ変換する", () => {
+        expect(getSpecificationValueLabel(
+            "bb_standard",
+            "bsa",
+        )).toBe("BSA（ねじ切り）")
+    })
+
     // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする。
     it("タイヤ幅がチューブの対応範囲内なら適合する", () => {
         const tire = createPart(1, "Tire", "tire", {
