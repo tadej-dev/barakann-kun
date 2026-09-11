@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import type {CompatibilityResult} from "@/features/simulator/partCompatibility"
 import type { Part } from "@/types/part"
 
 // 並び替え対象
@@ -15,7 +16,10 @@ export type CandidatePartsSortDescriptor = {
 const ALL_BRANDS = "all"
 
 // 候補パーツ表の状態管理
-export function useCandidatePartsTable(parts: Part[]) {
+export function useCandidatePartsTable(
+    parts: Part[],
+    compatibilityByPartId: ReadonlyMap<number, CompatibilityResult | null>,
+) {
     // 並び替え状態
     const [sortDescriptor, setSortDescriptor] =
         useState<CandidatePartsSortDescriptor>({
@@ -31,6 +35,16 @@ export function useCandidatePartsTable(parts: Part[]) {
     // ステム一体型フィルター
     const [integratedHandlebarOnly, setIntegratedHandlebarOnly] =
         useState(false)
+
+    // 非互換パーツの非表示フィルター
+    const [hideIncompatible, setHideIncompatible] = useState(false)
+
+    // 非互換の候補が存在するかどうか
+    const hasIncompatibleParts = useMemo(() => {
+        return parts.some((part) =>
+            compatibilityByPartId.get(part.id)?.status === "incompatible",
+        )
+    }, [compatibilityByPartId, parts])
 
     // 一体型ハンドルの有無
     const hasIntegratedHandlebars = useMemo(() => {
@@ -57,6 +71,7 @@ export function useCandidatePartsTable(parts: Part[]) {
         : ALL_BRANDS
     const effectiveIntegratedHandlebarOnly = integratedHandlebarOnly &&
         hasIntegratedHandlebars
+    const effectiveHideIncompatible = hideIncompatible && hasIncompatibleParts
 
     // 絞り込み・並び替え後の候補パーツ
     const filteredAndSortedParts = useMemo(() => {
@@ -85,9 +100,14 @@ export function useCandidatePartsTable(parts: Part[]) {
                 !effectiveIntegratedHandlebarOnly ||
                 (part.blockedCategoryKeys ?? []).includes("stem")
 
+            const matchesCompatibility =
+                !effectiveHideIncompatible ||
+                compatibilityByPartId.get(part.id)?.status !== "incompatible"
+
             return matchesName &&
                 matchesBrand &&
-                matchesIntegratedHandlebar
+                matchesIntegratedHandlebar &&
+                matchesCompatibility
         })
 
         // 選択中の列と方向による並び替え
@@ -125,6 +145,8 @@ export function useCandidatePartsTable(parts: Part[]) {
         })
     }, [
         parts,
+        compatibilityByPartId,
+        effectiveHideIncompatible,
         effectiveIntegratedHandlebarOnly,
         effectiveSelectedBrand,
         searchQuery,
@@ -147,17 +169,21 @@ export function useCandidatePartsTable(parts: Part[]) {
     // 検索条件の有無
     const hasActiveFilters = searchQuery.trim() !== "" ||
         effectiveSelectedBrand !== ALL_BRANDS ||
-        effectiveIntegratedHandlebarOnly
+        effectiveIntegratedHandlebarOnly ||
+        effectiveHideIncompatible
 
     return {
         brands,
         changeSort,
         filteredAndSortedParts,
         hasActiveFilters,
+        hasIncompatibleParts,
         hasIntegratedHandlebars,
+        hideIncompatible: effectiveHideIncompatible,
         integratedHandlebarOnly: effectiveIntegratedHandlebarOnly,
         searchQuery,
         selectedBrand: effectiveSelectedBrand,
+        setHideIncompatible,
         setIntegratedHandlebarOnly,
         setSearchQuery,
         setSelectedBrand,

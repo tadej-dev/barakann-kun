@@ -68,21 +68,39 @@ export function CandidatePartsTable({
                                         onSelect,
                                         onRemoveBlockingParts,
                                     }: CandidatePartsTableProps) {
+    // 検索条件が変わっても適合判定を再計算せず、パーツ選択時だけ更新
+    // 規格判定はフィルター結果ではなく元の候補一覧を対象にし、行表示時の参照をO(1)にする。
+    const compatibilityByPartId = useMemo(() => {
+        const result = new Map<number, CompatibilityResult | null>()
+
+        for (const part of parts) {
+            result.set(
+                part.id,
+                evaluatePartCompatibility(part, activeSlot, selectedParts),
+            )
+        }
+
+        return result
+    }, [activeSlot, parts, selectedParts])
+
     // 候補パーツ表の状態・表示データ
     const {
         brands,
         changeSort,
         filteredAndSortedParts,
         hasActiveFilters,
+        hasIncompatibleParts,
         hasIntegratedHandlebars,
+        hideIncompatible,
         integratedHandlebarOnly,
         searchQuery,
         selectedBrand,
+        setHideIncompatible,
         setIntegratedHandlebarOnly,
         setSearchQuery,
         setSelectedBrand,
         sortDescriptor,
-    } = useCandidatePartsTable(parts)
+    } = useCandidatePartsTable(parts, compatibilityByPartId)
     const showVariantColumn = hasPartVariantColumn(parts)
 
     const {
@@ -100,20 +118,6 @@ export function CandidatePartsTable({
     const supportsFrontRearSelection = categorySlots.length === 2
     const enableContentVisibility = filteredAndSortedParts.length >=
         CONTENT_VISIBILITY_THRESHOLD
-    // 検索条件が変わっても適合判定を再計算せず、パーツ選択時だけ更新
-    // 規格判定はフィルター結果ではなく元の候補一覧を対象にし、行表示時の参照をO(1)にする。
-    const compatibilityByPartId = useMemo(() => {
-        const result = new Map<number, CompatibilityResult | null>()
-
-        for (const part of parts) {
-            result.set(
-                part.id,
-                evaluatePartCompatibility(part, activeSlot, selectedParts),
-            )
-        }
-
-        return result
-    }, [activeSlot, parts, selectedParts])
 
     // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする
     // フレームが未選択の間は、他カテゴリーの候補を操作させず基準パーツの選択へ戻す。
@@ -188,10 +192,13 @@ export function CandidatePartsTable({
                 searchQuery={searchQuery}
                 integratedHandlebarOnly={integratedHandlebarOnly}
                 showIntegratedHandlebarFilter={hasIntegratedHandlebars}
+                hideIncompatible={hideIncompatible}
+                showIncompatibleFilter={hasIncompatibleParts}
                 resultCount={filteredAndSortedParts.length}
                 onBrandChange={setSelectedBrand}
                 onSearchQueryChange={setSearchQuery}
                 onIntegratedHandlebarOnlyChange={setIntegratedHandlebarOnly}
+                onHideIncompatibleChange={setHideIncompatible}
             />
 
             <div

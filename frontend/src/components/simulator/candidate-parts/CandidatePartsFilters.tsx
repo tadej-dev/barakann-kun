@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import {BrandSelect} from "@/components/simulator/candidate-parts/BrandSelect"
 
 type CandidatePartsFiltersProps = {
@@ -8,10 +9,13 @@ type CandidatePartsFiltersProps = {
     searchQuery: string
     integratedHandlebarOnly: boolean
     showIntegratedHandlebarFilter: boolean
+    hideIncompatible: boolean
+    showIncompatibleFilter: boolean
     resultCount: number
     onBrandChange: (brand: string) => void
     onSearchQueryChange: (query: string) => void
     onIntegratedHandlebarOnlyChange: (checked: boolean) => void
+    onHideIncompatibleChange: (checked: boolean) => void
 }
 
 // 候補パーツの絞り込み欄
@@ -21,10 +25,13 @@ export function CandidatePartsFilters({
     searchQuery,
     integratedHandlebarOnly,
     showIntegratedHandlebarFilter,
+    hideIncompatible,
+    showIncompatibleFilter,
     resultCount,
     onBrandChange,
     onSearchQueryChange,
     onIntegratedHandlebarOnlyChange,
+    onHideIncompatibleChange,
 }: CandidatePartsFiltersProps) {
     // ブランド・製品名・一体型ハンドルの条件を同じ候補状態へ渡し、表側で一括して再計算する。
     return (
@@ -51,6 +58,16 @@ export function CandidatePartsFilters({
                         onCheckedChange={onIntegratedHandlebarOnlyChange}
                     />
                     ステム一体型のみ
+                </label>
+            )}
+
+            {showIncompatibleFilter && (
+                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
+                    <Switch
+                        checked={hideIncompatible}
+                        onCheckedChange={onHideIncompatibleChange}
+                    />
+                    非互換を非表示
                 </label>
             )}
 
