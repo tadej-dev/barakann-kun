@@ -10,6 +10,7 @@ function jsonResponse(value: unknown, status = 200) {
     })
 }
 
+// レスポンス検証の条件だけをテスト側で変えられるよう、最小のパーツを用意する。
 const PART = {
     id: 1,
     name: "Frame",
@@ -45,18 +46,12 @@ describe("catalog API", () => {
         }])
     })
 
-    // 配列以外のJSONは、成功ステータスでも壊れたカタログとして拒否する。
-    it("カテゴリー一覧の不正なJSONを拒否する", async () => {
-        vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({items: []})))
-
-        await expect(fetchCategories()).rejects.toThrow(
-            "カテゴリー一覧のレスポンスを解釈できませんでした",
-        )
-    })
-
-    // Content-Typeや本文が期待形式でない場合に、画面へ曖昧な値を渡さない。
-    it("JSONでない成功レスポンスを拒否する", async () => {
-        vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json")))
+    // 成功ステータスでも、配列以外のJSONやJSONでない本文は壊れたカタログとして拒否する。
+    it.each([
+        ["配列以外のJSON", () => jsonResponse({items: []})],
+        ["JSONでない本文", () => new Response("not-json")],
+    ])("カテゴリー一覧の%sを拒否する", async (_label, responseFactory) => {
+        vi.stubGlobal("fetch", vi.fn(async () => responseFactory()))
 
         await expect(fetchCategories()).rejects.toThrow(
             "カテゴリー一覧のレスポンスを解釈できませんでした",

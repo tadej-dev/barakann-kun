@@ -62,9 +62,11 @@ function cookieHeader(response: Response): string {
 async function runCallback(issuer?: string): Promise<Response> {
     const app = createApp({authAdapter: adapter()})
     const env = bindings()
+    // CSRFトークンを取得し、以降のPOSTをAuth.jsの検証へ通す。
     const csrf = await app.request("/api/auth/csrf", {}, env)
     const csrfPayload = await csrf.json() as {csrfToken: string}
     const csrfCookie = csrf.headers.get("set-cookie")?.split(";", 1)[0] ?? ""
+    // サインインを開始し、stateとPKCE検証用Cookieを受け取る。
     const signin = await app.request(
         "/api/auth/signin/google",
         {
@@ -107,6 +109,7 @@ async function runCallback(issuer?: string): Promise<Response> {
         throw new Error(`Unexpected fetch: ${url}`)
     }))
 
+    // サインイン時に発行されたstateを引き継ぎ、issuerの有無だけを切り替えてコールバックを叩く。
     const callbackParams = new URLSearchParams({
         code: "test-code",
         state: location.searchParams.get("state") ?? "",
@@ -128,15 +131,13 @@ async function runCallback(issuer?: string): Promise<Response> {
 }
 
 describe("Google authentication callback", () => {
-    it("accepts a callback without an issuer response parameter", async () => {
-        const callback = await runCallback()
-
-        expect(callback.status).toBe(302)
-        expect(callback.headers.get("location")).toContain("/simulator")
-    })
-
-    it("accepts Google's issuer response parameter", async () => {
-        const callback = await runCallback("https://accounts.google.com")
+    // Googleはissuerレスポンスパラメータ(iss)を付与する場合がある。
+    // 有無どちらでも同じ戻り先へリダイレクトできることを固定する。
+    it.each([
+        ["issuerなし", undefined],
+        ["Googleのissuer付き", "https://accounts.google.com"],
+    ])("%sのコールバックを受け付ける", async (_label, issuer) => {
+        const callback = await runCallback(issuer)
 
         expect(callback.status).toBe(302)
         expect(callback.headers.get("location")).toContain("/simulator")

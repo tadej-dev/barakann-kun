@@ -5,6 +5,7 @@ import {
     createInitialSimulatorState,
     simulatorReducer,
 } from "@/features/simulator/simulatorReducer"
+import type {SimulatorState} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
 function createPart(
@@ -23,6 +24,7 @@ function createPart(
 }
 
 // 構成切り替え・パーツ選択・排他解除が状態遷移として正しく適用されることを確認する。
+// UIから渡された操作だけで状態が組み替わり、Reducerが排他ルールを一元的に守ることを固定する。
 describe("simulatorReducer", () => {
     // 前後選択可能なカテゴリーを開いた直後は、前輪を操作対象にする。
     it("前後カテゴリーは前輪スロットを初期表示する", () => {
@@ -33,33 +35,34 @@ describe("simulatorReducer", () => {
         )
     })
 
-    // 固定構成へ切り替えた後は、前の構成で選んでいたカテゴリーを引き継がない。
-    it("固定構成を切り替えるとフレーム選択へ戻る", () => {
+    // 固定構成・追加構成のどちらへ切り替えても、前の構成で選んでいたカテゴリーは
+    // 引き継がず、規格の基準となるフレーム選択へ戻す。
+    it.each([
+        [
+            "固定構成",
+            (state: SimulatorState) => simulatorReducer(state, {
+                type: "changeConfig",
+                configId: "2",
+            }),
+        ],
+        [
+            "追加構成",
+            (state: SimulatorState) => simulatorReducer(state, {
+                type: "selectSavedBuild",
+                buildId: "build-1",
+                parts: {},
+            }),
+        ],
+    ])("%sを切り替えるとフレーム選択へ戻る", (_label, transition) => {
+        // フレーム以外を選んだ状態から切り替えても、開始点はフレームに戻る。
         let state = createInitialSimulatorState("frame")
 
         state = simulatorReducer(state, {
             type: "changeSlot",
             slot: createPartSlot("wheel"),
         })
-        state = simulatorReducer(state, {
-            type: "changeConfig",
-            configId: "2",
-        })
 
-        expect(state.activeSlot).toEqual(createPartSlot("frame"))
-    })
-
-    // 追加構成へ切り替えた後も、規格の基準となるフレームから選択を始める。
-    it("追加構成を切り替えるとフレーム選択へ戻る", () => {
-        let state = createInitialSimulatorState("wheel")
-
-        state = simulatorReducer(state, {
-            type: "selectSavedBuild",
-            buildId: "build-1",
-            parts: {},
-        })
-
-        expect(state.activeSlot).toEqual(createPartSlot("frame"))
+        expect(transition(state).activeSlot).toEqual(createPartSlot("frame"))
     })
 
     // 追加構成をアクティブにした後の選択は、固定枠ではなくその構成へ保存する。

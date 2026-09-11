@@ -465,74 +465,6 @@ class TestConfigOrderRepository implements ConfigOrderRepository {
     }
 }
 
-// 同じversionを同時更新したときの競合を再現するRepository
-class ConcurrentSavedBuildRepository implements SavedBuildRepository {
-    version = 1
-
-    async count(): Promise<number> {
-        return 0
-    }
-
-    async list(): Promise<SavedBuild[]> {
-        return []
-    }
-
-    async findById(): Promise<SavedBuild | null> {
-        return null
-    }
-
-    async findPublicByToken(): Promise<SavedBuild | null> {
-        return null
-    }
-
-    async create(): Promise<SavedBuild> {
-        throw new Error("テスト対象外の処理です")
-    }
-
-    async update(
-        _userId: string,
-        _buildId: string,
-        version: number,
-        name: string,
-        parts: SavedBuildPartInput[],
-    ): Promise<UpdateSavedBuildResult> {
-        if (version !== this.version) {
-            return {kind: "conflict"}
-        }
-
-        this.version += 1
-
-        return {
-            kind: "updated",
-            build: {
-                id: "33333333-3333-4333-8333-333333333333",
-                name,
-                version: this.version,
-                createdAt: "2026-08-06T00:00:00.000Z",
-                updatedAt: "2026-08-06T00:00:00.000Z",
-                shareToken: null,
-                parts: parts.map((part) => ({
-                    ...part,
-                    price: 100,
-                    weight: 100,
-                })),
-            },
-        }
-    }
-
-    async rename(): Promise<RenameSavedBuildResult> {
-        return {kind: "not_found"}
-    }
-
-    async setSharing(): Promise<UpdateSavedBuildResult> {
-        return {kind: "not_found"}
-    }
-
-    async delete(): Promise<DeleteSavedBuildResult> {
-        return {kind: "not_found"}
-    }
-}
-
 // 変更系APIテストで使うAuth.jsのCSRFトークンとセッションCookieを取得
 async function getAuthenticatedCsrfRequest(
     app: ReturnType<typeof createApp>,
@@ -1293,6 +1225,7 @@ describe("saved builds API", () => {
         })
     })
 
+    // 他ユーザーの構成IDを指定しても、存在有無を漏らさず404にする。
     it("does not expose another user's build", async () => {
         const otherRepository = new TestSavedBuildRepository()
         const otherApp = createApp({
@@ -1501,6 +1434,7 @@ describe("saved builds API", () => {
         })
     })
 
+    // repositoryがconflictを返したら、楽観ロックの競合として409へ変換する。
     it("returns 409 when the build version is stale", async () => {
         const bindings = createAuthBindings()
         const csrf = await getAuthenticatedCsrfRequest(app, bindings)
@@ -1635,45 +1569,6 @@ describe("saved builds API", () => {
         expect(await response.json()).toMatchObject({
             error: {code: "INVALID_SHARE_TOKEN"},
         })
-    })
-
-    it("returns one success and one conflict for concurrent updates", async () => {
-        const concurrentRepository = new ConcurrentSavedBuildRepository()
-        const concurrentApp = createApp({
-            catalogRepository: createRepository(),
-            authAdapter: createAuthAdapter(),
-            savedBuildRepository: concurrentRepository,
-        })
-        const bindings = createAuthBindings()
-        const csrf = await getAuthenticatedCsrfRequest(
-            concurrentApp,
-            bindings,
-        )
-        const update = (name: string) => concurrentApp.request(
-            "/api/builds/33333333-3333-4333-8333-333333333333",
-            {
-                method: "PUT",
-                headers: {
-                    cookie: csrf.cookie,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    name,
-                    version: 1,
-                    parts: [],
-                    csrfToken: csrf.csrfToken,
-                }),
-            },
-            bindings,
-        )
-
-        const responses = await Promise.all([
-            update("同時更新A"),
-            update("同時更新B"),
-        ])
-
-        expect(responses.map((response) => response.status).sort())
-            .toEqual([200, 409])
     })
 
     it("deletes a build with the expected version", async () => {

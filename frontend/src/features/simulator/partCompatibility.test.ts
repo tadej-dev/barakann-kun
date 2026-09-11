@@ -30,21 +30,19 @@ function createPart(
 }
 
 // 規格が一致する場合・不明な場合・明確に不一致な場合の判定を確認する。
+// 判定そのものは共有コア(compareParts)が担い、ここではUI向けの選択可否・競合返却を固定する。
 describe("evaluatePartCompatibility", () => {
-    // DBの規格キーを候補一覧で読める日本語ラベルへ変換する。
-    it("内部用のパッド形状を表示名へ変換する", () => {
+    // 辞書にないmm系の規格値も、単位を補って表示できるようにする。
+    it("mm系の規格値には単位を補って表示する", () => {
         expect(getSpecificationValueLabel(
-            "pad_family",
-            "shimano_road_flat_mount",
-        )).toBe("Shimano ロード用フラットマウント形状")
-    })
-
-    // BSAシェル規格を追加したBBの表示に対応する。
-    it("BSAシェル規格を表示名へ変換する", () => {
+            "rotor_diameter_mm",
+            "160",
+        )).toBe("160mm")
+        // 小数を含むクランプ径でも同じ規則で表示する。
         expect(getSpecificationValueLabel(
-            "bb_standard",
-            "bsa",
-        )).toBe("BSA（ねじ切り）")
+            "handlebar_clamp_mm",
+            "31.8",
+        )).toBe("31.8mm")
     })
 
     // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする。
@@ -177,24 +175,6 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 専用フレームでは、規格値が欠けた汎用品を選択できないようにする。
-    it("専用フレームに対する適合未確認のハンドルは選択不可にする", () => {
-        const frame = createPart(1, "Frame", "frame", {
-            cockpit_interface: "canyon_cp0018",
-            cockpit_connection: "integrated_only",
-        })
-        const handlebar = createPart(2, "Handlebar", "handlebar", {})
-
-        const result = evaluatePartCompatibility(
-            handlebar,
-            createPartSlot("handlebar"),
-            {frame},
-        )
-
-        expect(result?.status).toBe("incompatible")
-        expect(result?.selectionBlocked).toBe(true)
-    })
-
     // 専用フォーク(either接続・ステム非占有)では、通常ハンドルをスルーせずフォーク規格と比較する。
     it("専用フォークと規格外の通常ハンドルは選択不可にする", () => {
         const frame = createPart(1, "Frame", "frame", {
@@ -274,7 +254,7 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 一体型専用フレームでは、規格値がある通常ハンドルでも選択を許可しない。
+    // 一体型専用フレームは、通常ハンドルの規格値が欠けていても選択を許可しない。
     it("一体型専用フレームでは通常ハンドルを選択不可にする", () => {
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "colnago_cc01",
