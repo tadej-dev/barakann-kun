@@ -8,6 +8,21 @@ import {migrateLegacyPartSlotSelections} from "@/features/simulator/partSlots"
 const STORAGE_KEY = "barakann-simulator-configs-v2"
 const LEGACY_STORAGE_KEY = "barakann-simulator-configs-v1"
 
+// フリーボディ統合で削除した旧パーツIDと、残したIDの対応。
+const PART_ID_ALIASES: Record<number, number> = {
+    442: 441,
+    444: 443,
+    446: 445,
+    448: 447,
+    450: 449,
+    452: 451,
+}
+
+// 旧IDは残したIDへ読み替え、保存済み選択の消失を防ぐ。
+function resolvePartId(partId: number) {
+    return PART_ID_ALIASES[partId] ?? partId
+}
+
 type StoredSelections = Record<string, number>
 type StoredConfigStates = Record<ConfigId, StoredSelections>
 
@@ -83,7 +98,9 @@ function parseStoredState(value: string): StoredSimulatorState | null {
                             // 旧形式ではパーツ全体が保存されるため、IDだけを抽出して現行形式へ揃える。
                             const partId = getStoredPartId(storedPart)
 
-                            return partId === null ? [] : [[slotKey, partId]]
+                            return partId === null
+                                ? []
+                                : [[slotKey, resolvePartId(partId)]]
                         },
                     ),
                 ) as StoredSelections

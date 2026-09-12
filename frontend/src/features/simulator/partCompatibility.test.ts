@@ -45,6 +45,14 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("31.8mm")
     })
 
+    // 複数対応の規格値は、各値を日本語ラベルで並べて表示する。
+    it("複数対応の規格値を並べて表示する", () => {
+        expect(getSpecificationValueLabel(
+            "freehub_body",
+            "shimano_hg,sram_xdr,campagnolo_n3w",
+        )).toBe("Shimano HG／SRAM XDR／Campagnolo N3W")
+    })
+
     // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする。
     it("タイヤ幅がチューブの対応範囲内なら適合する", () => {
         const tire = createPart(1, "Tire", "tire", {
@@ -361,6 +369,42 @@ describe("evaluatePartCompatibility", () => {
 
         expect(result?.status).toBe("incompatible")
         expect(result?.reasons).toContain("ローター取付方式が一致しません")
+    })
+
+    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを適合とする。
+    it("複数フリーボディ対応のホイールは集合内のカセットを適合とする", () => {
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "shimano_hg,sram_xdr",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xdr",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 対応集合に含まれないカセットは非互換とする。
+    it("複数フリーボディ対応のホイールでも集合外のカセットは非互換にする", () => {
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "shimano_hg,sram_xdr",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "campagnolo_n3w",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
     })
 
     // 同じペア商品を前後スロットに置いても、価格・重量を二重計上しない。

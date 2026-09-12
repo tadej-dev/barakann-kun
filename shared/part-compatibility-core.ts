@@ -61,6 +61,15 @@ function getSpecification(part: CompatibilityInput, key: string) {
     return part.specifications?.[key]
 }
 
+// カンマ区切りの規格値は、いずれか一致すれば適合とみなす。
+// 複数フリーボディ対応など、1パーツが複数規格に跨るケースを表現する。
+function specificationValuesMatch(first: string, second: string) {
+    const firstValues = first.split(",").map((value) => value.trim()).filter(Boolean)
+    const secondValues = second.split(",").map((value) => value.trim()).filter(Boolean)
+
+    return firstValues.some((value) => secondValues.includes(value))
+}
+
 function hasCategoryPair(
     firstCategory: string,
     secondCategory: string,
@@ -359,7 +368,7 @@ export function compareParts(
             }
         }
 
-        if (candidateValue === selectedValue) {
+        if (specificationValuesMatch(candidateValue, selectedValue)) {
             return {
                 status: "compatible",
                 reasons: [`${rule.label}が適合します`],

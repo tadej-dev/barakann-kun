@@ -132,13 +132,28 @@ export function getSpecificationLabel(key: string) {
     return SPECIFICATION_LABELS[key] ?? key
 }
 
-export function getSpecificationValueLabel(key: string, value: string) {
+// 単一の規格値を表示用ラベルへ変換する。
+function getSingleSpecificationValueLabel(key: string, value: string) {
     // 定義済みの値は日本語化し、mm系だけ単位を補って表示する。
     if (SPECIFICATION_VALUE_LABELS[value]) {
         return SPECIFICATION_VALUE_LABELS[value]
     }
 
     return key.endsWith("_mm") ? `${value}mm` : value
+}
+
+export function getSpecificationValueLabel(key: string, value: string) {
+    // 複数対応の値は、各規格を日本語化して並べて表示する。
+    if (value.includes(",")) {
+        return value
+            .split(",")
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .map((part) => getSingleSpecificationValueLabel(key, part))
+            .join("／")
+    }
+
+    return getSingleSpecificationValueLabel(key, value)
 }
 
 export function getPartPackageUnit(part: Part) {

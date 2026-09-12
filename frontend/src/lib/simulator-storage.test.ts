@@ -97,6 +97,21 @@ describe("simulator-storage", () => {
         expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
     })
 
+    // 統合で削除した旧パーツIDは、残したIDへ読み替えて復元する。
+    it("統合前の旧パーツIDを残したIDへ読み替える", () => {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            activeConfigId: "1",
+            configs: {
+                "1": {wheel: 442},
+                "2": {},
+                "3": {},
+                "4": {},
+            },
+        }))
+
+        expect(loadSimulatorState()?.configs["1"]).toEqual({wheel: 441})
+    })
+
     // Safariの制限やプライベートモードでも、シミュレーター自体は操作できるようにする。
     it("Storageへアクセスできない環境でも例外を画面へ伝播しない", () => {
         Object.defineProperty(window, "localStorage", {

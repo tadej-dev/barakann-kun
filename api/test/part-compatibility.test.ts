@@ -86,6 +86,46 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.slotKeys).toEqual(["tire:front", "wheel"])
     })
 
+    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを許可する。
+    it("複数フリーボディ対応のホイールは集合内のカセットを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {
+                    freehub_body: "shimano_hg,sram_xdr",
+                }),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {freehub_body: "sram_xdr"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 対応集合に含まれないカセットは保存不可として検出する。
+    it("複数フリーボディ対応でも集合外のカセットを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {
+                    freehub_body: "shimano_hg,sram_xdr",
+                }),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {
+                    freehub_body: "campagnolo_n3w",
+                }),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["cassette", "wheel"])
+        expect(issues[0]?.partIds).toEqual([2, 1])
+    })
+
     // 規格が未登録の組み合わせは、適合不明として保存を許可する。
     it("規格が未登録の組み合わせは保存拒否対象にしない", () => {
         const issues = findIncompatiblePartPairs([
