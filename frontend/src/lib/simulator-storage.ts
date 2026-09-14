@@ -18,11 +18,6 @@ const PART_ID_ALIASES: Record<number, number> = {
     452: 451,
 }
 
-// 旧IDは残したIDへ読み替え、保存済み選択の消失を防ぐ。
-function resolvePartId(partId: number) {
-    return PART_ID_ALIASES[partId] ?? partId
-}
-
 type StoredSelections = Record<string, number>
 type StoredConfigStates = Record<ConfigId, StoredSelections>
 
@@ -100,7 +95,7 @@ function parseStoredState(value: string): StoredSimulatorState | null {
 
                             return partId === null
                                 ? []
-                                : [[slotKey, resolvePartId(partId)]]
+                                : [[slotKey, PART_ID_ALIASES[partId] ?? partId]]
                         },
                     ),
                 ) as StoredSelections

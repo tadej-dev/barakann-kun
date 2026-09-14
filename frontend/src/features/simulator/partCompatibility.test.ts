@@ -371,6 +371,25 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.reasons).toContain("ローター取付方式が一致しません")
     })
 
+    // 650Bホイールに700Cタイヤは装着できないため非互換にする。
+    it("ホイール径が異なるタイヤは競合として扱う", () => {
+        const wheel = createPart(1, "Wheel", "wheel", {
+            wheel_diameter: "650B",
+        })
+        const tire = createPart(2, "Tire", "tire", {
+            wheel_diameter: "700C",
+            tire_width_mm: "28",
+        })
+
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
     // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを適合とする。
     it("複数フリーボディ対応のホイールは集合内のカセットを適合とする", () => {
         const wheel = createPart(1, "Wheel", "wheel", {

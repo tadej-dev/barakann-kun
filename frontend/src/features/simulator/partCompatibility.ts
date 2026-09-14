@@ -51,10 +51,12 @@ const SPECIFICATION_LABELS: Record<string, string> = {
 
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "6_bolt": "6ボルト",
+    alloy_7mm: "アロイ 7mm",
     argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
     bmc_ics: "BMC ICS対応",
     bb386: "BB386",
     bb86: "BB86",
+    bbright: "Cervélo BBRight",
     campagnolo_n3w: "Campagnolo N3W",
     campagnolo_protech: "Campagnolo Pro-Tech",
     campagnolo_ultra_torque: "Campagnolo Ultra-Torque",
@@ -68,8 +70,10 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     colnago_cc01: "Colnago CC.01対応",
     corratec_cct_icr: "Corratec CCT ICR対応",
     center_lock: "センターロック",
+    crankbrothers: "Crankbrothers",
     campagnolo_db310: "Campagnolo DB-310形状",
     dub: "SRAM DUB",
+    electronic_wired: "有線電動",
     electronic_wireless: "無線電動",
     either: "一体型／ステム式対応",
     felt_gravel_integrated: "Felt Gravel一体型専用",
@@ -81,6 +85,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     hollowtech_ii: "Shimano HOLLOWTECH II",
     hope_rx4: "HOPE RX4形状",
     integrated_only: "一体型コックピット専用",
+    italian: "イタリアンねじ切り",
     look_keo: "LOOK KEO",
     look_aero_combo: "LOOK Aero Combo専用",
     basso_sv_fuga: "Basso SV Fuga専用",
@@ -91,15 +96,21 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     mechanical: "機械式",
     pair: "前後セット",
     pf30: "PF30",
+    pf30a: "PF30A",
     post_mount: "ポストマウント",
+    praxis_m30: "Praxis M30",
     rear: "後輪専用",
     rotor_30: "Rotor 30mm",
     shimano_hg: "Shimano HG",
     shimano_k_type: "Shimano Kタイプ",
+    shimano_micro_spline: "Shimano マイクロスプライン",
     shimano_road_flat_mount: "Shimano ロード用フラットマウント形状",
+    shimano_spd: "Shimano SPD",
     shimano_spd_sl: "Shimano SPD-SL",
     single: "1個単位",
     sram_xdr: "SRAM XDR",
+    sram_gxp: "SRAM GXP",
+    sram_xd: "SRAM XD",
     sram_road_axs: "SRAM Road AXS形状",
     standard_1_1_8: "1-1/8インチ標準コラム",
     stem: "ステム式",
@@ -132,28 +143,12 @@ export function getSpecificationLabel(key: string) {
     return SPECIFICATION_LABELS[key] ?? key
 }
 
-// 単一の規格値を表示用ラベルへ変換する。
-function getSingleSpecificationValueLabel(key: string, value: string) {
-    // 定義済みの値は日本語化し、mm系だけ単位を補って表示する。
-    if (SPECIFICATION_VALUE_LABELS[value]) {
-        return SPECIFICATION_VALUE_LABELS[value]
-    }
-
-    return key.endsWith("_mm") ? `${value}mm` : value
-}
-
 export function getSpecificationValueLabel(key: string, value: string) {
-    // 複数対応の値は、各規格を日本語化して並べて表示する。
-    if (value.includes(",")) {
-        return value
-            .split(",")
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .map((part) => getSingleSpecificationValueLabel(key, part))
-            .join("／")
-    }
+    // 単一値もカンマ区切りも同じ経路で日本語化し、mm系だけ単位を補う。
+    const label = (single: string) =>
+        SPECIFICATION_VALUE_LABELS[single] ?? (key.endsWith("_mm") ? `${single}mm` : single)
 
-    return getSingleSpecificationValueLabel(key, value)
+    return value.split(",").map((part) => label(part.trim())).filter(Boolean).join("／")
 }
 
 export function getPartPackageUnit(part: Part) {
