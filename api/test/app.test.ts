@@ -38,6 +38,8 @@ const part: Part = {
     name: "Test Frame",
     modelName: "Test Frame",
     variantName: null,
+    modelYear: null,
+    edition: null,
     brandName: "Test Brand",
     categoryKey: "frame",
     weight: 900,

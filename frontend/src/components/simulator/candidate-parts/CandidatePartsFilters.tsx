@@ -1,79 +1,67 @@
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
-import {BrandSelect} from "@/components/simulator/candidate-parts/BrandSelect"
+import {CandidatePartsFilterMenu} from "@/components/simulator/candidate-parts/CandidatePartsFilterMenu"
+import type {
+    CandidateFilterState,
+    CockpitStatus,
+    SpecFilter,
+} from "@/features/simulator/candidatePartsFilter"
 
 type CandidatePartsFiltersProps = {
+    filters: CandidateFilterState
     brands: string[]
-    selectedBrand: string
-    searchQuery: string
-    integratedHandlebarOnly: boolean
+    specFilters: SpecFilter[]
+    showViewFilter: boolean
+    cockpitStatuses: CockpitStatus[]
+    modelYears: number[]
     showIntegratedHandlebarFilter: boolean
-    hideIncompatible: boolean
-    showIncompatibleFilter: boolean
+    onFiltersChange: (next: CandidateFilterState) => void
+    searchQuery: string
     resultCount: number
-    onBrandChange: (brand: string) => void
     onSearchQueryChange: (query: string) => void
-    onIntegratedHandlebarOnlyChange: (checked: boolean) => void
-    onHideIncompatibleChange: (checked: boolean) => void
 }
 
 // 候補パーツの絞り込み欄
 export function CandidatePartsFilters({
+    filters,
     brands,
-    selectedBrand,
-    searchQuery,
-    integratedHandlebarOnly,
+    specFilters,
+    showViewFilter,
+    cockpitStatuses,
+    modelYears,
     showIntegratedHandlebarFilter,
-    hideIncompatible,
-    showIncompatibleFilter,
+    onFiltersChange,
+    searchQuery,
     resultCount,
-    onBrandChange,
     onSearchQueryChange,
-    onIntegratedHandlebarOnlyChange,
-    onHideIncompatibleChange,
 }: CandidatePartsFiltersProps) {
-    // ブランド・製品名・一体型ハンドルの条件を同じ候補状態へ渡し、表側で一括して再計算する。
+    // 件数を絞り込みボタンの左に置き、絞り込みメニュー・検索の順で並べる。
+    // 検索は文字入力が主操作のため、メニューではなく入力欄として残す。
     return (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <BrandSelect
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* 桁数で幅が変わると右隣のボタンが動くため、固定幅・左寄せ・等幅数字にする。 */}
+            <p className="ml-1 min-w-12 shrink-0 text-left text-sm tabular-nums text-slate-500 sm:mr-2">
+                {resultCount}件
+            </p>
+
+            <CandidatePartsFilterMenu
+                filters={filters}
                 brands={brands}
-                selectedBrand={selectedBrand}
-                onBrandChange={onBrandChange}
+                specFilters={specFilters}
+                showViewFilter={showViewFilter}
+                cockpitStatuses={cockpitStatuses}
+                modelYears={modelYears}
+                showIntegratedHandlebarFilter={showIntegratedHandlebarFilter}
+                onFiltersChange={onFiltersChange}
             />
 
             <Input
                 type="search"
-                aria-label="製品名で検索"
-                placeholder="製品名で検索"
+                aria-label="検索"
+                placeholder="検索"
                 className="w-full sm:max-w-sm"
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
             />
-
-            {showIntegratedHandlebarFilter && (
-                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
-                    <Checkbox
-                        checked={integratedHandlebarOnly}
-                        onCheckedChange={onIntegratedHandlebarOnlyChange}
-                    />
-                    ステム一体型のみ
-                </label>
-            )}
-
-            {showIncompatibleFilter && (
-                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
-                    <Switch
-                        checked={hideIncompatible}
-                        onCheckedChange={onHideIncompatibleChange}
-                    />
-                    非互換を非表示
-                </label>
-            )}
-
-            <p className="shrink-0 text-sm text-slate-500">
-                {resultCount}件
-            </p>
         </div>
     )
 }

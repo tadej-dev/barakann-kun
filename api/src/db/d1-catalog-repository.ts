@@ -12,6 +12,8 @@ type PartRow = {
     name: string
     model_name: string | null
     variant_name: string | null
+    model_year: number | null
+    edition: string | null
     brand_name: string
     category_key: string
     weight: number
@@ -133,6 +135,8 @@ export class D1CatalogRepository implements CatalogRepository {
                        parts.name,
                        parts.model_name,
                        parts.variant_name,
+                       parts.model_year,
+                       parts.edition,
                        brands.name AS brand_name,
                        categories.key AS category_key,
                        parts.weight,
@@ -231,6 +235,8 @@ export class D1CatalogRepository implements CatalogRepository {
             name: row.name,
             modelName: row.model_name?.trim() || row.name,
             variantName: row.variant_name,
+            modelYear: row.model_year,
+            edition: row.edition,
             brandName: row.brand_name,
             categoryKey: row.category_key,
             weight: row.weight,

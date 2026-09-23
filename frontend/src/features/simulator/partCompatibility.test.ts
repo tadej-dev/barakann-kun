@@ -3,6 +3,7 @@ import {describe, expect, it} from "vitest"
 import {
     calculateSelectedPartsTotals,
     evaluatePartCompatibility,
+    getFrameCockpitBadge,
     getSpecificationValueLabel,
 } from "@/features/simulator/partCompatibility"
 import {createPartSlot} from "@/features/simulator/partSlots"
@@ -149,8 +150,8 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual([])
     })
 
-    // 既存パーツを解除してしまうフレーム変更は、候補の段階で選択不可にする。
-    it("既存シートポストと径が異なるフレームは選択不可にする", () => {
+    // フレームは基準パーツ。径が異なるシートポストは解除対象にし、フレームは選択可能にする。
+    it("径が異なるシートポストが選択済みでもフレームは選択可能にする", () => {
         const frame = createPart(1, "Frame", "frame", {
             seatpost_diameter_mm: "27.2",
         })
@@ -165,7 +166,8 @@ describe("evaluatePartCompatibility", () => {
         )
 
         expect(result?.status).toBe("incompatible")
-        expect(result?.selectionBlocked).toBe(true)
+        expect(result?.selectionBlocked).toBe(false)
+        expect(result?.conflictingSlotKeys).toEqual(["seatpost"])
     })
 
     // フレーム規格が未登録でも自由に適合とはせず、確認が必要な状態を表示する。
@@ -239,6 +241,189 @@ describe("evaluatePartCompatibility", () => {
         )
 
         expect(result).toBeNull()
+    })
+
+    // 丸型コラムのオープン規格は、標準1-1/8の一体型ハンドルも装着できる。
+    it("丸型オープン規格は標準一体型ハンドルを適合にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "fsa_acr",
+            cockpit_connection: "either",
+        })
+        const handlebar = createPart(2, "Integrated", "handlebar", {
+            cockpit_interface: "standard_1_1_8",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // D字コラムのオープン規格は標準コックピットを装着できない。
+    it("D字オープン規格は標準一体型ハンドルを非互換にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Integrated", "handlebar", {
+            cockpit_interface: "standard_1_1_8",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // D字コラムのオープン規格でも、規格一致の専用コックピットは装着できる。
+    it("D字オープン規格は規格一致の専用ハンドルを適合にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Dedicated", "handlebar", {
+            cockpit_interface: "pinarello_ticr",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 標準ステムは、丸型オープン規格では適合し、D字オープン規格では非互換になる。
+    it("標準ステムの可否を丸型とD字のオープン規格で分ける", () => {
+        const roundFrame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "fsa_acr",
+            cockpit_connection: "either",
+        })
+        const dShapedFrame = createPart(2, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_connection: "either",
+        })
+        const stem = createPart(3, "Stem", "stem", {
+            cockpit_interface: "standard_1_1_8",
+        })
+
+        const roundResult = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame: roundFrame},
+        )
+        const dShapedResult = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame: dShapedFrame},
+        )
+
+        expect(roundResult?.status).toBe("compatible")
+        expect(dShapedResult?.status).toBe("incompatible")
+    })
+
+    // システムタグが交差すれば、規格名が異なっても装着できる(例: DCR車とEXS)。
+    it("コックピットシステムが交差するフレームとハンドルは適合にする", () => {
+        const dedaFrame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_system: "deda_dcr",
+            cockpit_connection: "integrated_only",
+        })
+        const fsaFrame = createPart(2, "Frame", "frame", {
+            cockpit_interface: "fsa_acr",
+            cockpit_system: "fsa_acr",
+            cockpit_connection: "either",
+        })
+        const standardFrame = createPart(3, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            cockpit_system: "standard_1_1_8",
+            cockpit_connection: "either",
+        })
+        const barrier = createPart(4, "EXS AEROVER", "handlebar", {
+            cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+        }, ["stem"])
+
+        for (const frame of [dedaFrame, fsaFrame, standardFrame]) {
+            const result = evaluatePartCompatibility(
+                barrier,
+                createPartSlot("handlebar"),
+                {frame},
+            )
+
+            expect(result?.status).toBe("compatible")
+        }
+    })
+
+    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを選べない。
+    it("交換不可の付属コックピットは別ハンドルを選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "canyon_cp0018",
+            cockpit_system: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
+        }, ["handlebar", "stem"])
+        const barrier = createPart(2, "EXS AEROVER", "handlebar", {
+            cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            barrier,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 交換可の付属コックピットは、システムが一致するハンドルへ交換できる。
+    it("交換可の付属コックピットは適合するハンドルへ交換できる", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_system: "deda_dcr",
+            cockpit_replaceable: "true",
+            cockpit_connection: "integrated_only",
+        }, ["handlebar", "stem"])
+        const barrier = createPart(2, "EXS AEROVER", "handlebar", {
+            cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            barrier,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // フレームは基準パーツ。選択済みハンドルと規格が合わない場合は
+    // フレーム側を選択不可にせず、解除対象にして選び直せるようにする。
+    it("フレーム候補は選択済みハンドルと合わない場合に解除対象にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Integrated", "handlebar", {
+            cockpit_interface: "giant_overdrive_aero",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            frame,
+            createPartSlot("frame"),
+            {handlebar},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(false)
+        expect(result?.conflictingSlotKeys).toEqual(["handlebar"])
     })
 
     // 専用ステムが付属する場合も、通常ハンドルは付属ステムのクランプ径で判定する。
@@ -390,6 +575,27 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("incompatible")
     })
 
+    // 非互換の原因となった相手パーツを結果へ含め、UIで相手を特定できるようにする。
+    it("非互換の相手パーツを結果へ含める", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            handlebar_clamp_mm: "31.8",
+        })
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.counterparts[0]?.partName).toBe("Frame")
+        expect(result?.counterparts[0]?.slotKey).toBe("frame")
+    })
+
     // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを適合とする。
     it("複数フリーボディ対応のホイールは集合内のカセットを適合とする", () => {
         const wheel = createPart(1, "Wheel", "wheel", {
@@ -495,5 +701,64 @@ describe("evaluatePartCompatibility", () => {
             "tire:front": pair,
             "tire:rear": pair,
         })).toEqual({price: 1000, weight: 100 + 50})
+    })
+})
+
+// フレームのコックピットバッジを確認する。
+describe("getFrameCockpitBadge", () => {
+    // 付属は規格名を併記し、標準付属か専用付属かを区別する。
+    it("付属は規格名を併記したバッジを返す", () => {
+        const proprietaryFrame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "canyon_cp0018",
+            cockpit_connection: "integrated_only",
+        }, ["handlebar", "stem"])
+        const standardFrame = createPart(2, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            cockpit_connection: "integrated_only",
+        }, ["handlebar"])
+
+        expect(getFrameCockpitBadge(proprietaryFrame)).toEqual({
+            label: "コックピット付属（Canyon CP0018専用）",
+            className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+        })
+        expect(getFrameCockpitBadge(standardFrame)?.label).toBe(
+            "コックピット付属（1-1/8標準コラム）",
+        )
+    })
+
+    // ハンドル未占有で専用規格は、規格名そのものを表示する。
+    it("専用規格は規格名のバッジを返す", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "cervelo_s5_hb19",
+            cockpit_connection: "either",
+        })
+
+        expect(getFrameCockpitBadge(frame)?.label).toBe("Cervélo S5 HB19専用")
+    })
+
+    // サードパーティ製コックピットが装着できる規格は、具体名を表示する。
+    it("オープン規格は規格名のバッジを返す", () => {
+        const roundSteererFrame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "fsa_acr",
+            cockpit_connection: "either",
+        })
+        const dShapedFrame = createPart(2, "Frame", "frame", {
+            cockpit_interface: "pinarello_ticr",
+            cockpit_connection: "either",
+        })
+
+        expect(getFrameCockpitBadge(roundSteererFrame)?.label).toBe("FSA ACR対応")
+        expect(getFrameCockpitBadge(dShapedFrame)?.label).toBe("Pinarello TiCR対応")
+    })
+
+    // 標準規格は 1-1/8 標準コラム。規格が無ければ null。
+    it("標準規格は標準コラム、規格なしは null を返す", () => {
+        const standardFrame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+        })
+        const unknownFrame = createPart(2, "Frame", "frame", {})
+
+        expect(getFrameCockpitBadge(standardFrame)?.label).toBe("1-1/8標準コラム")
+        expect(getFrameCockpitBadge(unknownFrame)).toBeNull()
     })
 })

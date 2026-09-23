@@ -59,9 +59,75 @@ describe("保存構成の規格適合チェック", () => {
         },
     )
 
-    // 前後に同じ規格でも、反対側にしか対応しないパーツ同士は混ぜて判定しない。
-    it("前輪と後輪の規格は混ぜずに判定する", () => {
+    // システムタグが交差すれば、規格名が違っても適合として扱う。
+    it("コックピットシステムが交差するフレームとハンドルは不一致にしない", () => {
         const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {
+                    cockpit_interface: "pinarello_ticr",
+                    cockpit_system: "deda_dcr",
+                    cockpit_connection: "integrated_only",
+                }),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {
+                    cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+                }, ["stem"]),
+            },
+        ])
+
+        expect(issues).toHaveLength(0)
+    })
+
+    // 交換可の付属コックピットは、システムが一致するハンドルへの交換を許可する。
+    it("交換可の付属コックピットは適合ハンドルへの交換を不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {
+                    cockpit_interface: "pinarello_ticr",
+                    cockpit_system: "deda_dcr",
+                    cockpit_replaceable: "true",
+                    cockpit_connection: "integrated_only",
+                }, ["handlebar", "stem"]),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {
+                    cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+                }, ["stem"]),
+            },
+        ])
+
+        expect(issues).toHaveLength(0)
+    })
+
+    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを不一致にする。
+    it("交換不可の付属コックピットは別ハンドルを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {
+                    cockpit_interface: "canyon_cp0018",
+                    cockpit_system: "canyon_cp0018",
+                    cockpit_connection: "integrated_only",
+                }, ["handlebar", "stem"]),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {
+                    cockpit_system: "standard_1_1_8,fsa_acr,deda_dcr",
+                }, ["stem"]),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+    })
+
+    // 前後に同じ規格でも、反対側にしか対応しないパーツ同士は混ぜて判定しない。
+    it("前輪と後輪の規格は混ぜずに判定する", () => {        const issues = findIncompatiblePartPairs([
             {
                 slotKey: "wheel",
                 part: part(1, "wheel", {wheel_diameter: "700C"}),

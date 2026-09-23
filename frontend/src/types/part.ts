@@ -13,6 +13,10 @@ export type Part = {
     name: string
     modelName?: string | null
     variantName?: string | null
+    // モデルイヤー。未確認はnull
+    modelYear?: number | null
+    // 世代・仕様名(Gen 7, SL8 など)。未確認はnull
+    edition?: string | null
     brandName: string
     categoryKey?: string
     weight: number

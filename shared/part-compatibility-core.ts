@@ -50,10 +50,36 @@ export const EQUALITY_RULES: EqualityRule[] = [
 
 export const STANDARD_COCKPIT_INTERFACE = "standard_1_1_8"
 
-type FrameCockpitStatus =
+// 丸型1-1/8コラムのオープン規格。標準コックピットの装着可否を分岐させるために使う。
+const ROUND_STEERER_OPEN_COCKPIT_INTERFACES: readonly string[] = [
+    "fsa_acr",
+    "focus_cis",
+    "look_aero_combo",
+    "orbea_icr",
+]
+
+// オープン規格: 専用規格だがサードパーティ製コックピットが装着できるフレームのcockpit_interface。
+// 丸型コラム系は標準1-1/8のステム/一体型ハンドルも装着できる。
+// D字コラム系(Deda DCR対応車種など)は標準丸型を装着できず、規格一致品のみ装着できる。
+const OPEN_COCKPIT_INTERFACES = new Set<string>([
+    ...ROUND_STEERER_OPEN_COCKPIT_INTERFACES,
+    // D字コラムだがサードパーティ(Deda DCR等)の専用コックピットが存在する車種
+    "bianchi_specialissima_rc",
+    "bmc_ics",
+    "cannondale_delta",
+    "cannondale_knot",
+    "colnago_cc01",
+    "pinarello_ticr",
+    "wilier_filante",
+    "trek_madone_gen7",
+    "factor_ostro_vam",
+])
+
+export type FrameCockpitStatus =
     | "included"
     | "dedicated"
     | "standard"
+    | "open"
     | "unknown"
 
 function getSpecification(part: CompatibilityInput, key: string) {
@@ -109,9 +135,68 @@ export function getFrameCockpitStatus(
         return "unknown"
     }
 
-    return cockpitInterface === STANDARD_COCKPIT_INTERFACE
-        ? "standard"
+    if (cockpitInterface === STANDARD_COCKPIT_INTERFACE) {
+        return "standard"
+    }
+
+    // サードパーティ製コックピットが装着できるオープン規格か判定する。
+    return OPEN_COCKPIT_INTERFACES.has(cockpitInterface)
+        ? "open"
         : "dedicated"
+}
+
+// 丸型1-1/8コラムのフレームは、専用規格でも標準コックピットを装着できる。
+// 標準規格そのもの、または丸型コラムのオープン規格であればtrueを返す。
+function acceptsStandardCockpit(frame: CompatibilityInput) {
+    const cockpitInterface = getSpecification(frame, "cockpit_interface")
+
+    if (cockpitInterface === STANDARD_COCKPIT_INTERFACE) {
+        return true
+    }
+
+    return (
+        !!cockpitInterface &&
+        ROUND_STEERER_OPEN_COCKPIT_INTERFACES.includes(cockpitInterface)
+    )
+}
+
+// 付属コックピットをサードパーティ品へ交換できるフレームか判定する。
+// 交換可フレームでは、フレームが占有するハンドル/ステムを規格判定側で可否決定する。
+export function allowsCockpitReplacement(frame: CompatibilityInput) {
+    return getSpecification(frame, "cockpit_replaceable") === "true"
+}
+
+// システムタグ(cockpit_system)が交差すれば、規格名が違っても装着できるとみなす。
+// 例: Deda DCR系フレームと、DCR対応を宣言したサードパーティ製ハンドル。
+function cockpitSystemsMatch(
+    frame: CompatibilityInput,
+    connectedPart: CompatibilityInput,
+) {
+    const frameSystem = getSpecification(frame, "cockpit_system")
+    const connectedSystem = getSpecification(connectedPart, "cockpit_system")
+
+    if (!frameSystem || !connectedSystem) {
+        return false
+    }
+
+    return specificationValuesMatch(frameSystem, connectedSystem)
+}
+
+// パーツがカテゴリーを占有しているか判定する。
+// 交換可能な付属コックピットの占有は、規格判定側で可否を決めるため占有扱いから除く。
+export function blocksCategory(
+    part: CompatibilityInput,
+    categoryKey: string,
+) {
+    if (!(part.blockedCategoryKeys ?? []).includes(categoryKey)) {
+        return false
+    }
+
+    return !(
+        part.categoryKey === "frame" &&
+        allowsCockpitReplacement(part) &&
+        (categoryKey === "handlebar" || categoryKey === "stem")
+    )
 }
 
 function compareCockpitInterface(
@@ -120,7 +205,8 @@ function compareCockpitInterface(
 ): PairCompatibilityResult {
     const frameStatus = getFrameCockpitStatus(frame)
 
-    if (frameStatus === "included") {
+    // 付属コックピットでも、交換可フレームは規格適合したサードパーティ品を許可する。
+    if (frameStatus === "included" && !allowsCockpitReplacement(frame)) {
         return {
             status: "incompatible",
             reasons: ["フレームにコックピットが付属するため、別のハンドルやステムは選択できません"],
@@ -134,12 +220,26 @@ function compareCockpitInterface(
         }
     }
 
+    // システムタグが交差すれば、規格名が一致しなくても装着できる。
+    if (cockpitSystemsMatch(frame, connectedPart)) {
+        return {
+            status: "compatible",
+            reasons: ["コックピットシステムが適合します"],
+        }
+    }
+
     const frameInterface = getSpecification(frame, "cockpit_interface")
     const connectedInterface = getSpecification(connectedPart, "cockpit_interface")
 
     if (!connectedInterface) {
-        // 専用品は規格不明の候補へ逃がさず、適合が確認できた製品だけを選択可能にする。
-        return frameStatus === "dedicated"
+        // 専用品(D字オープン規格・付属コックピットを含む)は規格不明の候補へ逃がさず、
+        // 適合が確認できた製品だけを選択可能にする。
+        const requiresInterfaceMatch =
+            frameStatus === "dedicated" ||
+            frameStatus === "included" ||
+            (frameStatus === "open" && !acceptsStandardCockpit(frame))
+
+        return requiresInterfaceMatch
             ? {
                 status: "incompatible",
                 reasons: ["専用コックピットへの適合が確認できない製品です"],
@@ -151,6 +251,17 @@ function compareCockpitInterface(
     }
 
     if (frameInterface !== connectedInterface) {
+        // 丸型コラムのオープン規格は、標準1-1/8のコックピットも装着できる。
+        if (
+            acceptsStandardCockpit(frame) &&
+            connectedInterface === STANDARD_COCKPIT_INTERFACE
+        ) {
+            return {
+                status: "compatible",
+                reasons: ["オープン規格のため標準コックピットが適合します"],
+            }
+        }
+
         return {
             status: "incompatible",
             reasons: ["コックピット規格が一致しません"],
@@ -231,6 +342,12 @@ function compareCockpitParts(
             return compareCockpitInterface(frame, handlebar)
         }
 
+        // D字コラムのオープン規格も、規格一致する専用ハンドルだけを許可する。
+        // 丸型コラムのオープン規格は標準ハンドルを装着できるため、下のnullへ流してステム径で判定する。
+        if (frameStatus === "open" && !acceptsStandardCockpit(frame)) {
+            return compareCockpitInterface(frame, handlebar)
+        }
+
         // 標準フォークの通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する。
         return null
     }
@@ -241,7 +358,7 @@ function compareCockpitParts(
         const cockpitConnection = getSpecification(frame, "cockpit_connection")
 
         if (
-            (frame.blockedCategoryKeys ?? []).includes("stem") ||
+            blocksCategory(frame, "stem") ||
             cockpitConnection === "integrated_only"
         ) {
             return {
@@ -318,10 +435,8 @@ export function compareParts(
     selected: CompatibilityInput,
     selectedCategory: string,
 ): PairCompatibilityResult | null {
-    const candidateBlocksSelectedCategory =
-        (candidate.blockedCategoryKeys ?? []).includes(selectedCategory)
-    const selectedBlocksCandidateCategory =
-        (selected.blockedCategoryKeys ?? []).includes(candidateCategory)
+    const candidateBlocksSelectedCategory = blocksCategory(candidate, selectedCategory)
+    const selectedBlocksCandidateCategory = blocksCategory(selected, candidateCategory)
 
     if (candidateBlocksSelectedCategory || selectedBlocksCandidateCategory) {
         // 一体型パーツや付属コックピットとの二重選択を拒否する。

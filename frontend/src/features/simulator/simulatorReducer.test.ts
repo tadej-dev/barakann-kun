@@ -342,4 +342,33 @@ describe("simulatorReducer", () => {
             "inner_tube:front": tube,
         })
     })
+
+    // フレームが占有するカテゴリーの選択済みパーツは、フレーム選択時に解除する。
+    it("フレーム選択時に占有カテゴリーの選択済みパーツを解除する", () => {
+        const handlebar = createPart(1, "Handlebar")
+        const frame: Part = {
+            ...createPart(2, "Frame", ["handlebar", "stem"]),
+            categoryKey: "frame",
+        }
+        let state = createInitialSimulatorState("handlebar")
+
+        state = simulatorReducer(state, {
+            type: "selectPart",
+            part: handlebar,
+            slotKeys: ["handlebar"],
+        })
+        state = simulatorReducer(state, {
+            type: "changeSlot",
+            slot: createPartSlot("frame"),
+        })
+        state = simulatorReducer(state, {
+            type: "selectPart",
+            part: frame,
+            slotKeys: ["frame"],
+        })
+
+        expect(state.configs["1"]).toEqual({
+            frame,
+        })
+    })
 })

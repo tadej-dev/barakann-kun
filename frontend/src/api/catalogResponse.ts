@@ -2,6 +2,7 @@ import type {Category} from "@/types/category"
 import type {Part, PartIncludedItem} from "@/types/part"
 import {
     isNonNegativeFiniteNumber,
+    isOptionalNullableSafeInteger,
     isOptionalNullableString,
     isPositiveSafeInteger,
     isRecord,
@@ -96,6 +97,8 @@ type PartIdentity = Record<string, unknown> & {
     name: string
     modelName: string | null | undefined
     variantName: string | null | undefined
+    modelYear: number | null | undefined
+    edition: string | null | undefined
     brandName: string
     categoryKey: string
 }
@@ -106,6 +109,8 @@ function hasValidPartIdentity(
     return typeof value.name === "string" &&
         isOptionalNullableString(value.modelName) &&
         isOptionalNullableString(value.variantName) &&
+        isOptionalNullableSafeInteger(value.modelYear) &&
+        isOptionalNullableString(value.edition) &&
         typeof value.brandName === "string" &&
         typeof value.categoryKey === "string"
 }
@@ -170,6 +175,8 @@ function parsePart(value: unknown): Part {
         name: value.name,
         modelName: value.modelName as string | null | undefined,
         variantName: value.variantName as string | null | undefined,
+        modelYear: value.modelYear as number | null | undefined,
+        edition: value.edition as string | null | undefined,
         brandName: value.brandName,
         categoryKey: value.categoryKey,
         weight: value.weight,

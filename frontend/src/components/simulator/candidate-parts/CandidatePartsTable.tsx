@@ -24,6 +24,7 @@ import {
 import {hasPartVariantColumn} from "@/features/simulator/partDisplay"
 import type {PartSlot} from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
+import type {Category} from "@/types/category"
 import type {Part} from "@/types/part"
 
 // 行数が多い場合だけブラウザ標準の遅延描画を有効化
@@ -32,6 +33,7 @@ const CONTENT_VISIBILITY_THRESHOLD = 100
 // 候補パーツ表のプロパティ
 type CandidatePartsTableProps = {
     parts: Part[] // 選択中カテゴリーの候補パーツ
+    categories: Category[] // 非互換の相手をカテゴリ名で示すために使う
     activeSlot: PartSlot // 選択中の選択枠
     selectedParts: SelectedParts // 現在構成の選択済みパーツ
     selectedPart?: Part // 選択済みパーツ
@@ -54,6 +56,7 @@ type CandidatePartsTableProps = {
 // 候補パーツ一覧
 export function CandidatePartsTable({
                                         parts,
+                                        categories,
                                         activeSlot,
                                         selectedParts,
                                         selectedPart,
@@ -86,28 +89,42 @@ export function CandidatePartsTable({
     // 候補パーツ表の状態・表示データ
     const {
         brands,
+        candidateRows,
         changeSort,
-        filteredAndSortedParts,
+        changeVariant,
+        filters,
         hasActiveFilters,
-        hasIncompatibleParts,
-        hasIntegratedHandlebars,
-        hideIncompatible,
-        integratedHandlebarOnly,
         searchQuery,
-        selectedBrand,
-        setHideIncompatible,
-        setIntegratedHandlebarOnly,
+        setFilters,
         setSearchQuery,
-        setSelectedBrand,
+        cockpitStatuses,
+        modelYears,
+        showIntegratedHandlebarFilter,
+        showViewFilter,
         sortDescriptor,
-    } = useCandidatePartsTable(parts, compatibilityByPartId)
+        specFilters,
+    } = useCandidatePartsTable(
+        parts,
+        compatibilityByPartId,
+        selectedPart?.id,
+        activeSlot.categoryKey,
+    )
     const showVariantColumn = hasPartVariantColumn(parts)
+
+    // slotKey から相手カテゴリの表示名を引けるようにする。
+    const categoryDisplayNames = useMemo(
+        () => Object.fromEntries(
+            categories.map((category) => [category.key, category.displayName]),
+        ),
+        [categories],
+    )
 
     const {
         cancelPendingSelection,
         categorySlots,
         confirmPendingSelection,
         pendingSelection,
+        replacementNotice,
         requestSelection,
         requestSelectionBoth,
     } = useCandidatePartsSelection(
@@ -116,7 +133,7 @@ export function CandidatePartsTable({
         onSelect,
     )
     const supportsFrontRearSelection = categorySlots.length === 2
-    const enableContentVisibility = filteredAndSortedParts.length >=
+    const enableContentVisibility = candidateRows.length >=
         CONTENT_VISIBILITY_THRESHOLD
 
     // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする
@@ -186,19 +203,28 @@ export function CandidatePartsTable({
                 </div>
             )}
 
+            {/* フレーム選択で自動解除した内容を短時間だけ伝える。 */}
+            {replacementNotice && (
+                <div
+                    className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                    role="status"
+                >
+                    {replacementNotice}
+                </div>
+            )}
+
             <CandidatePartsFilters
+                filters={filters}
                 brands={brands}
-                selectedBrand={selectedBrand}
+                specFilters={specFilters}
+                showViewFilter={showViewFilter}
+                cockpitStatuses={cockpitStatuses}
+                modelYears={modelYears}
+                showIntegratedHandlebarFilter={showIntegratedHandlebarFilter}
+                onFiltersChange={setFilters}
                 searchQuery={searchQuery}
-                integratedHandlebarOnly={integratedHandlebarOnly}
-                showIntegratedHandlebarFilter={hasIntegratedHandlebars}
-                hideIncompatible={hideIncompatible}
-                showIncompatibleFilter={hasIncompatibleParts}
-                resultCount={filteredAndSortedParts.length}
-                onBrandChange={setSelectedBrand}
+                resultCount={candidateRows.length}
                 onSearchQueryChange={setSearchQuery}
-                onIntegratedHandlebarOnlyChange={setIntegratedHandlebarOnly}
-                onHideIncompatibleChange={setHideIncompatible}
             />
 
             <div
@@ -220,7 +246,7 @@ export function CandidatePartsTable({
                     />
 
                     <TableBody className={"font-bold"}>
-                        {filteredAndSortedParts.length === 0 ? (
+                        {candidateRows.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={showVariantColumn ? 5 : 4}>
                                     <div className="py-8 text-center text-zinc-500">
@@ -231,18 +257,24 @@ export function CandidatePartsTable({
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredAndSortedParts.map((part) => (
+                            candidateRows.map((row) => (
                                 <CandidatePartsTableRow
-                                    key={part.id}
-                                    part={part}
-                                    isSelected={selectedPart?.id === part.id}
+                                    key={row.key}
+                                    part={row.activePart}
+                                    variants={row.variants}
+                                    modelKey={row.key}
+                                    onVariantChange={changeVariant}
+                                    isSelected={
+                                        selectedPart?.id === row.activePart.id
+                                    }
                                     showVariantColumn={showVariantColumn}
-                                    compatibility={compatibilityByPartId.get(part.id) ?? null}
+                                    compatibility={compatibilityByPartId.get(row.activePart.id) ?? null}
+                                    categoryDisplayNames={categoryDisplayNames}
                                     enableContentVisibility={enableContentVisibility}
                                     canSelectBoth={
                                         supportsFrontRearSelection &&
-                                        !part.specifications?.allowed_position &&
-                                        getPartPackageUnit(part) !== "pair"
+                                        !row.activePart.specifications?.allowed_position &&
+                                        getPartPackageUnit(row.activePart) !== "pair"
                                     }
                                     onSelect={requestSelection}
                                     onSelectBoth={requestSelectionBoth}

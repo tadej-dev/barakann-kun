@@ -1,8 +1,11 @@
 import {describe, expect, it} from "vitest"
 
 import {
+    comparePartVariants,
     findBlockedSlotItem,
+    getPartModelKey,
     getPartDisplayName,
+    getPartVariantLabel,
     hasPartVariantColumn,
 } from "@/features/simulator/partDisplay"
 import type {Part} from "@/types/part"
@@ -80,6 +83,104 @@ describe("getPartDisplayName", () => {
         expect(hasPartVariantColumn([
             createMetadata(null, {wheel_diameter: "700C"}),
         ])).toBe(true)
+    })
+})
+
+// 同一モデルの集約キーと、バリアントの表示順を確認する。
+describe("getPartModelKey", () => {
+    function createVariant(
+        variantName: string,
+        overrides: Partial<Part> = {},
+    ): Part {
+        return {
+            id: 1,
+            name: `EXS AEROVER Compact ${variantName}`,
+            modelName: "EXS AEROVER Compact",
+            variantName,
+            brandName: "EXS",
+            weight: 300,
+            price: 79800,
+            blockedCategoryKeys: [],
+            ...overrides,
+        }
+    }
+
+    // ブランド・製品名・年式・世代が同じものだけを同じ行にまとめる。
+    it("同一モデル・同一世代は同じキーにする", () => {
+        const first = createVariant("360x90mm")
+        const second = createVariant("400x110mm")
+
+        expect(getPartModelKey(first)).toBe(getPartModelKey(second))
+    })
+
+    // 年式や世代が違えば別の行として扱う。
+    it("年式・世代が異なれば別のキーにする", () => {
+        const base = createVariant("360x90mm", {modelYear: 2025})
+        const otherYear = createVariant("360x90mm", {modelYear: 2024})
+        const otherEdition = createVariant("360x90mm", {modelYear: 2025, edition: "Gen 7"})
+
+        expect(getPartModelKey(base)).not.toBe(getPartModelKey(otherYear))
+        expect(getPartModelKey(base)).not.toBe(getPartModelKey(otherEdition))
+    })
+})
+
+describe("comparePartVariants", () => {
+    function createVariant(id: number, variantName: string): Part {
+        return {
+            id,
+            name: `Bar ${variantName}`,
+            variantName,
+            brandName: "Test",
+            weight: 300,
+            price: 1000,
+            blockedCategoryKeys: [],
+        }
+    }
+
+    // 数値を含むバリアント名は、数値の昇順で並べる。
+    it("バリアント名の数値を昇順で比較する", () => {
+        const variants = [
+            createVariant(3, "420x100mm"),
+            createVariant(1, "360x90mm"),
+            createVariant(2, "400x110mm"),
+        ]
+
+        expect([...variants].sort(comparePartVariants).map((part) => part.variantName))
+            .toEqual(["360x90mm", "400x110mm", "420x100mm"])
+    })
+})
+
+// サマリー表示用の、サイズ・世代まで含めた表示名を確認する。
+describe("getPartVariantLabel", () => {
+    function createFramePart(overrides: Partial<Part> = {}): Part {
+        return {
+            id: 612,
+            name: "Argon 18 Nitrogen Frameset M",
+            modelName: "Argon 18 Nitrogen Frameset",
+            variantName: "M",
+            brandName: "Argon 18",
+            weight: 1150,
+            price: 0,
+            blockedCategoryKeys: [],
+            ...overrides,
+        }
+    }
+
+    // サイズと世代を括弧書きで添え、選択内容を判別できるようにする。
+    it("サイズと世代を表示名へ付加する", () => {
+        expect(getPartVariantLabel(createFramePart()))
+            .toBe("Nitrogen Frameset（M）")
+
+        expect(getPartVariantLabel(createFramePart({edition: "Gen 8"})))
+            .toBe("Nitrogen Frameset（Gen 8 / M）")
+    })
+
+    // サイズも世代も無いパーツは、通常の表示名のまま返す。
+    it("サイズ・世代が無ければモデル名だけを返す", () => {
+        expect(getPartVariantLabel(createFramePart({
+            variantName: null,
+            edition: null,
+        }))).toBe("Nitrogen Frameset")
     })
 })
 

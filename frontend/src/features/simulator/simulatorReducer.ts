@@ -8,6 +8,7 @@ import {
     getPartSlotCategoryKey,
     type PartSlot,
 } from "@/features/simulator/partSlots"
+import {blocksCategory} from "../../../../shared/part-compatibility-core"
 import type {Part} from "@/types/part"
 
 // シミュレーター操作の種類
@@ -157,13 +158,12 @@ export function simulatorReducer(
             const removeSlotKeys = new Set(action.removeSlotKeys ?? [])
 
             // ほかの選択済みパーツが選択先カテゴリーを占有している場合は変更しない
+            // 交換可能な付属コックピットの占有は除き、規格判定側で可否を決める。
             const isTargetCategoryBlocked = Object.entries(
                 currentSelectedParts,
             ).some(([slotKey, part]) =>
                 !removeSlotKeys.has(slotKey) &&
-                (part.blockedCategoryKeys ?? []).includes(
-                    state.activeSlot.categoryKey,
-                ),
+                blocksCategory(part, state.activeSlot.categoryKey),
             )
 
             // 一体型パーツなどが対象カテゴリーを占有している場合は、排他条件を破る選択を無視する。

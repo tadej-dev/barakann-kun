@@ -2,22 +2,39 @@ import {memo, type KeyboardEvent} from "react"
 
 import { Badge } from "@/components/ui/badge"
 import {buttonVariants} from "@/components/ui/button"
+import {
+    Combobox,
+    ComboboxContent,
+    ComboboxInput,
+    ComboboxItem,
+} from "@/components/ui/combobox"
 import { TableCell, TableRow } from "@/components/ui/table"
 import {
     getPartPackageUnit,
-    getFrameCockpitStatus,
+    getFrameCockpitBadge,
     getSpecificationLabel,
     getSpecificationValueLabel,
+    type CompatibilityCounterpart,
     type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import {
+    getPartSlotCategoryKey,
+    getPartSlotPosition,
+    getPartSlotPositionLabel,
+} from "@/features/simulator/partSlots"
 import type { Part } from "@/types/part"
 
 type CandidatePartsTableRowProps = {
     part: Part
+    // 同一モデルのバリアント（サイズ・年式など）。1件ならセレクタを出さない。
+    variants: Part[]
+    modelKey: string
+    onVariantChange: (modelKey: string, partId: number) => void
     isSelected: boolean
     showVariantColumn: boolean
     compatibility: CompatibilityResult | null
+    categoryDisplayNames: Record<string, string>
     canSelectBoth: boolean
     enableContentVisibility: boolean
     onSelect: (part: Part) => void
@@ -42,27 +59,32 @@ const compatibilityLabels = {
     incompatible: "非互換",
 }
 
-const frameCockpitBadges = {
-    included: {
-        label: "コックピット付属",
-        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    },
-    dedicated: {
-        label: "専用コックピット必須",
-        className: "border-amber-300 bg-amber-50 text-amber-700",
-    },
-    standard: {
-        label: "標準コックピット対応",
-        className: "border-sky-300 bg-sky-50 text-sky-700",
-    },
+// 適合・非互換の相手を「カテゴリ（前後）「製品名」」の形で表す。
+function getCounterpartLabel(
+    counterpart: CompatibilityCounterpart,
+    categoryDisplayNames: Record<string, string>,
+) {
+    const categoryKey = getPartSlotCategoryKey(counterpart.slotKey)
+    const categoryName = categoryDisplayNames[categoryKey] ?? categoryKey
+    const positionLabel = getPartSlotPositionLabel(
+        getPartSlotPosition(counterpart.slotKey),
+    )
+
+    return positionLabel
+        ? `${categoryName}（${positionLabel}）「${counterpart.partName}」`
+        : `${categoryName}「${counterpart.partName}」`
 }
 
 // 候補パーツ表の行
 function CandidatePartsTableRowComponent({
     part,
+    variants,
+    modelKey,
+    onVariantChange,
     isSelected,
     showVariantColumn,
     compatibility,
+    categoryDisplayNames,
     canSelectBoth,
     enableContentVisibility,
     onSelect,
@@ -72,11 +94,31 @@ function CandidatePartsTableRowComponent({
     const includedItems = part.includedItems ?? []
     const specifications = Object.entries(part.specifications ?? {})
     const isSelectionBlocked = compatibility?.selectionBlocked ?? false
-    const frameCockpitStatus = getFrameCockpitStatus(part)
-    // 規格未確認(unknown)のバッジは表示しない
-    const frameCockpitBadge = frameCockpitStatus && frameCockpitStatus !== "unknown"
-        ? frameCockpitBadges[frameCockpitStatus]
-        : null
+    // フレームは全パーツ互換の基準として扱うため、候補行では互換バッジ・理由を出さない。
+    const isFrame = part.categoryKey === "frame"
+    // 規格未確認(unknown)やフレーム以外はバッジを表示しない
+    const frameCockpitBadge = getFrameCockpitBadge(part)
+
+    // サイズ・バリアントの選択肢（Combobox用）。値はpart id、表示はバリアント名。
+    const variantOptions = variants.map((variant) => ({
+        value: variant.id,
+        label: variant.variantName ?? variant.name,
+    }))
+    const activeVariantOption =
+        variantOptions.find((option) => option.value === part.id) ?? null
+
+    // 「どのパーツに対して」非互換・未確認かを示すため、相手と理由を整形する。
+    const counterparts = compatibility?.counterparts ?? []
+    const offendingCounterparts = counterparts.filter(
+        (counterpart) => counterpart.status !== "compatible",
+    )
+    // バッジのホバー詳細には適合した相手も含めて全件を出す。
+    const counterpartTooltip = counterparts
+        .map((counterpart) =>
+            `${getCounterpartLabel(counterpart, categoryDisplayNames)}：` +
+            `${compatibilityLabels[counterpart.status]}（${counterpart.reasons.join("、")}）`,
+        )
+        .join("\n")
 
     // キーボードによるパーツ選択処理
     function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
@@ -127,6 +169,18 @@ function CandidatePartsTableRowComponent({
                             {getPartDisplayName(part)}
                         </span>
 
+                        {part.modelYear != null && (
+                            <Badge variant="outline">
+                                {part.modelYear}
+                            </Badge>
+                        )}
+
+                        {part.edition && (
+                            <Badge variant="outline">
+                                {part.edition}
+                            </Badge>
+                        )}
+
                         {(part.blockedCategoryKeys ?? []).includes("stem") && (
                             <Badge className="bg-sky-100 text-sky-800">
                                 ステム一体型
@@ -146,11 +200,11 @@ function CandidatePartsTableRowComponent({
                             <Badge variant="secondary">前後セット</Badge>
                         )}
 
-                        {compatibility && (
+                        {!isFrame && compatibility && (
                             <Badge
                                 variant="outline"
                                 className={compatibilityBadgeStyles[compatibility.status]}
-                                title={compatibility.reasons.join("\n")}
+                                title={counterpartTooltip || compatibility.reasons.join("\n")}
                             >
                                 {compatibilityLabels[compatibility.status]}
                             </Badge>
@@ -167,10 +221,26 @@ function CandidatePartsTableRowComponent({
                         </span>
                     )}
 
-                    {compatibility && (
-                        <span className="break-words text-xs font-normal text-slate-500 [overflow-wrap:anywhere]">
-                            {compatibility.reasons.join("、")}
-                        </span>
+                    {!isFrame && compatibility && (offendingCounterparts.length > 0 ||
+                        compatibility.reasons.length > 0) && (
+                        <div className="flex flex-col gap-0.5 text-xs font-normal text-slate-500">
+                            {offendingCounterparts.length > 0
+                                ? offendingCounterparts.map((counterpart) => (
+                                    <span
+                                        key={counterpart.slotKey}
+                                        className="break-words [overflow-wrap:anywhere]"
+                                    >
+                                        {getCounterpartLabel(counterpart, categoryDisplayNames)}：
+                                        {counterpart.reasons.join("、")}
+                                    </span>
+                                ))
+                                : (
+                                    // 前後位置制約など比較相手がいない非互換は、理由だけを表示する。
+                                    <span className="break-words [overflow-wrap:anywhere]">
+                                        {compatibility.reasons.join("、")}
+                                    </span>
+                                )}
+                        </div>
                     )}
 
                     {canSelectBoth && (
@@ -195,7 +265,40 @@ function CandidatePartsTableRowComponent({
 
             {showVariantColumn && (
                 <TableCell>
-                    {part.variantName ? (
+                    {variants.length > 1 ? (
+                        // 複数サイズは1行にまとめ、検索できるComboboxで選ぶ。
+                        // 行の選択操作へ伝播させないよう、クリック/キー入力を止める。
+                        <div
+                            className="w-full max-w-[12rem]"
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                        >
+                            <Combobox
+                                items={variantOptions}
+                                value={activeVariantOption}
+                                onValueChange={(option) => {
+                                    if (option) {
+                                        onVariantChange(modelKey, option.value)
+                                    }
+                                }}
+                            >
+                                <ComboboxInput
+                                    aria-label="サイズ・バリアント"
+                                    placeholder="サイズを選択"
+                                />
+                                <ComboboxContent emptyMessage="該当するサイズがありません">
+                                    {variantOptions.map((option) => (
+                                        <ComboboxItem
+                                            key={option.value}
+                                            value={option}
+                                        >
+                                            {option.label}
+                                        </ComboboxItem>
+                                    ))}
+                                </ComboboxContent>
+                            </Combobox>
+                        </div>
+                    ) : part.variantName ? (
                         <Badge variant="secondary">{part.variantName}</Badge>
                     ) : (
                         <span className="text-muted-foreground">-</span>

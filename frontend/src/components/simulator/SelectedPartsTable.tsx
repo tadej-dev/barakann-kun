@@ -10,7 +10,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import {getPartDisplayName, findBlockedSlotItem} from "@/features/simulator/partDisplay"
-import {getFrameCockpitStatus} from "@/features/simulator/partCompatibility"
+import {getFrameCockpitBadge} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotPositionLabel,
     getPartSlots,
@@ -32,21 +32,6 @@ const priceFormatter = new Intl.NumberFormat("ja-JP", {
     currency: "JPY",
     maximumFractionDigits: 0,
 })
-
-const frameCockpitBadges = {
-    included: {
-        label: "コックピット付属",
-        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    },
-    dedicated: {
-        label: "専用コックピット必須",
-        className: "border-amber-300 bg-amber-50 text-amber-700",
-    },
-    standard: {
-        label: "標準コックピット対応",
-        className: "border-sky-300 bg-sky-50 text-sky-700",
-    },
-}
 
 export function SelectedPartsTable({
                                        categories,
@@ -112,12 +97,9 @@ export function SelectedPartsTable({
                             const blockedItemWeight = blockedItem
                                 ? blockedItem.quantity * blockedItem.weight
                                 : 0
-                            const frameCockpitStatus = part
-                                ? getFrameCockpitStatus(part)
-                                : null
-                            // 規格未確認(unknown)のバッジは表示しない
-                            const frameCockpitBadge = frameCockpitStatus && frameCockpitStatus !== "unknown"
-                                ? frameCockpitBadges[frameCockpitStatus]
+                            // 規格未確認(unknown)やフレーム以外はバッジを表示しない
+                            const frameCockpitBadge = part
+                                ? getFrameCockpitBadge(part)
                                 : null
 
                             return (
@@ -198,6 +180,19 @@ export function SelectedPartsTable({
                                                         {frameCockpitBadge.label}
                                                     </Badge>
                                                 )}
+
+                                            {/* サイズ・世代は選択漏れに気づきにくいため、選択中一覧でも明示する。 */}
+                                            {part && !isBlocked && part.edition && (
+                                                <Badge variant="outline">
+                                                    {part.edition}
+                                                </Badge>
+                                            )}
+
+                                            {part && !isBlocked && part.variantName && (
+                                                <Badge variant="secondary">
+                                                    {part.variantName}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </TableCell>
 

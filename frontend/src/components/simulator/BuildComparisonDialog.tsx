@@ -13,7 +13,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import {diagnoseBuild} from "@/features/simulator/buildDiagnosis"
-import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import {getPartVariantLabel} from "@/features/simulator/partDisplay"
 import {
     getPartPackageUnit,
     sumIncludedItemsWeight,
@@ -341,7 +341,7 @@ export function BuildComparisonDialog({
                                                     return (
                                                         <td key={build.key} className="border-b px-3 py-2 last:border-b-0">
                                                             {part
-                                                                ? `${part.brandName} ${getPartDisplayName(part)}`
+                                                                ? `${part.brandName} ${getPartVariantLabel(part)}`
                                                                 : "—"}
                                                         </td>
                                                     )

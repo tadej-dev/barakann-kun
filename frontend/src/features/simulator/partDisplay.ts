@@ -62,3 +62,68 @@ export function hasPartVariantColumn(
         return hasVariantName || hasSpecifications
     })
 }
+
+// 同一モデル（年式・エディションを含む）を1行へまとめるためのキー。
+// ブランド・製品名・年式・世代がすべて一致するものだけを同じ行に集約する。
+export function getPartModelKey(
+    part: Pick<
+        Part,
+        "brandName" | "modelName" | "name" | "modelYear" | "edition"
+    >,
+): string {
+    const modelName = part.modelName?.trim() || part.name.trim()
+
+    return [
+        part.brandName,
+        modelName,
+        part.modelYear ?? "",
+        part.edition ?? "",
+    ].join("\u0000")
+}
+
+// バリアント名に含まれる数値を比較用に取り出す（例: "360x90mm" → [360, 90]）。
+function getVariantNumbers(
+    part: Pick<Part, "name" | "variantName">,
+): number[] {
+    const source = part.variantName?.trim() || part.name
+    const matches = source.match(/\d+(?:\.\d+)?/g) ?? []
+
+    return matches.map(Number)
+}
+
+// バリアントを表示順（数値昇順→名前順）に並べるための比較関数。
+export function comparePartVariants(a: Part, b: Part): number {
+    const aNumbers = getVariantNumbers(a)
+    const bNumbers = getVariantNumbers(b)
+    const length = Math.max(aNumbers.length, bNumbers.length)
+
+    for (let index = 0; index < length; index += 1) {
+        // 数値が無いバリアントは末尾へ寄せるため -1 を既定値にする。
+        const aValue = aNumbers[index] ?? -1
+        const bValue = bNumbers[index] ?? -1
+
+        if (aValue !== bValue) {
+            return aValue - bValue
+        }
+    }
+
+    return (a.variantName ?? a.name).localeCompare(
+        b.variantName ?? b.name,
+        "ja-JP",
+    )
+}
+
+// サマリー・比較・共有表示で使う、サイズや世代まで含めた表示名。
+// 候補表の行内では候補の絞り込みに使うため、ここでは付加情報を明示する。
+export function getPartVariantLabel(
+    part: Pick<Part, "name" | "modelName" | "brandName" | "variantName" | "edition">,
+): string {
+    const baseName = getPartDisplayName(part)
+    const variantLabel = part.variantName?.trim()
+    const editionLabel = part.edition?.trim()
+    const suffixes = [editionLabel, variantLabel].filter(Boolean)
+
+    return suffixes.length > 0
+        ? `${baseName}（${suffixes.join(" / ")}）`
+        : baseName
+}

@@ -11,6 +11,7 @@ import {fetchParts, fetchPartsByIds} from "@/api/parts"
 import type {ConfigSlot} from "@/api/configSlots"
 import type {SavedBuild} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
+import {blocksCategory} from "../../../../shared/part-compatibility-core"
 import {
     calculateSelectedPartsTotals,
     evaluateSelectedPartsCompatibility,
@@ -379,9 +380,12 @@ export function useSimulatorController({
     // 選択済みパーツが占有しているカテゴリー
     const blockedCategoryKeys = useMemo(() => {
         // 一体型ハンドルなどが占有するカテゴリーをSet化し、候補取得前にO(1)で判定する。
+        // 交換可能な付属コックピットの占有は除き、規格判定側で可否を決める。
         return new Set(
-            Object.values(selectedParts).flatMap(
-                (part) => part.blockedCategoryKeys ?? [],
+            Object.values(selectedParts).flatMap((part) =>
+                (part.blockedCategoryKeys ?? []).filter((categoryKey) =>
+                    blocksCategory(part, categoryKey),
+                ),
             ),
         )
     }, [selectedParts])
@@ -390,7 +394,7 @@ export function useSimulatorController({
     const blockingSelections = useMemo(() => {
         // 現在カテゴリーを占有しているパーツだけを解除ダイアログの対象にする。
         return Object.entries(selectedParts).filter(([, part]) =>
-            (part.blockedCategoryKeys ?? []).includes(activeCategory),
+            blocksCategory(part, activeCategory),
         )
     }, [activeCategory, selectedParts])
 

@@ -14,7 +14,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import {getPartDisplayName} from "@/features/simulator/partDisplay"
+import {getPartVariantLabel} from "@/features/simulator/partDisplay"
 import {
     getPartPackageUnit,
     sumIncludedItemsWeight,
@@ -250,7 +250,7 @@ export function SharedBuildPage() {
                                             {part?.brandName ?? "—"}
                                         </td>
                                         <td className="border-b px-4 py-3 font-medium">
-                                            {part ? getPartDisplayName(part) : `パーツID ${snapshot.partId}`}
+                                            {part ? getPartVariantLabel(part) : `パーツID ${snapshot.partId}`}
                                         </td>
                                         <td className="border-b px-4 py-3 text-right tabular-nums">
                                             {currencyFormatter.format(snapshot.price)}

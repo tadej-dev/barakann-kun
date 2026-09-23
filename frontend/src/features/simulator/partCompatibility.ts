@@ -6,21 +6,83 @@ import {
 } from "../../../../shared/part-compatibility-core"
 import type {
     CompatibilityStatus,
+    FrameCockpitStatus,
 } from "../../../../shared/part-compatibility-core"
 import {
     getPartSlotCategoryKey,
     type PartSlot,
 } from "@/features/simulator/partSlots"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
 export {getFrameCockpitStatus}
 
+// 適合判定の相手となった選択済みパーツと、その結果。
+// 「どのパーツに対して非互換なのか」をUIで示すために保持する。
+export type CompatibilityCounterpart = {
+    slotKey: string
+    partName: string
+    status: CompatibilityStatus
+    reasons: string[]
+}
+
 export type CompatibilityResult = {
     status: CompatibilityStatus
     reasons: string[]
+    counterparts: CompatibilityCounterpart[]
     conflictingSlotKeys: string[]
     selectionBlocked: boolean
+}
+
+// フレームのコックピットバッジ。種別ごとの色と、規格名が未登録のときの文言。
+export type FrameCockpitBadge = {
+    label: string
+    className: string
+}
+
+const FRAME_COCKPIT_BADGES: Record<
+    Exclude<FrameCockpitStatus, "unknown">,
+    { className: string; fallback: string }
+> = {
+    included: {
+        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+        fallback: "コックピット付属",
+    },
+    dedicated: {
+        className: "border-amber-300 bg-amber-50 text-amber-700",
+        fallback: "専用コックピット必須",
+    },
+    open: {
+        className: "border-violet-300 bg-violet-50 text-violet-700",
+        fallback: "オープン規格対応",
+    },
+    standard: {
+        className: "border-sky-300 bg-sky-50 text-sky-700",
+        fallback: "1-1/8標準コラム",
+    },
+}
+
+export function getFrameCockpitBadge(part: Part): FrameCockpitBadge | null {
+    const status = getFrameCockpitStatus(part)
+
+    // 規格未確認(unknown)やフレーム以外はバッジを表示しない。
+    if (!status || status === "unknown") {
+        return null
+    }
+
+    const badge = FRAME_COCKPIT_BADGES[status]
+    const cockpitInterface = part.specifications?.cockpit_interface
+    const interfaceLabel = cockpitInterface
+        ? getSpecificationValueLabel("cockpit_interface", cockpitInterface)
+        : null
+
+    // 付属は規格名も併記し、標準付属か専用付属かを区別できるようにする。
+    const label = status === "included" && interfaceLabel
+        ? `コックピット付属（${interfaceLabel}）`
+        : interfaceLabel ?? badge.fallback
+
+    return { label, className: badge.className }
 }
 
 const SPECIFICATION_LABELS: Record<string, string> = {
@@ -30,6 +92,8 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     cleat_system: "クリート規格",
     cockpit_connection: "コックピット接続方式",
     cockpit_interface: "コックピット規格",
+    cockpit_replaceable: "コックピット交換可否",
+    cockpit_system: "コックピットシステム",
     crank_spindle: "クランク軸規格",
     drivetrain_speed: "対応段数",
     freehub_body: "フリーボディ",
@@ -54,8 +118,10 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     alloy_7mm: "アロイ 7mm",
     argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
     bmc_ics: "BMC ICS対応",
+    bb30: "BB30",
     bb386: "BB386",
     bb86: "BB86",
+    bb90: "BB90",
     bbright: "Cervélo BBRight",
     campagnolo_n3w: "Campagnolo N3W",
     campagnolo_protech: "Campagnolo Pro-Tech",
@@ -68,7 +134,8 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     cannondale_knot: "Cannondale KNOT対応",
     cervelo_s5_hb19: "Cervélo S5 HB19専用",
     colnago_cc01: "Colnago CC.01対応",
-    corratec_cct_icr: "Corratec CCT ICR対応",
+    corratec_cct_icr: "Corratec CCT ICR専用",
+    deda_dcr: "Deda DCR",
     center_lock: "センターロック",
     crankbrothers: "Crankbrothers",
     campagnolo_db310: "Campagnolo DB-310形状",
@@ -87,7 +154,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     integrated_only: "一体型コックピット専用",
     italian: "イタリアンねじ切り",
     look_keo: "LOOK KEO",
-    look_aero_combo: "LOOK Aero Combo専用",
+    look_aero_combo: "LOOK Aero Combo対応",
     basso_sv_fuga: "Basso SV Fuga専用",
     bianchi_oltre_rc: "Bianchi Oltre RC専用",
     bianchi_specialissima_rc: "Bianchi Specialissima RC対応",
@@ -112,14 +179,16 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     sram_gxp: "SRAM GXP",
     sram_xd: "SRAM XD",
     sram_road_axs: "SRAM Road AXS形状",
-    standard_1_1_8: "1-1/8インチ標準コラム",
+    standard_1_1_8: "1-1/8標準コラム",
     stem: "ステム式",
     giant_overdrive_aero: "Giant OverDrive Aero専用",
     orbea_icr: "Orbea ICR対応",
-    pardus_robin_evo: "Pardus Robin EVO対応",
+    pardus_robin_evo: "Pardus Robin EVO専用",
     pinarello_ticr: "Pinarello TiCR対応",
-    scott_addict_ic: "Scott Addict iC対応",
+    scott_addict_ic: "Scott Addict iC専用",
     scott_foil_ic: "Scott Foil iC専用",
+    t45: "T45（82.5mm）",
+    t47_68: "T47 68mm",
     t47_85_5: "T47 85.5mm",
     t47a: "T47A（76.75mm）",
     time_iclic: "TIME ICLIC",
@@ -128,8 +197,8 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     trek_madone_gen7: "Trek Madone Gen 7対応",
     van_rysel_rcr_f: "Van Rysel RCR-F専用",
     wilier_filante: "Wilier Filante対応",
-    wilier_verticale: "Wilier Verticale対応",
-    winspace_m6: "Winspace M6対応",
+    wilier_verticale: "Wilier Verticale専用",
+    winspace_m6: "Winspace M6専用",
     xelius_drs: "Lapierre Xelius DRS専用",
 }
 
@@ -194,6 +263,8 @@ export function evaluatePartCompatibility(
 ): CompatibilityResult | null {
     // 候補パーツを現在の選択状態と比較し、理由・解除対象・選択可否をまとめて返す。
     const reasons: string[] = []
+    // 比較した相手パーツと結果を蓄積し、非互換の原因をUIで特定できるようにする。
+    const counterparts: CompatibilityCounterpart[] = []
     const conflictingSlotKeys = new Set<string>()
     let hasRelevantSelection = false
     let hasUnknown = false
@@ -210,6 +281,7 @@ export function evaluatePartCompatibility(
         return {
             status: "incompatible",
             reasons: [`${getSpecificationValueLabel("allowed_position", allowedPosition)}の製品です`],
+            counterparts: [],
             conflictingSlotKeys: [],
             selectionBlocked: true,
         }
@@ -238,10 +310,18 @@ export function evaluatePartCompatibility(
 
         hasRelevantSelection = true
         reasons.push(...result.reasons)
+        // どの選択済みパーツに対する結果かを記録する。
+        counterparts.push({
+            slotKey: selectedSlotKey,
+            partName: getPartDisplayName(selectedPart),
+            status: result.status,
+            reasons: result.reasons,
+        })
 
         if (result.status === "incompatible") {
-            // フレームは基準パーツとして維持し、候補側が非互換なら選択を止める。
-            if (candidateCategory === "frame" || selectedCategory === "frame") {
+            // フレームは基準パーツ。基準(フレーム)と合わない候補は選択を止める。
+            // それ以外の競合は、該当する選択済みパーツを解除対象にする。
+            if (selectedCategory === "frame") {
                 selectionBlocked = true
             } else {
                 conflictingSlotKeys.add(selectedSlotKey)
@@ -258,6 +338,7 @@ export function evaluatePartCompatibility(
         return {
             status: "incompatible",
             reasons,
+            counterparts,
             conflictingSlotKeys: Array.from(conflictingSlotKeys),
             selectionBlocked,
         }
@@ -271,6 +352,7 @@ export function evaluatePartCompatibility(
     return {
         status: hasUnknown ? "unknown" : hasCompatible ? "compatible" : "unknown",
         reasons,
+        counterparts,
         conflictingSlotKeys: [],
         selectionBlocked: false,
     }

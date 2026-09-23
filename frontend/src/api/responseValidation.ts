@@ -32,6 +32,16 @@ export function isOptionalNullableString(
     return value === undefined || value === null || typeof value === "string"
 }
 
+export function isOptionalNullableSafeInteger(
+    value: unknown,
+): value is number | null | undefined {
+    // モデルイヤーなど、省略・nullを許す年号を安全な整数へ絞る。
+    return value === undefined || value === null ||
+        (typeof value === "number" &&
+            Number.isSafeInteger(value) &&
+            value >= 0)
+}
+
 // 保存構成APIで共有するパーツスロットキーの形式
 export function isPartSlotKey(value: unknown): value is string {
     // 保存構成の入力に任意のキーを混ぜず、既知のスロット形式だけを受け付ける。

@@ -83,6 +83,7 @@ export function Simulator({
                         <CandidatePartsTable
                             key={controller.activeSlot.key}
                             parts={controller.activeParts}
+                            categories={categories}
                             activeSlot={controller.activeSlot}
                             selectedParts={controller.selectedParts}
                             selectedPart={controller.selectedPart}

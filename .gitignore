@@ -22,6 +22,7 @@ node_modules/
 # Local agent settings
 AGENTS.md
 opencode.json
+.opencode/skills/
 
 # Local database files and journals
 *.sqlite
