@@ -1,4 +1,5 @@
 import {
+    Columns3,
     Ellipsis,
     Copy,
     GripVertical,
@@ -10,7 +11,7 @@ import {
     Unlink,
 } from "lucide-react"
 import {AlertDialog} from "@base-ui/react/alert-dialog"
-import {useState} from "react"
+import {useEffect, useState, type ReactElement} from "react"
 
 import {
     BuildComparisonDialog,
@@ -23,11 +24,16 @@ import {
 } from "@/components/reui/sortable"
 import {buttonVariants, Button} from "@/components/ui/button"
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-} from "@/components/ui/card"
+    Sidebar,
+    SidebarContent,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarRail,
+    SidebarTrigger,
+    useSidebar,
+} from "@/components/ui/sidebar"
 import {
     Dialog,
     DialogContent,
@@ -53,12 +59,6 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-} from "@/components/ui/accordion"
-import {
     MAX_SAVED_BUILDS,
     type SavedBuild,
 } from "@/api/savedBuilds"
@@ -74,6 +74,37 @@ import {
     MAX_CONFIG_NAME_LENGTH,
     useConfigListController,
 } from "@/features/simulator/useConfigListController"
+
+// 操作ボタンの共通クラス（閉じたレールではアイコンだけの正方形にする）
+const actionButtonClassName =
+    "h-8 w-full gap-1 px-2 text-xs group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+// 操作ボタンのラベル（閉じたレールでは隠してツールチップで補う）
+const actionButtonLabelClassName = "group-data-[collapsible=icon]:hidden"
+
+// 閉じたレールのときだけ、ラベルをツールチップとして表示する
+// 開いているときやスマホ幅では、ボタン自体にラベルが見えているためそのまま返す。
+function RailTooltip({
+    label,
+    children,
+}: {
+    label: string
+    children: ReactElement
+}) {
+    const {isMobile, state} = useSidebar()
+
+    if (state !== "collapsed" || isMobile) {
+        return children
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger render={children}/>
+            <TooltipContent side="right">
+                {label}
+            </TooltipContent>
+        </Tooltip>
+    )
+}
 
 // 構成一覧のプロパティ
 type ConfigListProps = {
@@ -93,6 +124,7 @@ type ConfigListProps = {
     onClearActiveConfig: () => void // 未ログイン時の選択中構成初期化
     onClearConfig: (configId: ConfigId) => Promise<void> // 構成初期化処理
     onRestoreConfigSlot: (slot: ConfigSlot) => Promise<void> // 最新の固定構成を復元
+    onActiveConfigNameChange?: (name: string) => void // 選択中構成名の通知（上部カード表示用）
 }
 
 // 構成選択欄
@@ -113,6 +145,7 @@ export function ConfigList({
                                onClearActiveConfig,
                                onClearConfig,
                                onRestoreConfigSlot,
+                               onActiveConfigNameChange,
                            }: ConfigListProps) {
     const {
         changeConfigOrder,
@@ -124,6 +157,8 @@ export function ConfigList({
         confirmation,
         errorMessage,
         isAuthenticated,
+        isAuthLoading,
+        isConfigListReady,
         isLoading,
         isLoadingConfigOrder,
         isNameValid,
@@ -170,27 +205,59 @@ export function ConfigList({
         onRestoreConfigSlot,
     })
 
+    // 選択中の構成名を求める。
+    // 構成名はログイン時だけD1から取得するため、見つからない場合は固定枠の既定名へ戻す。
+    const fallbackConfigName = `構成${activeConfigId}`
+    const activeItem = isAuthenticated
+        ? orderedItems.find((item) => {
+            // 追加構成を選択中なら追加構成、そうでなければ固定枠を探す。
+            if (activeSavedBuildId !== null) {
+                return item.kind === "build" && item.build.id === activeSavedBuildId
+            }
+
+            return item.kind === "slot" && item.slot.configId === activeConfigId
+        })
+        : undefined
+    const activeConfigName = activeItem
+        ? activeItem.kind === "slot"
+            ? activeItem.slot.name
+            : activeItem.build.name
+        : fallbackConfigName
+
+    // 構成名の取得元はこのコンポーネントにあるため、変化したときだけ親へ通知する。
+    useEffect(() => {
+        onActiveConfigNameChange?.(activeConfigName)
+    }, [activeConfigName, onActiveConfigNameChange])
+
     // 認証前は4つの固定枠だけを表示し、ログイン後はD1と同期する並び替え一覧へ切り替える。
     // 未ログイン時の既存レイアウト
+    // 閉じたレールでも使えるよう、番号アイコンと名前を持つSidebarのメニューボタンで描画する。
     const compactConfigButtons = (
-        <div className="grid grid-cols-2 gap-2">
+        <SidebarMenu className="gap-1">
             {CONFIG_IDS.map((configId) => {
                 // ログイン前は固定スロットだけを選択対象にし、追加構成のUIを出さない。
                 const isActive = configId === activeConfigId
 
                 return (
-                    <button
-                        key={configId}
-                        type="button"
-                        aria-selected={isActive}
-                        className="flex h-9 w-full items-center rounded-lg border bg-background px-3 text-left text-sm font-bold text-foreground transition-colors hover:bg-muted aria-selected:border-sky-500 aria-selected:bg-sky-50 aria-selected:text-sky-950"
-                        onClick={() => onConfigChange(configId)}
-                    >
-                        構成{configId}
-                    </button>
+                    <SidebarMenuItem key={configId}>
+                        <SidebarMenuButton
+                            isActive={isActive}
+                            aria-selected={isActive}
+                            tooltip={`構成${configId}`}
+                            className="font-bold data-active:bg-sky-50 data-active:text-sky-950"
+                            onClick={() => onConfigChange(configId)}
+                        >
+                            <span className="flex size-4 shrink-0 items-center justify-center text-xs">
+                                {configId}
+                            </span>
+                            <span>
+                                構成{configId}
+                            </span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                 )
             })}
-        </div>
+        </SidebarMenu>
     )
     const comparisonBuilds: ComparisonBuild[] = isAuthenticated
         ? orderedItems.map((item) => item.kind === "slot"
@@ -218,6 +285,8 @@ export function ConfigList({
             })),
         }))
     const [shareNotice, setShareNotice] = useState("")
+    // クリア確認ダイアログの開閉状態（トリガーがツールチップ付きのメニューボタンのため制御する）
+    const [isClearDialogOpen, setIsClearDialogOpen] = useState(false)
 
     async function copyShareUrl(shareToken: string) {
         const shareUrl = `${window.location.origin}/shared/${shareToken}`
@@ -274,92 +343,133 @@ export function ConfigList({
     }
 
     return (
-        <Card className="h-full border border-b-0">
-            <Accordion multiple={false} defaultValue={["config-list"]}>
-                <AccordionItem value="config-list" className="border-0">
-                    <CardHeader className="gap-0">
-                        <AccordionTrigger
-                            nativeButton={false}
-                            render={<div />}
-                            className="min-h-8"
-                        >
-                            <div className="flex min-w-0 flex-1 items-center gap-3">
-                                <span className="flex min-w-0 items-center gap-2 text-lg font-bold text-zinc-500">
-                                    構成選択
-                                    {/* 固定4枠も保存枠として数え、アカウント側の上限を画面上で共有する。 */}
-                                    {isAuthenticated && (
-                                        <Badge
-                                            variant="secondary"
-                                            aria-label="保存枠使用数"
-                                            title="構成1〜4を含むアカウントの保存枠使用数"
-                                        >
-                                            {isLoading || isSavedBuildsLoading
-                                                ? `… / ${MAX_SAVED_BUILDS}`
-                                                : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
-                                        </Badge>
-                                    )}
-                                </span>
-
-                                <div
-                                    className="ml-auto flex shrink-0 items-center gap-2"
-                                    onClick={(event) => event.stopPropagation()}
-                                    onKeyDown={(event) => event.stopPropagation()}
+        <Sidebar
+            collapsible="icon"
+            // 角丸で周囲に余白を取る表示にし、右側のパーツ表のカードと見た目をそろえる。
+            variant="floating"
+            // 標準のfixedだとフッターの上まで重なるため、stickyに変えてページ本体の範囲内に収める。
+            // ヘッダー（h-16）の下に張り付き、フッターが見えたら本体と一緒に上へ流れる。
+            // 余白は右側の本体（p-4）とそろえ、上下左を1rem・右を0にしてカードの上端と下端を合わせる。
+            // 左右の合計は標準のp-2と同じ1remなので、閉じたレールの幅の計算はそのまま使える。
+            className="sticky! top-16! bottom-auto! h-[calc(100svh-4rem)]! py-4! pl-4! pr-0!"
+        >
+                    <SidebarHeader>
+                        {/* 見出しの横に開閉ボタンを置き、閉じたレールでもボタンだけは残して開けるようにする。 */}
+                        {/* 見出しと保存枠数は、閉じたレールでは幅が足りないため隠す。 */}
+                        <div className="flex min-h-8 items-center gap-2 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+                            <SidebarTrigger
+                                aria-label="構成選択を開閉"
+                                className="shrink-0"
+                            />
+                            <span className="text-sm font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+                                構成選択
+                            </span>
+                            {/* 固定4枠も保存枠として数え、アカウント側の上限を画面上で共有する。 */}
+                            {isAuthenticated && (
+                                <Badge
+                                    variant="secondary"
+                                    className="group-data-[collapsible=icon]:hidden"
+                                    aria-label="保存枠使用数"
+                                    title="構成1〜4を含むアカウントの保存枠使用数"
                                 >
+                                    {isLoading || isSavedBuildsLoading
+                                        ? `… / ${MAX_SAVED_BUILDS}`
+                                        : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
+                                </Badge>
+                            )}
+                        </div>
+
+                        {/* 操作ボタンは構成一覧と同じ幅で縦に並べ、閉じたレールではアイコンとツールチップにする。 */}
+                        <div className="grid grid-cols-1 gap-2 px-2 group-data-[collapsible=icon]:px-0">
                             <BuildComparisonDialog
                                 builds={comparisonBuilds}
                                 categories={categories}
+                                renderTrigger={({disabled, title, onOpen}) => (
+                                    <RailTooltip label="比較">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className={actionButtonClassName}
+                                            disabled={disabled}
+                                            title={title}
+                                            onClick={onOpen}
+                                        >
+                                            <Columns3 />
+                                            <span className={actionButtonLabelClassName}>比較</span>
+                                        </Button>
+                                    </RailTooltip>
+                                )}
                             />
+
                             {isAuthenticated && (
                                 <>
                                     {/* 追加ボタンは保存枠の上限、削除ボタンは選択件数に応じて操作可否を決める。 */}
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        className="h-7 gap-1 px-2 text-xs"
-                                        disabled={
-                                            savedBuildsOperation !== null ||
-                                            totalSavedCount >= MAX_SAVED_BUILDS
-                                        }
-                                        title="現在の選択パーツを新しい構成として保存"
-                                        aria-label="新しい構成を追加"
-                                        onClick={openCreateSavedBuildDialog}
-                                    >
-                                        <Plus />
-                                        追加
-                                    </Button>
+                                    <RailTooltip label="追加">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className={actionButtonClassName}
+                                            disabled={
+                                                savedBuildsOperation !== null ||
+                                                totalSavedCount >= MAX_SAVED_BUILDS
+                                            }
+                                            title="現在の選択パーツを新しい構成として保存"
+                                            aria-label="新しい構成を追加"
+                                            onClick={openCreateSavedBuildDialog}
+                                        >
+                                            <Plus />
+                                            <span className={actionButtonLabelClassName}>追加</span>
+                                        </Button>
+                                    </RailTooltip>
+                                    <RailTooltip label="一括削除">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="destructive"
+                                            className={actionButtonClassName}
+                                            disabled={
+                                                isOperating || selectedSavedBuilds.length === 0
+                                            }
+                                            title={
+                                                selectedSavedBuilds.length > 0
+                                                    ? `選択した${selectedSavedBuilds.length}件の追加構成を削除`
+                                                    : "削除する追加構成を選択してください"
+                                            }
+                                            aria-label={`選択した追加構成を一括削除（${selectedSavedBuilds.length}件）`}
+                                            onClick={openDeleteSelectedBuildsDialog}
+                                        >
+                                            <Trash2 />
+                                            <span className={actionButtonLabelClassName}>一括削除</span>
+                                        </Button>
+                                    </RailTooltip>
+                                </>
+                            )}
+
+                            {!isAuthenticated && !isAuthLoading && (
+                                // 未ログイン時は現在の固定枠だけを確認ダイアログ付きでクリアできる。
+                                <RailTooltip label={`構成${activeConfigId}をクリア`}>
                                     <Button
                                         type="button"
                                         size="sm"
                                         variant="destructive"
-                                        className="h-7 gap-1 px-2 text-xs"
-                                        disabled={
-                                            isOperating || selectedSavedBuilds.length === 0
-                                        }
-                                        title={
-                                            selectedSavedBuilds.length > 0
-                                                ? `選択した${selectedSavedBuilds.length}件の追加構成を削除`
-                                                : "削除する追加構成を選択してください"
-                                        }
-                                        aria-label={`選択した追加構成を一括削除（${selectedSavedBuilds.length}件）`}
-                                        onClick={openDeleteSelectedBuildsDialog}
+                                        className={actionButtonClassName}
+                                        onClick={() => setIsClearDialogOpen(true)}
                                     >
                                         <Trash2 />
-                                        一括削除
+                                        <span className={actionButtonLabelClassName}>
+                                            構成{activeConfigId}をクリア
+                                        </span>
                                     </Button>
-                                </>
+                                </RailTooltip>
                             )}
-                            {!isAuthenticated && (
-                                // 未ログイン時は現在の固定枠だけを確認ダイアログ付きでクリアできる。
-                                <AlertDialog.Root>
-                                    <AlertDialog.Trigger
-                                        className={buttonVariants({
-                                            variant: "destructive",
-                                            size: "sm",
-                                        })}
-                                    >
-                                        構成{activeConfigId}をクリア
-                                    </AlertDialog.Trigger>
+                        </div>
 
+                        {!isAuthenticated && !isAuthLoading && (
+                                <AlertDialog.Root
+                                    open={isClearDialogOpen}
+                                    onOpenChange={setIsClearDialogOpen}
+                                >
                                     <AlertDialog.Portal>
                                         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0"/>
                                         <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-5 text-foreground shadow-xl transition-[scale,opacity] duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
@@ -392,41 +502,50 @@ export function ConfigList({
                                         </AlertDialog.Popup>
                                     </AlertDialog.Portal>
                                 </AlertDialog.Root>
-                            )}
-                                </div>
-                            </div>
-                        </AccordionTrigger>
-                    </CardHeader>
+                        )}
+                    </SidebarHeader>
 
-                    <AccordionContent>
-                        <CardContent className="space-y-3">
-                            {!isAuthenticated && compactConfigButtons}
+                        <SidebarContent className="gap-3 px-2 pb-2">
+                            {!isAuthenticated && !isAuthLoading && compactConfigButtons}
+
+                            {/* 認証確認中と初回取得中は、既定順の一覧を出さずに枠だけを表示する。 */}
+                            {(isAuthLoading || (isAuthenticated && !isConfigListReady)) && (
+                                <ul
+                                    className="grid grid-cols-1 gap-2 p-0"
+                                    role="status"
+                                    aria-label="構成を読み込んでいます"
+                                >
+                                    {CONFIG_IDS.map((configId) => (
+                                        <li
+                                            key={configId}
+                                            className="h-16 animate-pulse rounded-lg border bg-slate-100 group-data-[collapsible=icon]:h-8"
+                                        />
+                                    ))}
+                                </ul>
+                            )}
 
                             {isAuthenticated && (
                                 <>
                                     {/* ログイン後の一覧は固定枠と追加構成を同じSortableへ渡し、順序を一元管理する。 */}
-                                    <CardDescription>
-                                        構成名と選択パーツをアカウントへ保存できます。
-                                    </CardDescription>
-
-                                    {/* カタログ・並び順・保存構成のいずれかを取得中であることを伝える。 */}
-                                    {(isLoading ||
+                                    {/* 一覧表示後の再取得中であることを伝える。初回は枠の表示で代用する。 */}
+                                    {isConfigListReady && (isLoading ||
                                         isLoadingConfigOrder ||
                                         isSavedBuildLoading) && (
-                                        <p className="text-sm text-muted-foreground" role="status">
+                                        <p className="text-sm text-muted-foreground group-data-[collapsible=icon]:hidden" role="status">
                                             構成を読み込んでいます…
                                         </p>
                                     )}
 
+                                    {isConfigListReady && (
                                     <div className="w-full overflow-hidden rounded-lg">
                             <Sortable
                                 value={orderedItems}
                                 onValueChange={changeConfigOrder}
                                 getItemValue={(item) => item.key}
                                 strategy="grid"
-                                render={<ul className="grid grid-cols-1 gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />}
+                                render={<ul className="grid grid-cols-1 gap-2 p-0" />}
                             >
-                                {orderedItems.map((item) => {
+                                {orderedItems.map((item, index) => {
                                     // 固定枠と追加構成では操作メニューの内容が異なるため、種別ごとに描画する。
                                     if (item.kind === "slot") {
                                         const slot = item.slot
@@ -440,7 +559,7 @@ export function ConfigList({
                                                 render={
                                                     <li
                                                         className={
-                                                            "flex min-h-16 min-w-0 items-center gap-2 rounded-lg border p-0 transition-colors " +
+                                                            "flex min-h-16 min-w-0 items-center gap-2 rounded-lg border border-sidebar-border p-0 transition-colors group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:border-0 " +
                                                             (isActive
                                                                 ? "bg-sky-50/80"
                                                                 : "bg-white hover:bg-slate-50")
@@ -449,7 +568,7 @@ export function ConfigList({
                                                 }
                                             >
                                                 <div
-                                                    className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-3"
+                                                    className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
                                                     onClick={() => onConfigChange(slot.configId)}
                                                 >
                                                     <SortableItemHandle
@@ -459,21 +578,40 @@ export function ConfigList({
                                                                 aria-label={`${slot.name}を並び替え`}
                                                             />
                                                         }
-                                                        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:hidden"
                                                         onClick={(event) => event.stopPropagation()}
                                                     >
                                                     <GripVertical
-                                                        className="size-4 shrink-0 text-slate-400"
+                                                        className="size-4 shrink-0"
                                                         aria-hidden="true"
                                                     />
                                                     </SortableItemHandle>
+
+                                                    {/* 閉じたレールでは名前の代わりに並び順の番号を表示し、名前はツールチップで補う。 */}
+                                                    <Tooltip>
+                                                        <TooltipTrigger
+                                                            render={
+                                                                <button
+                                                                    type="button"
+                                                                    className="hidden size-8 shrink-0 items-center justify-center rounded-md text-xs font-bold group-data-[collapsible=icon]:flex"
+                                                                    aria-label={`${slot.name}を選択`}
+                                                                    aria-selected={isActive}
+                                                                />
+                                                            }
+                                                        >
+                                                            {index + 1}
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="[overflow-wrap:anywhere]">
+                                                            {slot.name}
+                                                        </TooltipContent>
+                                                    </Tooltip>
 
                                                     <Tooltip>
                                                         <TooltipTrigger
                                                             render={
                                                                 <button
                                                                     type="button"
-                                                                    className="min-w-0 flex-1 text-left"
+                                                                    className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden"
                                                                     aria-label={`${slot.name}を選択`}
                                                                     aria-selected={isActive}
                                                                 />
@@ -489,7 +627,7 @@ export function ConfigList({
                                                     </Tooltip>
 
                                                     <div
-                                                        className="flex shrink-0 items-center gap-2"
+                                                        className="flex shrink-0 items-center gap-2 group-data-[collapsible=icon]:hidden"
                                                         onClick={(event) => event.stopPropagation()}
                                                     >
                                                         <Badge
@@ -590,7 +728,7 @@ export function ConfigList({
                                                 render={
                                                     <li
                                                         className={
-                                                            "flex min-h-16 min-w-0 items-center gap-2 rounded-lg border p-0 transition-colors " +
+                                                            "flex min-h-16 min-w-0 items-center gap-2 rounded-lg border border-sidebar-border p-0 transition-colors group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:border-0 " +
                                                             (isActive
                                                                 ? "bg-sky-50/80"
                                                                 : "bg-white hover:bg-slate-50")
@@ -599,7 +737,7 @@ export function ConfigList({
                                                 }
                                         >
                                             <div
-                                                className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-3"
+                                                className="flex min-w-0 flex-1 items-center gap-2 self-stretch p-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
                                                 onMouseEnter={() => onSavedBuildPrefetch(build)}
                                                 onFocusCapture={() => onSavedBuildPrefetch(build)}
                                                 onClick={() => void onSavedBuildSelect(build)}
@@ -611,21 +749,41 @@ export function ConfigList({
                                                             aria-label={`${build.name}を並び替え`}
                                                         />
                                                     }
-                                                    className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:hidden"
                                                     onClick={(event) => event.stopPropagation()}
                                                 >
                                                 <GripVertical
-                                                    className="size-4 shrink-0 text-slate-400"
+                                                    className="size-4 shrink-0"
                                                     aria-hidden="true"
                                                 />
                                                 </SortableItemHandle>
+
+                                                {/* 閉じたレールでは名前の代わりに並び順の番号を表示し、名前はツールチップで補う。 */}
+                                                <Tooltip>
+                                                    <TooltipTrigger
+                                                        render={
+                                                            <button
+                                                                type="button"
+                                                                className="hidden size-8 shrink-0 items-center justify-center rounded-md text-xs font-bold group-data-[collapsible=icon]:flex"
+                                                                aria-label={`${build.name}を選択`}
+                                                                aria-selected={isActive}
+                                                                disabled={isOperating}
+                                                            />
+                                                        }
+                                                    >
+                                                        {index + 1}
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="right" className="[overflow-wrap:anywhere]">
+                                                        {build.name}
+                                                    </TooltipContent>
+                                                </Tooltip>
 
                                                 <Tooltip>
                                                     <TooltipTrigger
                                                         render={
                                                             <button
                                                                 type="button"
-                                                                className="min-w-0 flex-1 text-left"
+                                                                className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden"
                                                                 aria-label={`${build.name}を選択`}
                                                                 aria-selected={isActive}
                                                                 disabled={isOperating}
@@ -642,7 +800,7 @@ export function ConfigList({
                                                 </Tooltip>
 
                                                 <div
-                                                    className="flex shrink-0 items-center gap-2"
+                                                    className="flex shrink-0 items-center gap-2 group-data-[collapsible=icon]:hidden"
                                                     onClick={(event) => event.stopPropagation()}
                                                 >
                                                     <Badge
@@ -748,10 +906,11 @@ export function ConfigList({
                                 })}
                             </Sortable>
                                     </div>
+                                    )}
 
                                     {shareNotice && (
                                         <div
-                                            className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 group-data-[collapsible=icon]:hidden bg-emerald-50 p-3 text-sm text-emerald-900"
                                             role="status"
                                         >
                                             <span className="min-w-0 break-all">
@@ -774,7 +933,7 @@ export function ConfigList({
                                         savedBuildErrorMessage ||
                                         configOrderErrorMessage) && (
                                         <div
-                                            className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                                            className="flex items-start justify-between gap-3 rounded-lg border border-red-200 group-data-[collapsible=icon]:hidden bg-red-50 p-3 text-sm text-red-800"
                                             role="alert"
                                         >
                                             <span>
@@ -807,7 +966,7 @@ export function ConfigList({
                                     {/* 別端末の更新を上書きしないため、最新取得か現在端末の上書きを選ばせる。 */}
                                     {autoSaveConflict && (
                                         <div
-                                            className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+                                            className="flex flex-col gap-3 rounded-lg border border-amber-300 group-data-[collapsible=icon]:hidden bg-amber-50 p-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"
                                             role="alert"
                                         >
                                             <span>
@@ -835,10 +994,7 @@ export function ConfigList({
                                     )}
                                 </>
                             )}
-                        </CardContent>
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
+                        </SidebarContent>
 
             <Dialog
                 open={nameDialog !== null}
@@ -1010,6 +1166,8 @@ export function ConfigList({
                     </AlertDialog.Popup>
                 </AlertDialog.Portal>
             </AlertDialog.Root>
-        </Card>
+            {/* 端をクリックしても開閉できる細い帯 */}
+            <SidebarRail />
+        </Sidebar>
     )
 }

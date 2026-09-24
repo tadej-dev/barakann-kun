@@ -16,14 +16,21 @@ const TooltipTrigger = TooltipPrimitive.Trigger
 
 function TooltipContent({
     className,
+    side,
+    align,
     sideOffset = 6,
     ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Popup> & {
+    // Sidebarのアイコン表示では右側に出すため、表示位置を指定できるようにする
+    side?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["side"]
+    align?: React.ComponentProps<typeof TooltipPrimitive.Positioner>["align"]
     sideOffset?: number
 }) {
     return (
         <TooltipPrimitive.Portal>
             <TooltipPrimitive.Positioner
+                side={side}
+                align={align}
                 sideOffset={sideOffset}
                 className="z-50"
             >

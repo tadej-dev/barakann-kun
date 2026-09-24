@@ -3,7 +3,6 @@ import {GripVertical} from "lucide-react"
 import NumberFlow from "@number-flow/react"
 import type {Format} from "@number-flow/react"
 
-import {ConfigList} from "@/components/simulator/ConfigList"
 import {
     Sortable,
     SortableItem,
@@ -16,42 +15,20 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import type {
-    ConfigId,
-    ConfigStates,
-    SelectedParts,
-} from "@/features/simulator/simulatorTypes"
-import type {SavedBuild} from "@/api/savedBuilds"
-import type {ConfigSlot} from "@/api/configSlots"
-import type {Category} from "@/types/category"
 
 type SummaryCardsProps = {
-    categories: Category[]
     totalPrice: number
     totalWeight: number
-    activeConfigId: ConfigId
-    activeSavedBuildId: string | null
-    configStates: ConfigStates
-    selectedParts: SelectedParts
-    isSavedBuildLoading: boolean
-    savedBuildErrorMessage: string
-    savedBuildsReloadKey?: number
-    autoSaveEnabled?: boolean
-    onConfigChange: (configId: ConfigId) => void
-    onRestoreSavedBuild: (build: SavedBuild) => Promise<void>
-    onSavedBuildPrefetch: (build: SavedBuild) => void
-    onSavedBuildSelect: (build: SavedBuild) => void | Promise<void>
-    onClearActiveConfig: () => void
-    onClearConfig: (configId: ConfigId) => Promise<void>
-    onRestoreConfigSlot: (slot: ConfigSlot) => Promise<void>
+    activeConfigName: string // 選択中の構成名（構成選択は左カラムで行う）
 }
 
 type SummaryCardId = "price" | "weight" | "config"
 
+// 選択中の構成名を先頭に置き、金額・重量がどの構成の値かを読み取りやすくする。
 const initialCardOrder: SummaryCardId[] = [
+    "config",
     "price",
     "weight",
-    "config",
 ]
 
 type SummaryCard = {
@@ -62,30 +39,15 @@ type SummaryCard = {
 }
 
 export function SummaryCards({
-                                 categories,
                                  totalPrice,
                                  totalWeight,
-                                 activeConfigId,
-                                 activeSavedBuildId,
-                                 configStates,
-                                 selectedParts,
-                                 isSavedBuildLoading,
-                                 savedBuildErrorMessage,
-                                 savedBuildsReloadKey = 0,
-                                 autoSaveEnabled = true,
-                                 onConfigChange,
-                                 onRestoreSavedBuild,
-                                 onSavedBuildPrefetch,
-                                 onSavedBuildSelect,
-                                 onClearActiveConfig,
-                                 onClearConfig,
-                                 onRestoreConfigSlot,
+                                 activeConfigName,
                              }: SummaryCardsProps) {
     // カード順は画面内だけで管理し、数値計算や構成データの保存責務とは分離する。
     const [cardOrder, setCardOrder] =
         useState<SummaryCardId[]>(initialCardOrder)
 
-    // 金額・重量は同じカード描画器へ渡し、構成選択だけを専用UIとして扱う
+    // 金額・重量は同じカード描画器へ渡し、構成名だけを文字列表示のカードとして扱う
     const cards: Record<"price" | "weight", SummaryCard> = {
         price: {
             title: "合計金額",
@@ -113,35 +75,44 @@ export function SummaryCards({
             onValueChange={setCardOrder}
             getItemValue={(cardId) => cardId}
             strategy="grid"
-            className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-2"
+            className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-3"
         >
             {cardOrder.map((cardId) => {
-                // 構成選択は専用の操作を持つため、通常の数値カードとは描画を分ける。
+                // 構成名は数値ではないため、NumberFlowを使わない専用カードで描画する。
                 if (cardId === "config") {
                     return (
-                        <SortableItem
-                            key={cardId}
-                            value={cardId}
-                            className="sm:col-span-2"
-                        >
-                            <ConfigList
-                                categories={categories}
-                                activeConfigId={activeConfigId}
-                                activeSavedBuildId={activeSavedBuildId}
-                                configStates={configStates}
-                                selectedParts={selectedParts}
-                                isSavedBuildLoading={isSavedBuildLoading}
-                                savedBuildErrorMessage={savedBuildErrorMessage}
-                                savedBuildsReloadKey={savedBuildsReloadKey}
-                                autoSaveEnabled={autoSaveEnabled}
-                                onConfigChange={onConfigChange}
-                                onRestoreSavedBuild={onRestoreSavedBuild}
-                                onSavedBuildPrefetch={onSavedBuildPrefetch}
-                                onSavedBuildSelect={onSavedBuildSelect}
-                                onClearActiveConfig={onClearActiveConfig}
-                                onClearConfig={onClearConfig}
-                                onRestoreConfigSlot={onRestoreConfigSlot}
-                            />
+                        <SortableItem key={cardId} value={cardId}>
+                            <Card className="h-full border border-b-0">
+                                <CardHeader>
+                                    <CardTitle className="text-lg font-bold text-zinc-500">
+                                        選択中の構成
+                                    </CardTitle>
+
+                                    <CardAction>
+                                        <SortableItemHandle
+                                            render={
+                                                <button
+                                                    type="button"
+                                                    aria-label="選択中の構成カードを移動"
+                                                />
+                                            }
+                                            className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <GripVertical className="size-4"/>
+                                        </SortableItemHandle>
+                                    </CardAction>
+                                </CardHeader>
+
+                                <CardContent>
+                                    {/* 長い構成名は2行で省略し、title属性で全文を確認できるようにする。 */}
+                                    <p
+                                        className="line-clamp-2 text-2xl font-bold [overflow-wrap:anywhere]"
+                                        title={activeConfigName}
+                                    >
+                                        {activeConfigName}
+                                    </p>
+                                </CardContent>
+                            </Card>
                         </SortableItem>
                     )
                 }

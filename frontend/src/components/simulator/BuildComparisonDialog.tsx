@@ -1,3 +1,4 @@
+import type * as React from "react"
 import {Columns3} from "lucide-react"
 import {useEffect, useMemo, useState} from "react"
 
@@ -40,9 +41,18 @@ export type ComparisonBuild = {
     parts: ComparisonBuildPart[]
 }
 
+// 比較ダイアログを開くボタンへ渡す情報
+export type BuildComparisonTriggerProps = {
+    disabled: boolean // 比較対象が2件未満のときは押せない
+    title: string // ボタンの補足説明
+    onOpen: () => void // ダイアログを開く処理
+}
+
 type BuildComparisonDialogProps = {
     builds: ComparisonBuild[]
     categories: Category[]
+    // 配置先に合わせてボタンの見た目を変えたい場合に指定する（未指定なら既定のボタン）
+    renderTrigger?: (props: BuildComparisonTriggerProps) => React.ReactNode
 }
 
 const currencyFormatter = new Intl.NumberFormat("ja-JP", {
@@ -80,6 +90,7 @@ function snapshotTotals(
 export function BuildComparisonDialog({
     builds,
     categories,
+    renderTrigger,
 }: BuildComparisonDialogProps) {
     const [open, setOpen] = useState(false)
     const [selectedKeys, setSelectedKeys] = useState<string[]>([])
@@ -187,22 +198,31 @@ export function BuildComparisonDialog({
         setOpen(nextOpen)
     }
 
+    // 開くボタンの状態は既定ボタンと差し替えボタンで共通にする
+    const triggerProps: BuildComparisonTriggerProps = {
+        disabled: builds.length < 2,
+        title: builds.length < 2
+            ? "比較には2件以上の構成が必要です"
+            : "複数構成を比較",
+        onOpen: () => changeOpen(true),
+    }
+
     return (
         <>
-            <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 px-2 text-xs"
-                disabled={builds.length < 2}
-                title={builds.length < 2
-                    ? "比較には2件以上の構成が必要です"
-                    : "複数構成を比較"}
-                onClick={() => changeOpen(true)}
-            >
-                <Columns3 />
-                比較
-            </Button>
+            {renderTrigger ? renderTrigger(triggerProps) : (
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-full gap-1 px-2 text-xs"
+                    disabled={triggerProps.disabled}
+                    title={triggerProps.title}
+                    onClick={triggerProps.onOpen}
+                >
+                    <Columns3 />
+                    比較
+                </Button>
+            )}
 
             <Dialog open={open} onOpenChange={changeOpen}>
                 <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">

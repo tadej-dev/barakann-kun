@@ -153,6 +153,9 @@ export function useConfigListController({
     const [savedBuildDialog, setSavedBuildDialog] =
         useState<SavedBuildDialogState | null>(null)
     const [selectedSavedBuildIds, setSelectedSavedBuildIds] = useState<string[]>([])
+    // 構成一覧を初めて表示できる状態になった認証ユーザー。
+    // 一度そろった後は再取得中も一覧を出し続け、操作のたびに一覧が消えないようにする。
+    const [configListReadyUserId, setConfigListReadyUserId] = useState<string | null>(null)
     const autoSaveTimersRef = useRef<Partial<Record<ConfigId, ReturnType<typeof setTimeout>>>>({})
     const autoSaveInFlightRef = useRef<Partial<Record<ConfigId, boolean>>>({})
     const autoSavePendingRef = useRef<Partial<Record<ConfigId, boolean>>>({})
@@ -268,6 +271,29 @@ export function useConfigListController({
         // 不正な順序キーは静かに除外し、実在する構成だけを描画する。
         return item ? [item] : []
     })
+
+    // 固定枠・並び順・追加構成の取得がすべて「完了」または「エラー」になったか。
+    // どれか1つでも未取得のまま表示すると、既定順で描画した後に並び替わってちらつく。
+    const isConfigSlotsSettled = hasLoadedConfigSlots || errorMessage !== ""
+    const isConfigOrderSettled = hasLoadedConfigOrder || configOrderErrorMessage !== ""
+    const isSavedBuildsSettled = !isSavedBuildsLoading
+    const isConfigListSettled = isAuthenticated &&
+        isConfigSlotsSettled &&
+        isConfigOrderSettled &&
+        isSavedBuildsSettled
+
+    // 初回の取得がそろった時点のユーザーを記録する。
+    // Effectを挟まず描画中に反映し、一覧が出るまでの余計な1フレームを作らない。
+    if (isConfigListSettled && configListReadyUserId !== authUserId) {
+        setConfigListReadyUserId(authUserId)
+    }
+
+    const isConfigListReady = isAuthenticated && (
+        isConfigListSettled ||
+        configListReadyUserId === authUserId
+    )
+    // 認証確認中は、ログイン前用のボタンを一瞬表示しないように区別する。
+    const isAuthLoading = authStatus === "loading"
 
     // 別端末でアクティブな追加構成が削除された場合は固定構成へ戻す
     useEffect(() => {
@@ -884,6 +910,8 @@ export function useConfigListController({
     }
 
     return {
+        isAuthLoading,
+        isConfigListReady,
         changeConfigOrder,
         changeName,
         changeSavedBuildName,
