@@ -54,6 +54,118 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("Shimano HG／SRAM XDR／Campagnolo N3W")
     })
 
+    // フレームの最大タイヤ幅を超えるタイヤは、フレームを維持したまま選べない。
+    it("フレームの最大タイヤ幅を超えるタイヤは選択できない", () => {
+        const frame = createPart(1, "Frame", "frame", {max_tire_width_mm: "30"})
+        const tire = createPart(2, "Tire", "tire", {tire_width_mm: "32"})
+
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 最大幅以内のタイヤは適合として扱う。
+    it("フレームの最大タイヤ幅以内のタイヤは適合する", () => {
+        const frame = createPart(1, "Frame", "frame", {max_tire_width_mm: "30"})
+        const tire = createPart(2, "Tire", "tire", {tire_width_mm: "28"})
+
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // フレームのブレーキマウントと合わないキャリパーは選択できない。
+    it("ブレーキマウントが異なるキャリパーは選択できない", () => {
+        const frame = createPart(1, "Frame", "frame", {brake_mount: "flat_mount"})
+        const caliper = createPart(2, "Caliper", "brake_caliper", {brake_mount: "post_mount"})
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 段数が一致していても変速方式が異なれば、どちらの理由も残して非互換にする。
+    it("レバーとディレイラーは段数と変速方式の両方を判定する", () => {
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            drivetrain_speed: "12",
+            shift_system: "mechanical",
+        })
+        const derailleur = createPart(2, "RD", "rear_derailleur", {
+            drivetrain_speed: "12",
+            shift_system: "electronic_wireless",
+        })
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur", "single"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toEqual([
+            "対応段数が適合します",
+            "変速方式が一致しません",
+        ])
+    })
+
+    // カセットとチェーンの段数が異なれば非互換にする。
+    it("段数が異なるカセットとチェーンは非互換にする", () => {
+        const cassette = createPart(1, "Cassette", "cassette", {drivetrain_speed: "12"})
+        const chain = createPart(2, "Chain", "chain", {drivetrain_speed: "11"})
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain", "single"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["cassette"])
+    })
+
+    // コンポセットのクランク軸規格とBBを比較する。
+    it("コンポセットとクランク軸規格が異なるBBは非互換にする", () => {
+        const groupset = createPart(1, "Groupset", "groupset", {crank_spindle: "hollowtech_ii"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {crank_spindle: "dub"})
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket", "single"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["groupset"])
+    })
+
+    // コンポセットのフリーボディに対応するホイールは適合する。
+    it("コンポセットのフリーボディに対応するホイールは適合する", () => {
+        const groupset = createPart(1, "Groupset", "groupset", {freehub_body: "sram_xdr"})
+        const wheel = createPart(2, "Wheel", "wheel", {freehub_body: "shimano_hg,sram_xdr"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel", "single"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
     // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする。
     it("タイヤ幅がチューブの対応範囲内なら適合する", () => {
         const tire = createPart(1, "Tire", "tire", {
@@ -667,6 +779,25 @@ describe("evaluatePartCompatibility", () => {
 
         expect(calculateSelectedPartsTotals({frame}))
             .toEqual({price: 1000, weight: 780 + 320 + 200})
+    })
+
+    // コンポセットの構成品は重量・価格がセット本体に含まれるため、合計へ加算しない。
+    it("セット構成品の重量と参考価格は合計に加算しない", () => {
+        const groupset: Part = {
+            ...createPart(1, "Groupset", "groupset", {}),
+            weight: 2500,
+            includedItems: [{
+                name: "RD-R7150",
+                quantity: 1,
+                categoryKey: "rear_derailleur",
+                weight: 262,
+                price: 40000,
+                isSetComponent: true,
+            }],
+        }
+
+        expect(calculateSelectedPartsTotals({groupset}))
+            .toEqual({price: 1000, weight: 2500})
     })
 
     // カテゴリーなし付属品（クリート等）は完成重量へ加算しない。

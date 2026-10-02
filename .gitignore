@@ -23,6 +23,8 @@ node_modules/
 AGENTS.md
 opencode.json
 .opencode/skills/
+.commandcode/
+.claude/
 
 # Local database files and journals
 *.sqlite

@@ -1,3 +1,4 @@
+import {Badge} from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {CandidatePartsFilterMenu} from "@/components/simulator/candidate-parts/CandidatePartsFilterMenu"
 import type {
@@ -18,6 +19,7 @@ type CandidatePartsFiltersProps = {
     searchQuery: string
     resultCount: number
     onSearchQueryChange: (query: string) => void
+    slotPositionLabel?: string | null // 前後スロットの表示名(前輪・後輪)。単一スロットではnull
 }
 
 // 候補パーツの絞り込み欄
@@ -33,6 +35,7 @@ export function CandidatePartsFilters({
     searchQuery,
     resultCount,
     onSearchQueryChange,
+    slotPositionLabel,
 }: CandidatePartsFiltersProps) {
     // 件数を絞り込みボタンの左に置き、絞り込みメニュー・検索の順で並べる。
     // 検索は文字入力が主操作のため、メニューではなく入力欄として残す。
@@ -62,6 +65,16 @@ export function CandidatePartsFilters({
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
             />
+
+            {/* 前後で別々に選ぶパーツは、どちらの位置を選んでいるかを検索欄の右に示す。 */}
+            {slotPositionLabel && (
+                <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-slate-600">
+                    選択位置
+                    <Badge variant="outline">
+                        {slotPositionLabel}
+                    </Badge>
+                </div>
+            )}
         </div>
     )
 }

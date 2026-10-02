@@ -106,7 +106,7 @@ export function SummaryCards({
                                 <CardContent>
                                     {/* 長い構成名は2行で省略し、title属性で全文を確認できるようにする。 */}
                                     <p
-                                        className="line-clamp-2 text-2xl font-bold [overflow-wrap:anywhere]"
+                                        className="line-clamp-2 text-4xl font-bold [overflow-wrap:anywhere]"
                                         title={activeConfigName}
                                     >
                                         {activeConfigName}

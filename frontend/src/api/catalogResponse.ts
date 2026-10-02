@@ -57,7 +57,13 @@ function parseIncludedItem(value: unknown): PartIncludedItem {
         typeof value.name !== "string" ||
         !isPositiveSafeInteger(value.quantity) ||
         (value.categoryKey !== null && typeof value.categoryKey !== "string") ||
-        !isNonNegativeFiniteNumber(value.weight)
+        !isNonNegativeFiniteNumber(value.weight) ||
+        // 参考価格とセット構成品フラグは、旧APIでは無いため省略を許可する
+        (value.price !== undefined &&
+            value.price !== null &&
+            !isNonNegativeFiniteNumber(value.price)) ||
+        (value.isSetComponent !== undefined &&
+            typeof value.isSetComponent !== "boolean")
     ) {
         throw new CatalogResponseError(
             "パーツの付属品情報を解釈できませんでした",
@@ -69,6 +75,8 @@ function parseIncludedItem(value: unknown): PartIncludedItem {
         quantity: value.quantity,
         categoryKey: value.categoryKey,
         weight: value.weight,
+        price: value.price ?? null,
+        isSetComponent: value.isSetComponent ?? false,
     }
 }
 

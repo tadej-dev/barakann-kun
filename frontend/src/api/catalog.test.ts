@@ -89,6 +89,9 @@ describe("catalog API", () => {
                 quantity: 1,
                 categoryKey: "handlebar",
                 weight: 320,
+                // 旧APIに無い参考価格・構成品フラグは既定値で補う
+                price: null,
+                isSetComponent: false,
             }],
         }])
     })

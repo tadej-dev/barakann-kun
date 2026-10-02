@@ -12,9 +12,20 @@ export type CompatibilityInput = {
     specifications?: Record<string, string>
 }
 
+// 規格ごとの判定結果。画面で「非適合：フリーボディ（カセット：HG／XDR）」のように並べるために使う。
+// reasons(文章)は保存APIのエラー文などで使うため残し、こちらは表示用の構造データとして併せて返す。
+export type CompatibilityDetail = {
+    label: string // 規格名(例: フリーボディ)
+    status: CompatibilityStatus
+    specificationKey?: string // 値を日本語ラベルへ変換するための規格キー。整形済みの値なら省略する
+    candidateValue?: string // 判定対象(候補)側の値。未登録なら省略
+    selectedValue?: string // 比較相手(選択済み)側の値。未登録なら省略
+}
+
 type PairCompatibilityResult = {
     status: CompatibilityStatus
     reasons: string[]
+    details?: CompatibilityDetail[]
 }
 
 type EqualityRule = {
@@ -23,6 +34,42 @@ type EqualityRule = {
     label: string
     protectedCategory?: string
     protectedCategoryLabel?: string
+}
+
+// 変速段数をそろえる必要がある駆動系のカテゴリー。
+// レバーの段数に合わせてディレイラー・カセット・チェーン・チェーンリングの幅が決まるため、全組み合わせで比較する。
+const DRIVETRAIN_SPEED_CATEGORIES = [
+    "shift_brake_lever",
+    "front_derailleur",
+    "rear_derailleur",
+    "crankset",
+    "cassette",
+    "chain",
+] as const
+
+// 変速方式(機械式・電動有線・電動無線)をそろえる必要があるカテゴリー。
+// 信号をやり取りするのはレバーとディレイラーだけなので、クランクなどは含めない。
+const SHIFT_SYSTEM_CATEGORIES = [
+    "shift_brake_lever",
+    "front_derailleur",
+    "rear_derailleur",
+] as const
+
+// 指定したカテゴリーの全組み合わせに、同じ規格キーの一致ルールを作る。
+function createPairwiseRules(
+    categories: readonly string[],
+    specificationKey: string,
+    label: string,
+): EqualityRule[] {
+    const rules: EqualityRule[] = []
+
+    for (const [index, first] of categories.entries()) {
+        for (const second of categories.slice(index + 1)) {
+            rules.push({categories: [first, second], specificationKey, label})
+        }
+    }
+
+    return rules
 }
 
 // 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する。
@@ -46,6 +93,35 @@ export const EQUALITY_RULES: EqualityRule[] = [
         protectedCategory: "frame",
         protectedCategoryLabel: "フレーム",
     },
+    {
+        categories: ["frame", "wheel"],
+        specificationKey: "wheel_diameter",
+        label: "ホイール径",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+    },
+    {
+        categories: ["frame", "brake_caliper"],
+        specificationKey: "brake_mount",
+        label: "ブレーキマウント",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+    },
+    // コンポセットは構成品(クランク・カセット・キャリパー)の規格をセット本体に持たせて判定する。
+    // 構成品のカテゴリーはセットが占有するため、単体パーツとの組み合わせはこの3つだけになる。
+    {categories: ["groupset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
+    {categories: ["groupset", "wheel"], specificationKey: "freehub_body", label: "フリーボディ"},
+    {categories: ["groupset", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
+    ...createPairwiseRules(
+        DRIVETRAIN_SPEED_CATEGORIES,
+        "drivetrain_speed",
+        "対応段数",
+    ),
+    ...createPairwiseRules(
+        SHIFT_SYSTEM_CATEGORIES,
+        "shift_system",
+        "変速方式",
+    ),
 ]
 
 export const STANDARD_COCKPIT_INTERFACE = "standard_1_1_8"
@@ -428,6 +504,148 @@ function compareTireAndTube(
     }
 }
 
+// フレームのタイヤクリアランスとタイヤ幅を比較する。
+// 一致ではなく「最大幅以下か」で判定するため、一致ルールとは別に扱う。
+function compareFrameAndTire(
+    frame: CompatibilityInput,
+    tire: CompatibilityInput,
+): PairCompatibilityResult | null {
+    const maxWidthValue = getSpecification(frame, "max_tire_width_mm")
+    const tireWidthValue = getSpecification(tire, "tire_width_mm")
+
+    if (!maxWidthValue && !tireWidthValue) {
+        return null
+    }
+
+    const maxWidth = Number(maxWidthValue)
+    const tireWidth = Number(tireWidthValue)
+
+    if (!Number.isFinite(maxWidth) || !Number.isFinite(tireWidth) || !maxWidthValue || !tireWidthValue) {
+        return {
+            status: "unknown",
+            reasons: ["フレームの対応タイヤ幅が未確認です"],
+        }
+    }
+
+    if (tireWidth > maxWidth) {
+        // フレームは構成の基準なので、入らないタイヤはフレームを維持したまま選べない扱いにする。
+        return {
+            status: "incompatible",
+            reasons: [
+                `${tireWidth}mmのタイヤはフレームの最大${maxWidth}mmを超えるため、フレームを維持したまま選択できません`,
+            ],
+        }
+    }
+
+    return {
+        status: "compatible",
+        reasons: [`タイヤ幅${tireWidth}mmはフレームの最大${maxWidth}mm以内です`],
+    }
+}
+
+// 複数ルールの判定結果を1つにまとめる。
+// 同じ組み合わせに規格が複数ある場合(段数と変速方式など)、最も重い結果を採用し、理由はすべて残す。
+function combinePairResults(
+    results: PairCompatibilityResult[],
+): PairCompatibilityResult | null {
+    if (results.length === 0) {
+        return null
+    }
+
+    const hasIncompatible = results.some((result) => result.status === "incompatible")
+    const hasUnknown = results.some((result) => result.status === "unknown")
+    const status: CompatibilityStatus = hasIncompatible
+        ? "incompatible"
+        : hasUnknown
+            ? "unknown"
+            : "compatible"
+
+    return {
+        status,
+        reasons: results.flatMap((result) => result.reasons),
+        details: results.flatMap((result) => result.details ?? []),
+    }
+}
+
+// 一致ルール1件分の判定。両方の規格が未登録ならnullを返す。
+function compareByEqualityRule(
+    rule: EqualityRule,
+    candidate: CompatibilityInput,
+    candidateCategory: string,
+    selected: CompatibilityInput,
+    selectedCategory: string,
+): PairCompatibilityResult | null {
+    const candidateValue = getSpecification(candidate, rule.specificationKey)
+    const selectedValue = getSpecification(selected, rule.specificationKey)
+
+    if (!candidateValue && !selectedValue) {
+        return null
+    }
+
+    // 規格名と両側の値は、どの判定結果でも同じ形で表示用に添える。
+    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [{
+        label: rule.label,
+        status,
+        specificationKey: rule.specificationKey,
+        candidateValue,
+        selectedValue,
+    }]
+
+    if (!candidateValue || !selectedValue) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.label}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    if (specificationValuesMatch(candidateValue, selectedValue)) {
+        return {
+            status: "compatible",
+            reasons: [`${rule.label}が適合します`],
+            details: createDetails("compatible"),
+        }
+    }
+
+    if (
+        rule.protectedCategory &&
+        (
+            candidateCategory === rule.protectedCategory ||
+            selectedCategory === rule.protectedCategory
+        )
+    ) {
+        return {
+            status: "incompatible",
+            reasons: [
+                `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,
+            ],
+            details: createDetails("incompatible"),
+        }
+    }
+
+    return {
+        status: "incompatible",
+        reasons: [`${rule.label}が一致しません`],
+        details: createDetails("incompatible"),
+    }
+}
+
+// 規格ごとの詳細を持たない判定結果に、規格名だけの詳細を補う。
+// コックピットやカテゴリーの占有のように、値の一致では表せない判定で使う。
+function withSummaryDetail(
+    result: PairCompatibilityResult,
+    label: string,
+): PairCompatibilityResult {
+    if (result.details && result.details.length > 0) {
+        return result
+    }
+
+    return {
+        ...result,
+        details: [{label, status: result.status}],
+    }
+}
+
 // 2パーツ間の規格判定。対象カテゴリーの組み合わせがなければnullを返す。
 export function compareParts(
     candidate: CompatibilityInput,
@@ -443,6 +661,7 @@ export function compareParts(
         return {
             status: "incompatible",
             reasons: ["別の選択パーツが対象カテゴリーを占有するため同時に選択できません"],
+            details: [{label: "カテゴリーの占有", status: "incompatible"}],
         }
     }
 
@@ -454,64 +673,65 @@ export function compareParts(
     )
 
     if (cockpitResult) {
-        return cockpitResult
+        return withSummaryDetail(cockpitResult, "コックピット")
     }
 
     if (hasCategoryPair(candidateCategory, selectedCategory, ["tire", "inner_tube"])) {
         const tire = candidateCategory === "tire" ? candidate : selected
         const tube = candidateCategory === "inner_tube" ? candidate : selected
 
-        return compareTireAndTube(tire, tube)
+        return withSummaryDetail(compareTireAndTube(tire, tube), "タイヤサイズ")
     }
+
+    if (hasCategoryPair(candidateCategory, selectedCategory, ["frame", "tire"])) {
+        const frame = candidateCategory === "frame" ? candidate : selected
+        const tire = candidateCategory === "tire" ? candidate : selected
+
+        const result = compareFrameAndTire(frame, tire)
+
+        if (!result) {
+            return null
+        }
+
+        // 値は単位つきで整形済みのため、規格キーを付けずにそのまま表示する。
+        const tireWidth = getSpecification(tire, "tire_width_mm")
+        const maxWidth = getSpecification(frame, "max_tire_width_mm")
+        const tireValue = tireWidth ? `${tireWidth}mm` : undefined
+        const frameValue = maxWidth ? `最大${maxWidth}mm` : undefined
+
+        return {
+            ...result,
+            details: [{
+                label: "タイヤ幅",
+                status: result.status,
+                candidateValue: candidateCategory === "tire" ? tireValue : frameValue,
+                selectedValue: candidateCategory === "tire" ? frameValue : tireValue,
+            }],
+        }
+    }
+
+    // 該当する一致ルールをすべて評価し、結果をまとめる。
+    const ruleResults: PairCompatibilityResult[] = []
 
     for (const rule of EQUALITY_RULES) {
         if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
             continue
         }
 
-        const candidateValue = getSpecification(candidate, rule.specificationKey)
-        const selectedValue = getSpecification(selected, rule.specificationKey)
+        const result = compareByEqualityRule(
+            rule,
+            candidate,
+            candidateCategory,
+            selected,
+            selectedCategory,
+        )
 
-        if (!candidateValue && !selectedValue) {
-            return null
-        }
-
-        if (!candidateValue || !selectedValue) {
-            return {
-                status: "unknown",
-                reasons: [`${rule.label}が未確認です`],
-            }
-        }
-
-        if (specificationValuesMatch(candidateValue, selectedValue)) {
-            return {
-                status: "compatible",
-                reasons: [`${rule.label}が適合します`],
-            }
-        }
-
-        if (
-            rule.protectedCategory &&
-            (
-                candidateCategory === rule.protectedCategory ||
-                selectedCategory === rule.protectedCategory
-            )
-        ) {
-            return {
-                status: "incompatible",
-                reasons: [
-                    `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,
-                ],
-            }
-        }
-
-        return {
-            status: "incompatible",
-            reasons: [`${rule.label}が一致しません`],
+        if (result) {
+            ruleResults.push(result)
         }
     }
 
-    return null
+    return combinePairResults(ruleResults)
 }
 
 export type CompatibilityIssue = {

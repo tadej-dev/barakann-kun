@@ -17,6 +17,7 @@ import {
     type CompatibilityCounterpart,
     type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
+import {buildCompatibilitySummary} from "@/features/simulator/compatibilitySummary"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
     getPartSlotCategoryKey,
@@ -54,12 +55,19 @@ const compatibilityBadgeStyles = {
 }
 
 const compatibilityLabels = {
-    compatible: "適合",
+    compatible: "互換",
     unknown: "規格未確認",
     incompatible: "非互換",
 }
 
-// 適合・非互換の相手を「カテゴリ（前後）「製品名」」の形で表す。
+// 互換・非互換の相手を「カテゴリ（前後）「製品名」」の形で表す。
+// 適合判定の行見出しの色。非互換・未確認・互換を色でも見分けられるようにする。
+const compatibilitySummaryLabelStyles = {
+    incompatible: "text-red-600",
+    unknown: "text-amber-600",
+    compatible: "text-emerald-600",
+}
+
 function getCounterpartLabel(
     counterpart: CompatibilityCounterpart,
     categoryDisplayNames: Record<string, string>,
@@ -109,16 +117,19 @@ function CandidatePartsTableRowComponent({
 
     // 「どのパーツに対して」非互換・未確認かを示すため、相手と理由を整形する。
     const counterparts = compatibility?.counterparts ?? []
-    const offendingCounterparts = counterparts.filter(
-        (counterpart) => counterpart.status !== "compatible",
-    )
-    // バッジのホバー詳細には適合した相手も含めて全件を出す。
+    // バッジのホバー詳細には互換の相手も含めて全件を出す。
     const counterpartTooltip = counterparts
         .map((counterpart) =>
             `${getCounterpartLabel(counterpart, categoryDisplayNames)}：` +
             `${compatibilityLabels[counterpart.status]}（${counterpart.reasons.join("、")}）`,
         )
         .join("\n")
+
+    // 相手パーツとの判定を「非互換・未確認・互換」の行にまとめる。
+    const compatibilitySummary = buildCompatibilitySummary(
+        counterparts,
+        categoryDisplayNames,
+    )
 
     // キーボードによるパーツ選択処理
     function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
@@ -221,17 +232,25 @@ function CandidatePartsTableRowComponent({
                         </span>
                     )}
 
-                    {!isFrame && compatibility && (offendingCounterparts.length > 0 ||
+                    {!isFrame && compatibility && (compatibilitySummary.length > 0 ||
                         compatibility.reasons.length > 0) && (
                         <div className="flex flex-col gap-0.5 text-xs font-normal text-slate-500">
-                            {offendingCounterparts.length > 0
-                                ? offendingCounterparts.map((counterpart) => (
+                            {compatibilitySummary.length > 0
+                                ? compatibilitySummary.map((line) => (
                                     <span
-                                        key={counterpart.slotKey}
+                                        key={line.status}
                                         className="break-words [overflow-wrap:anywhere]"
                                     >
-                                        {getCounterpartLabel(counterpart, categoryDisplayNames)}：
-                                        {counterpart.reasons.join("、")}
+                                        <span className={`font-semibold ${compatibilitySummaryLabelStyles[line.status]}`}>
+                                            {line.label}：
+                                        </span>
+                                        {/* 各項目にマウスを乗せると、両側の値を詳細として表示する。 */}
+                                        {line.items.map((item, index) => (
+                                            <span key={item.text} title={item.title}>
+                                                {index > 0 && "\u3000"}
+                                                {item.text}
+                                            </span>
+                                        ))}
                                     </span>
                                 ))
                                 : (

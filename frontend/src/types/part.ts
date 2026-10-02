@@ -5,6 +5,10 @@ export type PartIncludedItem = {
     categoryKey: string | null
     // 完成重量へ加算する単品重量。未調査は0のまま加算対象外にする
     weight: number
+    // 単品のメーカー希望小売価格(参考表示用で合計金額には加算しない)。未調査はnull
+    price?: number | null
+    // セット構成品かどうか。trueなら重量はセット本体に含まれるため完成重量へ加算しない
+    isSetComponent?: boolean
 }
 
 // 候補一覧・選択状態・保存構成で共有するパーツの表示および規格情報。

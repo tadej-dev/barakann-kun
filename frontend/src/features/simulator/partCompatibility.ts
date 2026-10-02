@@ -5,6 +5,7 @@ import {
     getFrameCockpitStatus,
 } from "../../../../shared/part-compatibility-core"
 import type {
+    CompatibilityDetail,
     CompatibilityStatus,
     FrameCockpitStatus,
 } from "../../../../shared/part-compatibility-core"
@@ -17,6 +18,7 @@ import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
 export {getFrameCockpitStatus}
+export type {CompatibilityDetail}
 
 // 適合判定の相手となった選択済みパーツと、その結果。
 // 「どのパーツに対して非互換なのか」をUIで示すために保持する。
@@ -25,6 +27,7 @@ export type CompatibilityCounterpart = {
     partName: string
     status: CompatibilityStatus
     reasons: string[]
+    details: CompatibilityDetail[] // 規格ごとの判定結果(表示で状態別にまとめるために使う)
 }
 
 export type CompatibilityResult = {
@@ -122,6 +125,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     bb386: "BB386",
     bb86: "BB86",
     bb90: "BB90",
+    bb92: "BB92",
     bbright: "Cervélo BBRight",
     campagnolo_n3w: "Campagnolo N3W",
     campagnolo_protech: "Campagnolo Pro-Tech",
@@ -189,6 +193,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     scott_foil_ic: "Scott Foil iC専用",
     t45: "T45（82.5mm）",
     t47_68: "T47 68mm",
+    t47_73: "T47 73mm",
     t47_85_5: "T47 85.5mm",
     t47a: "T47A（76.75mm）",
     time_iclic: "TIME ICLIC",
@@ -250,9 +255,11 @@ export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
 }
 
 // カテゴリー付き付属品の重量を数量込みで合計する。価格は加算しない。
+// セット構成品の重量はセット本体の重量に含まれるため、二重計算しないよう除外する。
 export function sumIncludedItemsWeight(part: Part): number {
     return (part.includedItems ?? [])
         .filter((item) => item.categoryKey !== null)
+        .filter((item) => !item.isSetComponent)
         .reduce((total, item) => total + item.quantity * item.weight, 0)
 }
 
@@ -316,6 +323,7 @@ export function evaluatePartCompatibility(
             partName: getPartDisplayName(selectedPart),
             status: result.status,
             reasons: result.reasons,
+            details: result.details ?? [],
         })
 
         if (result.status === "incompatible") {

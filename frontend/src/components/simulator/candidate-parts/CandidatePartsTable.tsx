@@ -14,7 +14,6 @@ import {
     TableCell,
     TableRow,
 } from "@/components/ui/table"
-import {Badge} from "@/components/ui/badge"
 import {Button} from "@/components/ui/button"
 import {
     evaluatePartCompatibility,
@@ -194,15 +193,6 @@ export function CandidatePartsTable({
 
     return (
         <div className="space-y-3">
-            {slotPositionLabel && (
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                    選択位置
-                    <Badge variant="outline">
-                        {slotPositionLabel}
-                    </Badge>
-                </div>
-            )}
-
             {/* フレーム選択で自動解除した内容を短時間だけ伝える。 */}
             {replacementNotice && (
                 <div
@@ -225,6 +215,7 @@ export function CandidatePartsTable({
                 searchQuery={searchQuery}
                 resultCount={candidateRows.length}
                 onSearchQueryChange={setSearchQuery}
+                slotPositionLabel={slotPositionLabel}
             />
 
             <div

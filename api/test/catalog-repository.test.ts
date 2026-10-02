@@ -65,6 +65,9 @@ describe("d1-catalog-repository", () => {
             quantity: 1,
             categoryKey: "handlebar",
             weight: 320,
+            // 列が無い行は「価格なし・通常の付属品」として返す
+            price: null,
+            isSetComponent: false,
         }])
     })
 })

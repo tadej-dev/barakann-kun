@@ -28,6 +28,8 @@ type IncludedItemRow = {
     quantity: number
     category_key: string | null
     weight: number
+    price: number | null
+    is_set_component: number
 }
 
 type BlockedCategoryRow = {
@@ -83,12 +85,12 @@ export class D1CatalogRepository implements CatalogRepository {
     constructor(private readonly database: D1Database) {}
 
     async findCategories(): Promise<Category[]> {
-        // 表示順をマスターデータのID順に統一
+        // 表示順は sort_order で決め、同じ値ならID順にする
         const rows = await queryRows<CategoryRow>(
             this.database,
             `SELECT id, key, display_name
              FROM categories
-             ORDER BY id ASC`,
+             ORDER BY sort_order ASC, id ASC`,
         )
 
         return rows.map((row) => ({
@@ -168,6 +170,8 @@ export class D1CatalogRepository implements CatalogRepository {
                             items.item_name,
                             items.quantity,
                             items.weight,
+                            items.price,
+                            items.is_set_component,
                             categories.key AS category_key
                      FROM part_included_items AS items
                      LEFT JOIN categories
@@ -203,6 +207,9 @@ export class D1CatalogRepository implements CatalogRepository {
                     quantity: row.quantity,
                     categoryKey: row.category_key,
                     weight: row.weight,
+                    // 列追加前のデータでも壊れないよう、未設定は「価格なし・通常の付属品」とみなす
+                    price: row.price ?? null,
+                    isSetComponent: row.is_set_component === 1,
                 })
                 includedItems.set(row.part_id, items)
 

@@ -97,6 +97,10 @@ export function SelectedPartsTable({
                             const blockedItemWeight = blockedItem
                                 ? blockedItem.quantity * blockedItem.weight
                                 : 0
+                            // セット構成品の参考価格(単品定価)。合計金額には加算しない表示専用の値。
+                            const blockedItemPrice = blockedItem?.price != null
+                                ? blockedItem.quantity * blockedItem.price
+                                : null
                             // 規格未確認(unknown)やフレーム以外はバッジを表示しない
                             const frameCockpitBadge = part
                                 ? getFrameCockpitBadge(part)
@@ -154,9 +158,12 @@ export function SelectedPartsTable({
                                                     : "未選択"}
                                             </span>
 
+                                            {/* コンポセットなどのセット構成品と、フレーム付属品などを区別して表示する。 */}
                                             {isBlocked && blockedItem && (
                                                 <Badge variant="outline">
-                                                    付属品
+                                                    {blockedItem.isSetComponent
+                                                        ? "構成品"
+                                                        : "付属品"}
                                                 </Badge>
                                             )}
 
@@ -205,9 +212,19 @@ export function SelectedPartsTable({
                                     </TableCell>
 
                                     <TableCell>
-                                        {part && !isBlocked
-                                            ? priceFormatter.format(part.price)
-                                            : "-"}
+                                        {part && !isBlocked ? (
+                                            priceFormatter.format(part.price)
+                                        ) : isBlocked && blockedItemPrice !== null ? (
+                                            // 単品定価は合計金額(セット価格)と一致しないため、参考値だと分かる表示にする。
+                                            <span
+                                                className="text-xs font-normal text-muted-foreground"
+                                                title="単品のメーカー希望小売価格（参考）。合計金額には含みません"
+                                            >
+                                                参考 {priceFormatter.format(blockedItemPrice)}
+                                            </span>
+                                        ) : (
+                                            "-"
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             )
