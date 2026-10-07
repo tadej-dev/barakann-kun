@@ -16,9 +16,12 @@ export default defineConfig({
   },
 
   server: {
+    // Google OAuthのコールバック先と一致させ、空きポートへの自動変更を防ぐ。
+    port: 5173,
+    strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:8787",
         changeOrigin: true,
       },
     },

@@ -1,6 +1,12 @@
-target/
 .env
-.env.example
+.env.*
+!.env.example
+
+# Local secrets used by Cloudflare/Wrangler development
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
 .idea/
 .vscode/
 *.iml
@@ -9,5 +15,32 @@ target/
 # Logs
 *.log
 
-# Docker / local runtime
-docker-compose.override.yml
+# Local runtime
+node_modules/
+.wrangler/
+
+# Local agent settings
+AGENTS.md
+opencode.json
+.opencode/skills/
+.commandcode/
+.claude/
+
+# Local database files and journals
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Private key material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Generated build and test output
+dist/
+coverage/
+*.tsbuildinfo

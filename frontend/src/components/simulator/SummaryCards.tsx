@@ -3,7 +3,6 @@ import {GripVertical} from "lucide-react"
 import NumberFlow from "@number-flow/react"
 import type {Format} from "@number-flow/react"
 
-import {ConfigList} from "@/components/simulator/ConfigList"
 import {
     Sortable,
     SortableItem,
@@ -16,19 +15,21 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import type {ConfigId} from "@/features/simulator/simulatorTypes"
 
 type SummaryCardsProps = {
     totalPrice: number
     totalWeight: number
-    activeConfigId: ConfigId
-    onConfigChange: (configId: ConfigId) => void
-    onClearActiveConfig: () => void
+    activeConfigName: string // 選択中の構成名（構成選択は左カラムで行う）
 }
 
 type SummaryCardId = "price" | "weight" | "config"
 
-const initialCardOrder: SummaryCardId[] = ["price", "weight", "config"]
+// 選択中の構成名を先頭に置き、金額・重量がどの構成の値かを読み取りやすくする。
+const initialCardOrder: SummaryCardId[] = [
+    "config",
+    "price",
+    "weight",
+]
 
 type SummaryCard = {
     title: string
@@ -40,14 +41,14 @@ type SummaryCard = {
 export function SummaryCards({
                                  totalPrice,
                                  totalWeight,
-                                 activeConfigId,
-                                 onConfigChange,
-                                 onClearActiveConfig,
+                                 activeConfigName,
                              }: SummaryCardsProps) {
+    // カード順は画面内だけで管理し、数値計算や構成データの保存責務とは分離する。
     const [cardOrder, setCardOrder] =
         useState<SummaryCardId[]>(initialCardOrder)
 
-    const cards: Record<Exclude<SummaryCardId, "config">, SummaryCard> = {
+    // 金額・重量は同じカード描画器へ渡し、構成名だけを文字列表示のカードとして扱う
+    const cards: Record<"price" | "weight", SummaryCard> = {
         price: {
             title: "合計金額",
             value: totalPrice,
@@ -67,23 +68,51 @@ export function SummaryCards({
         },
     }
 
+    // 数値カードと構成カードを同じSortableへ渡し、利用者が表示順を変更できるようにする。
     return (
         <Sortable
             value={cardOrder}
             onValueChange={setCardOrder}
             getItemValue={(cardId) => cardId}
             strategy="grid"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,1fr))_minmax(260px,1fr)]"
+            className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-3"
         >
             {cardOrder.map((cardId) => {
+                // 構成名は数値ではないため、NumberFlowを使わない専用カードで描画する。
                 if (cardId === "config") {
                     return (
                         <SortableItem key={cardId} value={cardId}>
-                            <ConfigList
-                                activeConfigId={activeConfigId}
-                                onConfigChange={onConfigChange}
-                                onClearActiveConfig={onClearActiveConfig}
-                            />
+                            <Card className="h-full border border-b-0">
+                                <CardHeader>
+                                    <CardTitle className="text-lg font-bold text-zinc-500">
+                                        選択中の構成
+                                    </CardTitle>
+
+                                    <CardAction>
+                                        <SortableItemHandle
+                                            render={
+                                                <button
+                                                    type="button"
+                                                    aria-label="選択中の構成カードを移動"
+                                                />
+                                            }
+                                            className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <GripVertical className="size-4"/>
+                                        </SortableItemHandle>
+                                    </CardAction>
+                                </CardHeader>
+
+                                <CardContent>
+                                    {/* 長い構成名は省略し、全文はマウスを乗せると表示する */}
+                                    <p
+                                        className="line-clamp-2 text-4xl font-bold [overflow-wrap:anywhere]"
+                                        title={activeConfigName}
+                                    >
+                                        {activeConfigName}
+                                    </p>
+                                </CardContent>
+                            </Card>
                         </SortableItem>
                     )
                 }

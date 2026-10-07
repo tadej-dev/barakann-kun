@@ -36,6 +36,7 @@ function createPart(id: number): Part {
     }
 }
 
+// 現行形式・旧形式・Storage利用不可の環境で、画面状態を安全に復元できるか確認する。
 describe("simulator-storage", () => {
     beforeEach(() => {
         Object.defineProperty(globalThis, "window", {
@@ -48,6 +49,7 @@ describe("simulator-storage", () => {
         Reflect.deleteProperty(globalThis, "window")
     })
 
+    // 旧形式のPartオブジェクトをIDだけのv2形式へ変換し、前輪へ引き継ぐ。
     it("旧形式のPartからIDを取り出して前後スロットへ移行する", () => {
         window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify({
             activeConfigId: "1",
@@ -70,6 +72,7 @@ describe("simulator-storage", () => {
         })
     })
 
+    // localStorageの肥大化を防ぐため、保存するのはパーツIDと構成メタデータだけにする。
     it("Part全体ではなくIDだけをv2形式で保存する", () => {
         const part = createPart(20)
         const configs: ConfigStates = {
@@ -92,5 +95,36 @@ describe("simulator-storage", () => {
             },
         })
         expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    })
+
+    // 統合で削除した旧パーツIDは、残したIDへ読み替えて復元する。
+    it("統合前の旧パーツIDを残したIDへ読み替える", () => {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            activeConfigId: "1",
+            configs: {
+                "1": {wheel: 442},
+                "2": {},
+                "3": {},
+                "4": {},
+            },
+        }))
+
+        expect(loadSimulatorState()?.configs["1"]).toEqual({wheel: 441})
+    })
+
+    // Safariの制限やプライベートモードでも、シミュレーター自体は操作できるようにする。
+    it("Storageへアクセスできない環境でも例外を画面へ伝播しない", () => {
+        Object.defineProperty(window, "localStorage", {
+            configurable: true,
+            get: () => {
+                throw new Error("Storage is unavailable")
+            },
+        })
+
+        expect(loadSimulatorState()).toBeNull()
+        expect(() => saveSimulatorState({
+            activeConfigId: "1",
+            configs: {"1": {}, "2": {}, "3": {}, "4": {}},
+        })).not.toThrow()
     })
 })

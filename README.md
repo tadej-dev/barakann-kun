@@ -276,115 +276,59 @@ UI・体験の改善：
 
 ## 10. 技術スタック（手段としての技術）
 
-### 10-1. 使用予定の技術
+### 10-1. 使用技術
 
-- フレームワーク：Spring Boot
-- 言語：Java
-- DB：PostgreSQL
-- フロントエンド：
-  - Thymeleaf（MVP）
-  - 将来的に React または Next.js を検討
-- デプロイ先：Render または Railway
-- 使用予定ライブラリ：
-  - Spring Security
-  - Spring Data JPA
-  - Lombok
-  - Thymeleaf
+- フロントエンド：React、TypeScript、Vite、Tailwind CSS
+- バックエンド：Hono、TypeScript、Zod
+- データベース：Cloudflare D1
+- 実行・配信環境：Cloudflare Workers、Workers Static Assets
+- テスト：Vitest
+- UI：Base UI、ReUI、dnd-kit
 
 ---
 
 ### 10-2. 技術選定の理由
 
-なぜこの技術を使うのか：
-JavaおよびSpring Bootの学習を継続しており、バックエンド開発への理解を深めたいと考えているためです。
-また、本サービスではパーツ情報や互換性判定など、複雑なデータ構造や業務ロジックを扱うことが想定されます。
-Spring Bootは保守性や拡張性に優れており、将来的な機能追加にも対応しやすいと考えています。
-
-今回チャレンジしたい点：
-
-- Spring Securityを利用した認証機能の実装
-- JPAを利用した複雑なデータモデリング
-- パーツ互換性判定ロジックの設計
-- 検索機能の実装
-- 将来的なSPA構成を見据えたAPI設計
-
-不安な点：
-
-- ドメイン設計が複雑になる可能性がある
-- 互換性判定ロジックの実装難易度が高い
-- パーツデータ数の増加によるパフォーマンスへの影響
+- ReactとHonoをTypeScriptで統一し、フロントエンドとAPIの型を追いやすくする
+- Hono APIとReact SPAを同一Workerから配信し、CORSを必要としない構成にする
+- D1とWorkersを利用し、小規模なMVPを低コストで運用する
+- ZodでAPI入力値を実行時にも検証する
+- パーツ適合判定を純粋なTypeScript関数として分離し、テストしやすくする
 
 ---
 
-### 10-3.キャッチアップ不足の懸念
+### 10-3. 今後の技術的な懸念
 
-Spring Bootを利用した開発経験がまだ十分ではないため、認証機能やデータベース設計、デプロイ作業などで学習コストが発生する可能性があります。
+- ログイン機能追加時の認証・認可とユーザー別データ管理
+- D1の制限を考慮したクエリとマイグレーション設計
+- パーツデータと価格更新日の継続的なメンテナンス
+- 規格情報が不足しているパーツの適合判定方針
+- フロントエンドのバンドルサイズと初期表示速度
 
-また、パーツ管理や互換性判定機能は要件が複雑であり、実装難易度や調査工数を正確に見積もることが難しいと考えています。
+### 10-4. ローカル開発
 
-まずはMVPとして、
+初回のみ依存関係とローカルD1を準備します。
 
-- ユーザー登録
-- パーツ選択
-- 重量計算
-- 価格計算
+```bash
+cd /Users/wcyt/Develop/barakann-kun
+npm ci
+npm run setup
+```
 
-に機能を限定し、早期に動くものをリリースします。
+ReactとHonoを同時に起動します。
 
-その後、利用者のフィードバックをもとに、
+```bash
+npm run dev
+```
 
-- 互換性判定
-- パーツ比較
-- AIレコメンド
-
-などの機能を段階的に追加する予定です。
-
-また、ReactやNext.jsについては本リリース後にキャッチアップを進め、必要性や開発コストを検証した上で導入を判断します。
-
-### 10-4.  現在のキャッチアップ状況
-
-#### Spring Boot
-
-以下については学習済みです。
-
-- CRUDアプリケーションの作成
-- Controller / Service / Repositoryの実装
-- Spring Data JPAを利用したDB操作
-- 基本的なルーティング（GET / POST）
-- フォーム送信およびバリデーション
-
-一方で、以下は今後キャッチアップを進める予定です。
-
-- 複雑なドメイン設計
-- API設計および外部API連携
-
-#### Thymeleaf
-
-以下については学習済みです。
-
-- 一覧表示
-- 詳細表示
-- 登録フォーム
-- 編集フォーム
-- バリデーションエラー表示
-
-本サービスではMVP段階ではThymeleafを利用し、サーバーサイドレンダリングを前提として開発を進める予定です。
-
-#### 状態管理
-
-React等のSPAフレームワークは現時点では利用予定がなく、Thymeleafによるサーバーサイドレンダリングを採用する予定です。
-
-#### API連携
-
-現時点では外部APIとの連携経験はありません。
+- React：`http://localhost:5173`
+- Hono：`http://localhost:8787`
 
 ### 10-5.  画面遷移図URL
 
 Figma：https://www.figma.com/design/d1LLrTFUodsXWP0HaqyaAf/barakan-kun?node-id=0-1&p=f&t=YM471mAtPBCiUwp0-0
 
-### 10-6.  ER図のリンク
+### 10-6. データベース定義
 
-Gyazo：https://i.gyazo.com/d59ce5806ac6a65f56e53156bf280dde.png
-
-
-```
+- 現在のD1スキーマ：[`api/migrations/0001_initial_schema.sql`](api/migrations/0001_initial_schema.sql)
+- 初期設計時のER図：https://i.gyazo.com/d59ce5806ac6a65f56e53156bf280dde.png

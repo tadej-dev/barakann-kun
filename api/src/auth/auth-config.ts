@@ -1,0 +1,102 @@
+import type {Adapter} from "@auth/core/adapters"
+import type {OAuthConfig} from "@auth/core/providers"
+import type {AuthConfig} from "@hono/auth-js"
+
+import {createD1AuthAdapter} from "./d1-auth-adapter"
+import type {Bindings} from "../types"
+
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+const SESSION_UPDATE_AGE_SECONDS = 60 * 60
+
+const GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+
+/**
+ * Googleの認可レスポンスに `iss` が付かない環境でも処理できるOAuth設定。
+ *
+ * Auth.jsの組み込みGoogleプロバイダーはOIDC discoveryを利用するため、
+ * discovery metadataが `iss` を必須と通知した場合に、その値を検証します。
+ * Google側のレスポンス差異で `iss` が欠落するケースがあるため、エンドポイントを
+ * 明示したOAuth 2.0として扱い、認可コード交換後はGoogleのUserInfo APIでプロフィールを取得します。
+ * stateとPKCEは維持し、コールバックの改ざんと認可コード横取りへの対策を残します。
+ */
+function createGoogleProvider(
+    clientId: string,
+    clientSecret: string,
+): OAuthConfig<Record<string, unknown>> {
+    // discoveryへ依存せず使用するGoogleの各エンドポイントを固定する
+    return {
+        id: "google",
+        name: "Google",
+        type: "oauth",
+        // 明示OAuth設定でも、Googleが返すissuer値を正しく検証できるようにする。
+        issuer: "https://accounts.google.com",
+        clientId,
+        clientSecret,
+        authorization: {
+            url: GOOGLE_AUTHORIZATION_ENDPOINT,
+            params: {
+                scope: "openid profile email",
+            },
+        },
+        token: {
+            url: GOOGLE_TOKEN_ENDPOINT,
+        },
+        userinfo: {
+            url: GOOGLE_USERINFO_ENDPOINT,
+        },
+        // Googleのレスポンスに依存せず、Auth.js側でstateとPKCEを検証する。
+        checks: ["pkce", "state"],
+    }
+}
+
+// Auth.js設定の生成
+export function createAuthConfig(
+    context: {env: Bindings},
+    adapter?: Adapter,
+): AuthConfig {
+    const {
+        AUTH_SECRET,
+        AUTH_URL,
+        AUTH_DEBUG,
+        GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET,
+    } = context.env
+
+    // ルートとテストで共通利用するAuth.js設定をここで組み立てる
+    return {
+        basePath: "/api/auth",
+        secret: AUTH_SECRET ?? "",
+        trustHost: true,
+        // OAuthプロバイダーのエラー内容を確認するときだけ、ローカルで明示的に有効化する。
+        // 本番で常時有効にすると認証フローの詳細がログへ出るため、既定値は無効にする。
+        debug: AUTH_DEBUG === "true",
+        ...(AUTH_URL ? {url: AUTH_URL} : {}),
+        // テストから渡されたAdapterを優先し通常時だけD1実装を生成する
+        adapter: adapter ?? createD1AuthAdapter(context.env.DB),
+        providers: [
+            createGoogleProvider(
+                GOOGLE_CLIENT_ID ?? "",
+                GOOGLE_CLIENT_SECRET ?? "",
+            ),
+        ],
+        session: {
+            // D1のセッションを正本としてログアウトや期限切れを管理する
+            strategy: "database",
+            maxAge: SESSION_MAX_AGE_SECONDS,
+            updateAge: SESSION_UPDATE_AGE_SECONDS,
+        },
+        callbacks: {
+            // Auth.js標準のセッションへアプリ内ユーザーIDを追加
+            async session({session, user}) {
+                // 保存APIが本文のユーザーIDを信頼せず所有者を判定できるようにする
+                if (session.user) {
+                    session.user.id = user.id
+                }
+
+                return session
+            },
+        },
+    }
+}

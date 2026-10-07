@@ -1,3 +1,5 @@
+import {useMemo} from "react"
+
 import {CandidatePartsFilters} from "./CandidatePartsFilters"
 import {CandidatePartsBlockedMessage} from "./CandidatePartsBlockedMessage"
 import {CandidatePartsSelectionDialog} from "./CandidatePartsSelectionDialog"
@@ -12,18 +14,25 @@ import {
     TableCell,
     TableRow,
 } from "@/components/ui/table"
-import {Badge} from "@/components/ui/badge"
+import {Button} from "@/components/ui/button"
 import {
     evaluatePartCompatibility,
     getPartPackageUnit,
+    type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
+import {hasPartVariantColumn} from "@/features/simulator/partDisplay"
 import type {PartSlot} from "@/features/simulator/partSlots"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
+import type {Category} from "@/types/category"
 import type {Part} from "@/types/part"
+
+// 行数が多い場合だけブラウザ標準の遅延描画を有効化
+const CONTENT_VISIBILITY_THRESHOLD = 100
 
 // 候補パーツ表のプロパティ
 type CandidatePartsTableProps = {
     parts: Part[] // 選択中カテゴリーの候補パーツ
+    categories: Category[] // 非互換の相手をカテゴリ名で示すために使う
     activeSlot: PartSlot // 選択中の選択枠
     selectedParts: SelectedParts // 現在構成の選択済みパーツ
     selectedPart?: Part // 選択済みパーツ
@@ -33,6 +42,8 @@ type CandidatePartsTableProps = {
     blockingCategoryNames: string[] // 選択不可の原因となるカテゴリー名
     blockingPartNames: string[] // 選択不可の原因となるパーツ名
     slotPositionLabel?: string | null // 前後スロットの表示名
+    frameSelected: boolean // フレーム選択済みかどうか
+    onSelectFrame: () => void // フレーム選択へ戻る処理
     onSelect: (
         part: Part,
         slotKeys?: string[],
@@ -44,6 +55,7 @@ type CandidatePartsTableProps = {
 // 候補パーツ一覧
 export function CandidatePartsTable({
                                         parts,
+                                        categories,
                                         activeSlot,
                                         selectedParts,
                                         selectedPart,
@@ -53,43 +65,102 @@ export function CandidatePartsTable({
                                         blockingCategoryNames,
                                         blockingPartNames,
                                         slotPositionLabel,
+                                        frameSelected,
+                                        onSelectFrame,
                                         onSelect,
                                         onRemoveBlockingParts,
                                     }: CandidatePartsTableProps) {
+    // 検索条件が変わっても適合判定を再計算せず、パーツ選択時だけ更新
+    // 規格判定はフィルター結果ではなく元の候補一覧を対象にし、行表示時の参照をO(1)にする。
+    const compatibilityByPartId = useMemo(() => {
+        const result = new Map<number, CompatibilityResult | null>()
+
+        for (const part of parts) {
+            result.set(
+                part.id,
+                evaluatePartCompatibility(part, activeSlot, selectedParts),
+            )
+        }
+
+        return result
+    }, [activeSlot, parts, selectedParts])
+
     // 候補パーツ表の状態・表示データ
     const {
         brands,
+        candidateRows,
         changeSort,
-        filteredAndSortedParts,
+        changeVariant,
+        filters,
         hasActiveFilters,
-        hasIntegratedHandlebars,
-        integratedHandlebarOnly,
         searchQuery,
-        selectedBrand,
-        setIntegratedHandlebarOnly,
+        setFilters,
         setSearchQuery,
-        setSelectedBrand,
+        cockpitStatuses,
+        modelYears,
+        showIntegratedHandlebarFilter,
+        showViewFilter,
         sortDescriptor,
-    } = useCandidatePartsTable(parts)
+        specFilters,
+    } = useCandidatePartsTable(
+        parts,
+        compatibilityByPartId,
+        selectedPart?.id,
+        activeSlot.categoryKey,
+    )
+    const showVariantColumn = hasPartVariantColumn(parts)
+
+    // slotKey から相手カテゴリの表示名を引けるようにする。
+    const categoryDisplayNames = useMemo(
+        () => Object.fromEntries(
+            categories.map((category) => [category.key, category.displayName]),
+        ),
+        [categories],
+    )
 
     const {
         cancelPendingSelection,
         categorySlots,
         confirmPendingSelection,
         pendingSelection,
+        replacementNotice,
         requestSelection,
+        requestSelectionBoth,
     } = useCandidatePartsSelection(
         activeSlot,
         selectedParts,
         onSelect,
     )
     const supportsFrontRearSelection = categorySlots.length === 2
+    const enableContentVisibility = candidateRows.length >=
+        CONTENT_VISIBILITY_THRESHOLD
+
+    // 表示データの準備後に、排他・読み込み・エラーの順で早期returnする
+    // フレームが未選択の間は、他カテゴリーの候補を操作させず基準パーツの選択へ戻す。
+    if (!frameSelected && activeSlot.categoryKey !== "frame") {
+        return (
+            <CandidatePartsTableMessage
+                message="規格の基準となるフレームを先に選択してください"
+                showVariantColumn={showVariantColumn}
+            >
+                <Button
+                    type="button"
+                    size="sm"
+                    onClick={onSelectFrame}
+                >
+                    フレームを選択
+                </Button>
+            </CandidatePartsTableMessage>
+        )
+    }
 
     // 選択不可状態
     if (blockedMessage) {
+        // 一体型パーツなどでカテゴリー全体が占有されている場合は、表を出さず解除導線を優先する。
         return (
             <CandidatePartsBlockedMessage
                 message={blockedMessage}
+                showVariantColumn={showVariantColumn}
                 blockingCategoryNames={blockingCategoryNames}
                 blockingPartNames={blockingPartNames}
                 onRemove={onRemoveBlockingParts}
@@ -99,14 +170,22 @@ export function CandidatePartsTable({
 
     // 読み込み状態
     if (isLoading) {
-        return <CandidatePartsTableMessage message="パーツを読み込んでいます..."/>
+        // 候補一覧がまだない間に空表示と誤認させない。
+        return (
+            <CandidatePartsTableMessage
+                message="パーツを読み込んでいます..."
+                showVariantColumn={showVariantColumn}
+            />
+        )
     }
 
     // API取得エラー
     if (errorMessage) {
+        // 取得失敗時は古い候補を表示せず、再試行可能なエラー表示へ切り替える。
         return (
             <CandidatePartsTableMessage
                 message={errorMessage}
+                showVariantColumn={showVariantColumn}
                 className="text-destructive"
             />
         )
@@ -114,41 +193,53 @@ export function CandidatePartsTable({
 
     return (
         <div className="space-y-3">
-            {slotPositionLabel && (
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                    選択位置
-                    <Badge variant="outline">
-                        {slotPositionLabel}
-                    </Badge>
+            {/* フレーム選択で自動解除した内容を短時間だけ伝える。 */}
+            {replacementNotice && (
+                <div
+                    className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                    role="status"
+                >
+                    {replacementNotice}
                 </div>
             )}
 
             <CandidatePartsFilters
+                filters={filters}
                 brands={brands}
-                selectedBrand={selectedBrand}
+                specFilters={specFilters}
+                showViewFilter={showViewFilter}
+                cockpitStatuses={cockpitStatuses}
+                modelYears={modelYears}
+                showIntegratedHandlebarFilter={showIntegratedHandlebarFilter}
+                onFiltersChange={setFilters}
                 searchQuery={searchQuery}
-                integratedHandlebarOnly={integratedHandlebarOnly}
-                showIntegratedHandlebarFilter={hasIntegratedHandlebars}
-                resultCount={filteredAndSortedParts.length}
-                onBrandChange={setSelectedBrand}
+                resultCount={candidateRows.length}
                 onSearchQueryChange={setSearchQuery}
-                onIntegratedHandlebarOnlyChange={setIntegratedHandlebarOnly}
+                slotPositionLabel={slotPositionLabel}
             />
 
-            <div className="overflow-hidden rounded-lg border bg-background">
+            <div
+                className={
+                    "rounded-lg border bg-background " +
+                    (enableContentVisibility
+                        ? "max-h-[70vh] overflow-auto"
+                        : "overflow-x-auto")
+                }
+            >
                 <Table
                     aria-label="候補パーツ一覧"
                     className="min-w-[760px] table-fixed"
                 >
                     <CandidatePartsTableHeader
                         sortDescriptor={sortDescriptor}
+                        showVariantColumn={showVariantColumn}
                         onSort={changeSort}
                     />
 
                     <TableBody className={"font-bold"}>
-                        {filteredAndSortedParts.length === 0 ? (
+                        {candidateRows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5}>
+                                <TableCell colSpan={showVariantColumn ? 5 : 4}>
                                     <div className="py-8 text-center text-zinc-500">
                                         {hasActiveFilters
                                             ? "検索条件に一致するパーツがありません"
@@ -157,23 +248,27 @@ export function CandidatePartsTable({
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredAndSortedParts.map((part) => (
+                            candidateRows.map((row) => (
                                 <CandidatePartsTableRow
-                                    key={part.id}
-                                    part={part}
-                                    isSelected={selectedPart?.id === part.id}
-                                    compatibility={evaluatePartCompatibility(
-                                        part,
-                                        activeSlot,
-                                        selectedParts,
-                                    )}
+                                    key={row.key}
+                                    part={row.activePart}
+                                    variants={row.variants}
+                                    modelKey={row.key}
+                                    onVariantChange={changeVariant}
+                                    isSelected={
+                                        selectedPart?.id === row.activePart.id
+                                    }
+                                    showVariantColumn={showVariantColumn}
+                                    compatibility={compatibilityByPartId.get(row.activePart.id) ?? null}
+                                    categoryDisplayNames={categoryDisplayNames}
+                                    enableContentVisibility={enableContentVisibility}
                                     canSelectBoth={
                                         supportsFrontRearSelection &&
-                                        !part.specifications?.allowed_position &&
-                                        getPartPackageUnit(part) !== "pair"
+                                        !row.activePart.specifications?.allowed_position &&
+                                        getPartPackageUnit(row.activePart) !== "pair"
                                     }
-                                    onSelect={() => requestSelection(part)}
-                                    onSelectBoth={() => requestSelection(part, true)}
+                                    onSelect={requestSelection}
+                                    onSelectBoth={requestSelectionBoth}
                                 />
                             ))
                         )}

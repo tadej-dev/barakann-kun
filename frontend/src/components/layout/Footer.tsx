@@ -14,6 +14,7 @@ const footerLinks = [
 
 // フッター
 export function Footer() {
+    // リンク配列をmapし、規約ページの追加・変更を1か所で管理する。
     return (
         <footer className="shrink-0 border-t border-slate-800 bg-[#0b0f12] px-10 py-6 text-sm text-slate-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

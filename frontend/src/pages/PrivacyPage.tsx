@@ -1,5 +1,6 @@
 // プライバシーポリシー画面
 export function PrivacyPage() {
+    // 規約本文はAPIから取得せず、ビルド済みの静的コンテンツとして提供する。
     return (
         <div className="bg-slate-50 text-slate-900">
             <main className="mx-auto max-w-4xl px-6 py-12">
@@ -18,28 +19,32 @@ export function PrivacyPage() {
                 </div>
 
                 <article className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+                    {/* 認証とサービス提供で取り扱う情報の概要 */}
                     <div className="mb-8 rounded-lg bg-slate-50 p-4 text-sm leading-7 text-slate-600">
                         <p className="mt-1">
-                            本サービスでは、現時点でユーザー登録機能は提供していません。
-                            ただし、サービス改善や機能提供のため、必要な範囲で情報を取り扱う場合があります。
+                            本サービスでは、Googleアカウントによるログイン機能を提供しています。
+                            ログイン機能やサービス提供のため、必要な範囲でユーザー情報を取り扱います。
                         </p>
                     </div>
 
+                    {/* Googleログインや利用状況から取得する情報 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第1条（取得する情報）
                         </h2>
 
                         <p className="leading-8 text-slate-700">
-                            本サービスでは、現時点でユーザーの氏名、住所、電話番号、メールアドレス等の個人情報を直接取得する機能は提供していません。
+                            Googleアカウントでログインした場合、表示名、メールアドレス、プロフィール画像、
+                            Googleアカウントを識別するための情報を取得します。
                         </p>
 
                         <p className="mt-3 leading-8 text-slate-700">
-                            ただし、アクセス解析、問い合わせ対応、サービス改善等を行う場合には、利用状況、アクセス日時、ブラウザ情報、
+                            また、サービス提供、問い合わせ対応、サービス改善等を行う場合には、利用状況、アクセス日時、ブラウザ情報、
                             端末情報、IPアドレス等の情報を取得する場合があります。
                         </p>
                     </section>
 
+                    {/* ブラウザ内に保持する構成データと移行時の扱い */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第2条（localStorageの利用）
@@ -51,7 +56,8 @@ export function PrivacyPage() {
 
                         <p className="mt-3 leading-8 text-slate-700">
                             localStorageに保存される情報は、ユーザーが利用しているブラウザ内に保存されます。
-                            これらの情報は、サーバーには送信されません。
+                            ログイン後にユーザーが確認して移行を選択した場合は、選択した構成のパーツIDが
+                            ユーザーのアカウントに紐づく保存構成としてサーバーへ送信されます。
                         </p>
 
                         <p className="mt-3 leading-8 text-slate-700">
@@ -60,6 +66,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 取得情報を利用する目的 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第3条（利用目的）
@@ -78,6 +85,7 @@ export function PrivacyPage() {
                         </ul>
                     </section>
 
+                    {/* 法令に基づく場合を除く第三者提供の制限 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第4条（第三者提供）
@@ -88,27 +96,31 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* Google認証やホスティング等の外部サービス */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第5条（外部サービスの利用）
                         </h2>
 
                         <p className="leading-8 text-slate-700">
-                            本サービスでは、今後、アクセス解析、ホスティング、エラー監視、広告配信等のために外部サービスを利用する場合があります。
+                            本サービスでは、Googleアカウントによる認証やホスティング等のために外部サービスを利用します。
                         </p>
 
                         <p className="mt-3 leading-8 text-slate-700">
-                            外部サービスを利用する場合、各外部サービスのプライバシーポリシーに従って情報が取り扱われる場合があります。
+                            Googleログインを利用する場合、Googleのプライバシーポリシー等に従って情報が取り扱われます。
+                            その他の外部サービスについても、各サービスのプライバシーポリシーに従って情報が取り扱われる場合があります。
                         </p>
                     </section>
 
+                    {/* ログイン状態の維持等に使うCookie類 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第6条（Cookie等の利用）
                         </h2>
 
                         <p className="leading-8 text-slate-700">
-                            本サービスでは、サービスの利便性向上、利用状況の分析、機能改善等のためにCookieまたは類似の技術を利用する場合があります。
+                            本サービスでは、ログイン状態の維持、サービスの利便性向上、利用状況の分析、機能改善等のために
+                            Cookieまたは類似の技術を利用する場合があります。
                         </p>
 
                         <p className="mt-3 leading-8 text-slate-700">
@@ -117,6 +129,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 取得情報の安全管理とアカウント削除時の消去 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第7条（情報の管理）
@@ -126,8 +139,14 @@ export function PrivacyPage() {
                             運営者は、取得した情報について、漏えい、滅失、き損、不正アクセス等を防止するため、
                             必要かつ適切な範囲で安全管理に努めます。
                         </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            ユーザーがアカウント削除を実行した場合、アカウント情報、認証情報、
+                            保存構成および関連するセッション情報を削除します。
+                        </p>
                     </section>
 
+                    {/* ポリシーを変更する場合の扱い */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第8条（プライバシーポリシーの変更）
@@ -139,6 +158,7 @@ export function PrivacyPage() {
                         </p>
                     </section>
 
+                    {/* 問い合わせ窓口に関する案内 */}
                     <section>
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第9条（お問い合わせ）

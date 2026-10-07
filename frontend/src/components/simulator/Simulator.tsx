@@ -1,395 +1,109 @@
-import {useEffect, useMemo, useReducer, useState} from "react"
-
-import {fetchParts, fetchPartsByIds} from "@/api/parts"
 import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
-import {CategoryList} from "@/components/simulator/CategoryList"
+import type {CSSProperties} from "react"
+
+import {ConfigList} from "@/components/simulator/ConfigList"
+import {AutoSaveConflictAlert} from "@/components/simulator/config-list/AutoSaveConflictAlert"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
-    createInitialSimulatorState,
-    simulatorReducer,
-} from "@/features/simulator/simulatorReducer"
-import {calculateSelectedPartsTotals} from "@/features/simulator/partCompatibility"
+    SidebarInset,
+    SidebarProvider,
+    SidebarTrigger,
+} from "@/components/ui/sidebar"
+import {useConfigAutoSave} from "@/features/simulator/useConfigAutoSave"
+import {useConfigCollection} from "@/features/simulator/useConfigCollection"
 import {
-    getPartSlotCategoryKey,
-    getPartSlotPositionLabel,
-    getPartSlots,
-    type PartSlot,
-} from "@/features/simulator/partSlots"
-import {
-    CONFIG_IDS,
-    type ConfigId,
-    type ConfigStates,
-    type SelectedParts,
-} from "@/features/simulator/simulatorTypes"
-import {
-    loadSimulatorState,
-    saveSimulatorState,
-} from "@/lib/simulator-storage"
+    useSimulatorController,
+    type UseSimulatorControllerProps,
+} from "@/features/simulator/useSimulatorController"
 import type {Category} from "@/types/category"
-import type {Part} from "@/types/part"
 
-// シミュレーターのプロパティ
+// シミュレーター画面のプロパティ
 type SimulatorProps = {
-    categories: Category[] // カテゴリー一覧
+    categories: Category[]
+    savedBuildsReloadKey?: number
+    autoSaveEnabled?: boolean
 }
 
-// 空の選択済みパーツ
-const EMPTY_SELECTED_PARTS: SelectedParts = {}
-
-// シミュレーター本体
+// シミュレーター画面
 export function Simulator({
                               categories,
+                              savedBuildsReloadKey = 0,
+                              autoSaveEnabled = true,
                           }: SimulatorProps) {
-    const [storedState] = useState(loadSimulatorState)
-    const storedPartIds = useMemo(
-        () => Array.from(new Set(
-            storedState
-                ? Object.values(storedState.configs).flatMap((selections) =>
-                    Object.values(selections),
-                )
-                : [],
-        )),
-        [storedState],
-    )
-    const [hasRestoredStoredParts, setHasRestoredStoredParts] = useState(
-        storedPartIds.length === 0,
-    )
-    const [restoreError, setRestoreError] = useState("")
-
-    // シミュレーターの状態管理
-    const [simulatorState, dispatch] = useReducer(
-        simulatorReducer, // 状態更新処理
-        categories[0]?.key ?? "", // 初期カテゴリーキー
-        (initialCategory) => {
-            // 初期状態
-            const initialState = createInitialSimulatorState(
-                initialCategory, // 初期カテゴリーキー
-            )
-
-            if (!storedState) {
-                return initialState
-            }
-
-            return {
-                ...initialState, // 初期状態の引き継ぎ
-                activeConfigId: storedState.activeConfigId, // 保存済み構成ID
-            }
-        },
-    )
-
-    // 選択中の構成ID
-    const {activeConfigId} = simulatorState
-
-    // 選択中のパーツ選択枠
-    const {activeSlot} = simulatorState
-
-    // 選択中のカテゴリー
-    const {categoryKey: activeCategory} = activeSlot
-
-    // 構成別の選択状態
-    const {configs} = simulatorState
-
-    // 保存済みIDから最新のパーツ情報を復元
-    useEffect(() => {
-        if (!storedState || storedPartIds.length === 0) {
-            return
-        }
-
-        const controller = new AbortController()
-        const stateToRestore = storedState
-
-        async function restoreStoredParts() {
-            try {
-                const parts = await fetchPartsByIds(
-                    storedPartIds,
-                    controller.signal,
-                )
-                const partsById = new Map(
-                    parts.map((part) => [part.id, part]),
-                )
-                const restoredConfigs = Object.fromEntries(
-                    CONFIG_IDS.map((configId) => [
-                        configId,
-                        Object.fromEntries(
-                            Object.entries(stateToRestore.configs[configId]).flatMap(
-                                ([slotKey, partId]) => {
-                                    const part = partsById.get(partId)
-
-                                    return part?.categoryKey ===
-                                        getPartSlotCategoryKey(slotKey)
-                                        ? [[slotKey, part]]
-                                        : []
-                                },
-                            ),
-                        ),
-                    ]),
-                ) as ConfigStates
-
-                dispatch({
-                    type: "restore",
-                    activeConfigId: stateToRestore.activeConfigId,
-                    configs: restoredConfigs,
-                })
-                setRestoreError("")
-                setHasRestoredStoredParts(true)
-            } catch (error) {
-                if (!controller.signal.aborted) {
-                    setRestoreError(
-                        error instanceof Error
-                            ? error.message
-                            : "保存済み構成の復元に失敗しました",
-                    )
-                }
-            }
-        }
-
-        void restoreStoredParts()
-
-        return () => controller.abort()
-    }, [storedPartIds, storedState])
-
-    // 構成変更時の保存
-    useEffect(() => {
-        if (!hasRestoredStoredParts) {
-            return
-        }
-
-        saveSimulatorState({
-            activeConfigId, // 現在の構成ID
-            configs, // 現在の構成状態
-        })
-    }, [
-        activeConfigId, // 構成切り替え時の保存
-        configs, // パーツ選択時の保存
-        hasRestoredStoredParts, // 保存済み構成復元後の保存
-    ])
-
-    // 現在構成の選択済みパーツ
-    const selectedParts =
-        configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
-
-    // 選択済みパーツが占有しているカテゴリー
-    const blockedCategoryKeys = useMemo(() => {
-        return new Set(
-            Object.values(selectedParts).flatMap(
-                (part) => part.blockedCategoryKeys ?? [],
-            ),
-        )
-    }, [selectedParts])
-
-    // 現在カテゴリーを占有している選択内容
-    const blockingSelections = useMemo(() => {
-        return Object.entries(selectedParts).filter(([, part]) =>
-            (part.blockedCategoryKeys ?? []).includes(activeCategory),
-        )
-    }, [activeCategory, selectedParts])
-
-    // 占有中パーツのカテゴリー名
-    const blockingCategoryNames = useMemo(() => {
-        return Array.from(new Set(
-            blockingSelections.map(([slotKey]) => {
-                const categoryKey = getPartSlotCategoryKey(slotKey)
-
-                return categories.find(
-                    (category) => category.key === categoryKey,
-                )?.displayName ?? "選択済みパーツ"
-            }),
-        ))
-    }, [blockingSelections, categories])
-
-    // 現在カテゴリーの選択不可メッセージ
-    const blockedMessage = blockingSelections.length > 0
-        ? `${blockingSelections.map(([, part]) => part.name).join("、")}に含まれるため、${
-            categories.find((category) => category.key === activeCategory)
-                ?.displayName ?? "このカテゴリー"
-        }は選択できません。`
-        : undefined
-
-    // カテゴリー別の候補パーツ
-    const [partsByCategory, setPartsByCategory] = useState<
-        Record<string, Part[]> // カテゴリーキーと候補パーツ一覧の対応
-    >({}) // 初期状態（未取得）
-
-    // カテゴリー別のエラーメッセージ
-    const [
-        partsErrorsByCategory,
-        setPartsErrorsByCategory,
-    ] = useState<
-        Record<string, string> // カテゴリーキーとエラーメッセージの対応
-    >({}) // 初期状態（エラーなし）
-
-    useEffect(() => {
-        // カテゴリー未選択・他パーツに含まれる場合の終了処理
-        if (
-            !activeCategory ||
-            blockedCategoryKeys.has(activeCategory)
-        ) {
-            return
-        }
-
-        // 取得済みパーツの再利用
-        if (
-            Object.hasOwn(
-                partsByCategory,
-                activeCategory,
-            )
-        ) {
-            return
-        }
-
-        // API通信の中断制御
-        const controller = new AbortController()
-
-        // 候補パーツの取得処理
-        async function loadParts() {
-            try {
-                const parts = await fetchParts(
-                    activeCategory, // 取得対象のカテゴリーキー
-                    controller.signal, // API通信の中断シグナル
-                )
-
-                // 取得結果のカテゴリー別保存
-                setPartsByCategory((current) => ({
-                    ...current, // 取得済みパーツの引き継ぎ
-                    [activeCategory]: parts, // 現在カテゴリーの取得結果
-                }))
-
-                // 取得成功時のエラー削除
-                setPartsErrorsByCategory((current) => {
-                    const next = {...current} // 現在のエラー内容をコピー
-
-                    delete next[activeCategory] // 現在カテゴリーのエラーを削除
-
-                    return next
-                })
-            } catch (error) {
-                // 通信中断以外のエラー処理
-                if (!controller.signal.aborted) {
-                    setPartsErrorsByCategory((current) => ({
-                        ...current, // ほかのカテゴリーのエラーを引き継ぐ
-                        [activeCategory]:
-                            error instanceof Error
-                                ? error.message // Error型のメッセージ
-                                : "エラーが発生しました", // Error型以外のメッセージ
-                    }))
-                }
-            }
-        }
-
-        // 非同期処理の実行
-        void loadParts()
-
-        // カテゴリー変更・画面破棄時の通信中断
-        return () => controller.abort()
-    }, [
-        activeCategory, // 選択中カテゴリーの変更監視
-        blockedCategoryKeys, // 選択不可カテゴリーの変更監視
-        partsByCategory, // 取得済みパーツの変更監視
-    ])
-
-    // 選択中カテゴリーの取得状態
-    const hasLoadedActiveCategory = Object.hasOwn(
-        partsByCategory,
-        activeCategory,
-    )
-
-    // 選択中カテゴリーの候補パーツ
-    const activeParts = partsByCategory[activeCategory] ?? []
-
-    // 選択中カテゴリーのエラーメッセージ
-    const partsError = partsErrorsByCategory[activeCategory] ?? ""
-
-    // 候補パーツの読み込み状態
-    const isLoadingParts =
-        Boolean(activeCategory) &&
-        !hasLoadedActiveCategory &&
-        !partsError
-
-    // 選択済みパーツの合計
-    const {price: totalPrice, weight: totalWeight} = useMemo(
-        () => calculateSelectedPartsTotals(selectedParts),
-        [selectedParts],
-    )
-
-    // 構成変更処理
-    function changeConfig(configId: ConfigId) {
-        dispatch({
-            type: "changeConfig", // 構成変更
-            configId, // 変更先の構成ID
-        })
+    const controllerProps: UseSimulatorControllerProps = {
+        categories,
+        autoSaveEnabled,
     }
+    // controllerの戻り値を表示コンポーネントへ配線し、このファイルでは状態を直接変更しない。
+    const controller = useSimulatorController(controllerProps)
 
-    // カテゴリー変更処理
-    function changeCategory(category: string) {
-        const nextSlot = activeCategory === category
-            ? activeSlot
-            : getPartSlots(category)[0]
+    // 構成データ(固定枠・追加構成・表示順)は、構成一覧・自動保存・上部カードの構成名で共有するため、ここで1回だけ取得する。
+    const collection = useConfigCollection({
+        savedBuildsReloadKey,
+        activeConfigId: controller.activeConfigId,
+        activeSavedBuildId: controller.activeSavedBuildId,
+        onConfigChange: controller.changeConfig,
+    })
+    // 選択中のパーツとサーバーの保存内容を同期する。構成一覧の表示とは独立した処理。
+    const autoSave = useConfigAutoSave({
+        collection,
+        configStates: controller.configs,
+        selectedParts: controller.selectedParts,
+        activeConfigId: controller.activeConfigId,
+        activeSavedBuildId: controller.activeSavedBuildId,
+        isSavedBuildLoading: controller.isSavedBuildLoading,
+        autoSaveEnabled: controller.autoSaveEnabled,
+        onConfigChange: controller.changeConfig,
+        onRestoreConfigSlot: controller.restoreConfigSlot,
+        onRestoreSavedBuild: controller.selectSavedBuild,
+    })
 
-        changeSlot(nextSlot)
-    }
-
-    // 選択枠変更処理
-    function changeSlot(slot: PartSlot) {
-        dispatch({
-            type: "changeSlot", // 選択枠変更
-            slot, // 変更先の選択枠
-        })
-    }
-
-    // パーツ選択処理
-    function selectPart(
-        part: Part,
-        slotKeys?: string[],
-        removeSlotKeys?: string[],
-    ) {
-        dispatch({
-            type: "selectPart", // パーツ選択
-            part, // 選択対象のパーツ
-            slotKeys, // 選択先の選択枠
-            removeSlotKeys, // 非互換パーツの解除対象
-        })
-    }
-
-    // 現在カテゴリーを占有するパーツの解除処理
-    function removeBlockingParts() {
-        dispatch({
-            type: "removeParts", // パーツ解除
-            slotKeys: blockingSelections.map(([slotKey]) => slotKey),
-        })
-    }
-
-    // 現在構成の初期化処理
-    function clearActiveConfig() {
-        dispatch({
-            type: "clearActiveConfig", // 現在構成の初期化
-        })
-    }
-
+    // 画面レイアウトは表示だけを担当し、選択・保存・復元の状態遷移はcontrollerへ集約する。
     return (
-        <div className="bg-slate-100 p-4">
-            <main className="grid min-h-[calc(100vh-64px)] grid-cols-1 gap-4 lg:grid-cols-[230px_1fr]">
-                <aside className="rounded-lg bg-[#101518] p-4 text-white">
-                    <CategoryList
-                        categories={categories}
-                        activeCategory={activeCategory}
-                        blockedCategoryKeys={blockedCategoryKeys}
-                        onCategoryChange={changeCategory}
-                    />
-                </aside>
+        // サイドバーの幅と配置を、構成一覧に合わせて調整する。
+        <SidebarProvider
+            className="min-h-[calc(100svh-4rem)] bg-slate-100 [&_[data-slot=sidebar-gap]]:hidden"
+            style={{"--sidebar-width": "19rem"} as CSSProperties}
+        >
+            <ConfigList
+                categories={categories}
+                collection={collection}
+                activeConfigId={controller.activeConfigId}
+                activeSavedBuildId={controller.activeSavedBuildId}
+                configStates={controller.configs}
+                selectedParts={controller.selectedParts}
+                isSavedBuildLoading={controller.isSavedBuildLoading}
+                savedBuildErrorMessage={controller.savedBuildError}
+                onConfigChange={controller.changeConfig}
+                onSavedBuildSelect={controller.selectSavedBuild}
+                onSavedBuildPrefetch={controller.prefetchSavedBuild}
+                onClearActiveConfig={controller.clearActiveConfig}
+                onClearConfig={controller.clearConfig}
+            >
+                {/* 自動保存の競合通知 */}
+                <AutoSaveConflictAlert
+                    conflict={autoSave.autoSaveConflict}
+                    onResolve={(resolution) => void autoSave.resolveAutoSaveConflict(resolution)}
+                />
+            </ConfigList>
 
-                <section className="rounded-lg border border-slate-300 bg-white p-4">
+            <SidebarInset className="min-w-0 bg-slate-100 p-4">
+                <section className="min-w-0 flex-1 overflow-hidden rounded-lg border border-slate-300 bg-white p-4">
+                    {/* スマホ幅でサイドバーを開くボタン */}
+                    <div className="mb-3 md:hidden">
+                        <SidebarTrigger aria-label="構成選択を開く" />
+                    </div>
+
                     <SummaryCards
-                        totalPrice={totalPrice}
-                        totalWeight={totalWeight}
-                        activeConfigId={activeConfigId}
-                        onConfigChange={changeConfig}
-                        onClearActiveConfig={clearActiveConfig}
+                        totalPrice={controller.totalPrice}
+                        totalWeight={controller.totalWeight}
+                        activeConfigName={collection.activeConfigName}
                     />
 
-                    {restoreError && (
+                    {controller.restoreError && (
                         <p className="mt-3 text-sm font-medium text-destructive">
-                            {restoreError}。ページを再読み込みしてください。
+                            {controller.restoreError}。ページを再読み込みしてください。
                         </p>
                     )}
 
@@ -397,36 +111,33 @@ export function Simulator({
                         className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">
                         <SelectedPartsTable
                             categories={categories}
-                            activeSlotKey={activeSlot.key}
-                            selectedParts={selectedParts}
-                            blockedCategoryKeys={blockedCategoryKeys}
-                            onSlotChange={changeSlot}
+                            activeSlotKey={controller.activeSlot.key}
+                            selectedParts={controller.selectedParts}
+                            blockedCategoryKeys={controller.blockedCategoryKeys}
+                            onSlotChange={controller.changeSlot}
                         />
 
                         <CandidatePartsTable
-                            key={activeSlot.key}
-                            parts={activeParts}
-                            activeSlot={activeSlot}
-                            selectedParts={selectedParts}
-                            selectedPart={
-                                selectedParts[activeSlot.key]
-                            }
-                            isLoading={isLoadingParts}
-                            errorMessage={partsError}
-                            blockedMessage={blockedMessage}
-                            blockingCategoryNames={blockingCategoryNames}
-                            blockingPartNames={blockingSelections.map(
-                                ([, part]) => part.name,
-                            )}
-                            slotPositionLabel={getPartSlotPositionLabel(
-                                activeSlot.position,
-                            )}
-                            onSelect={selectPart}
-                            onRemoveBlockingParts={removeBlockingParts}
+                            key={controller.activeSlot.key}
+                            parts={controller.activeParts}
+                            categories={categories}
+                            activeSlot={controller.activeSlot}
+                            selectedParts={controller.selectedParts}
+                            selectedPart={controller.selectedPart}
+                            isLoading={controller.isLoadingParts}
+                            errorMessage={controller.partsError}
+                            blockedMessage={controller.blockedMessage}
+                            blockingCategoryNames={controller.blockingCategoryNames}
+                            blockingPartNames={controller.blockingPartNames}
+                            slotPositionLabel={controller.slotPositionLabel}
+                            frameSelected={Boolean(controller.selectedParts.frame)}
+                            onSelectFrame={() => controller.changeCategory("frame")}
+                            onSelect={controller.onSelectPart}
+                            onRemoveBlockingParts={controller.onRemoveBlockingParts}
                         />
                     </div>
                 </section>
-            </main>
-        </div>
+            </SidebarInset>
+        </SidebarProvider>
     )
 }

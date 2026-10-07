@@ -1,4 +1,5 @@
 // 利用規約画面
+// 利用規約をアプリケーション内の固定ページとして表示する。
 export function TermsPage() {
     return (
         <div className="bg-slate-50 text-slate-900">
@@ -19,6 +20,7 @@ export function TermsPage() {
                 </div>
 
                 <article className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+                    {/* 規約の概要を先に示し、本文が個人開発サービス向けであることを明示する。 */}
                     <div className="mb-8 rounded-lg bg-slate-50 p-4 text-sm leading-7 text-slate-600">
                         <p className="mt-1">
                             本ページは個人開発サービス向けの利用規約です。
@@ -26,6 +28,7 @@ export function TermsPage() {
                         </p>
                     </div>
 
+                    {/* サービス利用への同意条件 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第1条（適用）
@@ -37,6 +40,7 @@ export function TermsPage() {
                         </p>
                     </section>
 
+                    {/* シミュレーターで提供する機能と、情報が参考値であること */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第2条（サービス内容）
@@ -53,6 +57,7 @@ export function TermsPage() {
                         </p>
                     </section>
 
+                    {/* 購入・互換性確認を利用者自身が行うこと */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第3条（利用上の注意）
@@ -64,6 +69,7 @@ export function TermsPage() {
                         </p>
                     </section>
 
+                    {/* localStorageとログイン後のD1保存の違い */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第4条（保存機能について）
@@ -77,8 +83,19 @@ export function TermsPage() {
                         <p className="mt-3 leading-8 text-slate-700">
                             また、ブラウザの設定変更、キャッシュ削除、ストレージ削除等により、保存された構成データが失われる場合があります。
                         </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            ログイン後、ユーザーが確認して移行を選択した場合は、localStorageの構成を
+                            アカウントに紐づく保存構成としてサーバーへ保存できます。
+                        </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            アカウントを削除した場合、アカウントに紐づく保存構成およびログイン情報は削除されます。
+                            localStorageに保存された構成は、ブラウザ側に残ります。
+                        </p>
                     </section>
 
+                    {/* 過度なアクセスや不正利用などの禁止事項 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第5条（禁止事項）
@@ -97,6 +114,7 @@ export function TermsPage() {
                         </ul>
                     </section>
 
+                    {/* 情報の正確性・サービス停止に関する免責 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第6条（免責事項）
@@ -112,6 +130,7 @@ export function TermsPage() {
                         </p>
                     </section>
 
+                    {/* 画面・プログラム等の権利帰属 */}
                     <section className="mb-10">
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第7条（知的財産権）
@@ -123,6 +142,7 @@ export function TermsPage() {
                         </p>
                     </section>
 
+                    {/* 規約を変更する場合の効力発生日 */}
                     <section>
                         <h2 className="mb-3 border-l-4 border-sky-500 pl-3 text-xl font-bold text-slate-900">
                             第8条（利用規約の変更）

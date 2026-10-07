@@ -10,12 +10,15 @@ export type ConfigId = (typeof CONFIG_IDS)[number]
 // 選択枠別の選択済みパーツ
 export type SelectedParts = Record<string, Part>
 
+// 固定構成と追加構成で共有する、スロット単位の選択状態。
 // 構成別の選択済みパーツ
 export type ConfigStates = Record<ConfigId, SelectedParts>
 
 // シミュレーター全体の状態
 export type SimulatorState = {
     activeConfigId: ConfigId // 選択中の構成ID
+    activeSavedBuildId: string | null // 選択中の追加構成ID
     activeSlot: PartSlot // 選択中のパーツ選択枠
     configs: ConfigStates // 構成別の選択状態
+    savedBuildParts: SelectedParts // 選択中の追加構成のパーツ
 }

@@ -1,0 +1,432 @@
+import {fetchCsrfToken} from "@/features/auth/authApi"
+import {
+    isNonNegativeFiniteNumber,
+    isPartSlotKey,
+    isPositiveSafeInteger,
+} from "@/api/responseValidation"
+
+// サーバー側と同じ保存上限をUI表示にも利用する
+export const MAX_SAVED_BUILDS = 20
+const FIXED_CONFIG_COUNT = 4
+const MAX_PARTS_PER_BUILD = 100
+const MAX_SAVED_BUILD_ID_LENGTH = 200
+const MAX_TIMESTAMP_LENGTH = 64
+
+// 固定構成4件を含む上限と、1構成あたりの入力・表示サイズをAPIと共有する。
+
+// D1へ保存する構成内パーツの入力
+export type SavedBuildPartInput = {
+    slotKey: string
+    partId: number
+}
+
+// 保存構成に含まれる、保存時点のパーツ情報
+export type SavedBuildPart = SavedBuildPartInput & {
+    price: number
+    weight: number
+}
+
+// 保存構成APIから返される構成
+export type SavedBuild = {
+    id: string
+    name: string
+    version: number
+    createdAt: string
+    updatedAt: string
+    shareToken: string | null
+    parts: SavedBuildPart[]
+}
+
+// 公開URLでは所有者向け識別子や世代情報を受け取らない
+export type PublicSavedBuild = Pick<SavedBuild, "name" | "parts">
+
+type ApiErrorPayload = {
+    error?: {
+        code?: unknown
+        message?: unknown
+        partIds?: unknown
+    }
+}
+
+// APIエラーを呼び出し側で扱いやすい形にする
+export class SavedBuildApiError extends Error {
+    readonly code: string | null
+    readonly partIds: number[]
+
+    constructor(
+        message: string,
+        code: string | null = null,
+        partIds: number[] = [],
+    ) {
+        super(message)
+        this.name = "SavedBuildApiError"
+        this.code = code
+        this.partIds = partIds
+    }
+}
+
+// 構成APIのエラー本文を読み取り、画面表示用の例外へ変換
+async function throwApiError(
+    response: Response,
+    fallbackMessage: string,
+): Promise<never> {
+    // APIのエラー本文は形式が保証されないため、読める項目だけを画面用例外へ移す。
+    let message = fallbackMessage
+    let code: string | null = null
+    let partIds: number[] = []
+
+    try {
+        const payload = await response.json() as ApiErrorPayload
+
+        if (typeof payload.error?.message === "string") {
+            message = payload.error.message
+        }
+
+        if (typeof payload.error?.code === "string") {
+            code = payload.error.code
+        }
+
+        if (
+            Array.isArray(payload.error?.partIds) &&
+            payload.error.partIds.every(
+                (partId) => isPositiveSafeInteger(partId),
+            )
+        ) {
+            partIds = payload.error.partIds as number[]
+        }
+    } catch {
+        // JSON形式でないエラーは呼び出し元の既定メッセージを使う
+    }
+
+    throw new SavedBuildApiError(message, code, partIds)
+}
+
+// DB由来のIDを画面へ流す前に、URLへ安全に渡せる長さと形式を確認。
+// 実DBはUUIDだが、移行処理やテスト用リポジトリの不透明なIDも扱えるようにする。
+function isSavedBuildId(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= MAX_SAVED_BUILD_ID_LENGTH &&
+        /^[A-Za-z0-9_-]+$/.test(value)
+}
+
+// 保存構成の表示文字列を、サーバーの入力上限と同じ範囲へ限定
+function isSavedBuildText(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 50
+}
+
+// 保存日時は表示・監査用途の短い文字列として扱う
+function isTimestamp(value: unknown): value is string {
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= MAX_TIMESTAMP_LENGTH
+}
+
+// 非公開はnull、公開中はUUID由来の固定長トークンだけを受け付ける
+function isShareToken(value: unknown): value is string | null {
+    return value === null || (
+        typeof value === "string" && /^[a-f0-9]{32}$/.test(value)
+    )
+}
+
+function parseSavedBuildParts(value: unknown): SavedBuildPart[] {
+    if (!Array.isArray(value) || value.length > MAX_PARTS_PER_BUILD) {
+        throw new SavedBuildApiError(
+            "保存構成のパーツ情報を解釈できませんでした",
+        )
+    }
+
+    const parsedParts = value.flatMap((part) => {
+        // 不正なパーツ要素は後段で件数差分として検出し、部分的な構成を受け付けない
+        if (typeof part !== "object" || part === null) {
+            return []
+        }
+
+        const partRecord = part as Record<string, unknown>
+
+        if (
+            !isPartSlotKey(partRecord.slotKey) ||
+            !isPositiveSafeInteger(partRecord.partId) ||
+            !isNonNegativeFiniteNumber(partRecord.price) ||
+            !isNonNegativeFiniteNumber(partRecord.weight)
+        ) {
+            return []
+        }
+
+        return [{
+            slotKey: partRecord.slotKey,
+            partId: partRecord.partId,
+            price: partRecord.price,
+            weight: partRecord.weight,
+        }]
+    })
+
+    if (
+        parsedParts.length !== value.length ||
+        new Set(parsedParts.map((part) => part.slotKey)).size !== parsedParts.length
+    ) {
+        // 重複スロットを許すと復元時の選択結果が不定になるため一覧を返さない
+        throw new SavedBuildApiError(
+            "保存構成のパーツ情報を解釈できませんでした",
+        )
+    }
+
+    return parsedParts
+}
+
+// APIレスポンスの構造を検証し、予期しないJSONを画面へ流さない
+function parseSavedBuild(value: unknown): SavedBuild {
+    if (
+        typeof value !== "object" ||
+        value === null
+    ) {
+        // ID・名称・version・日時・partsがそろわない構成は全体を無効として扱う。
+        throw new SavedBuildApiError(
+            "保存構成のレスポンスを解釈できませんでした",
+        )
+    }
+
+    const record = value as Record<string, unknown>
+    const parts = record.parts
+    const shareToken = record.shareToken ?? null
+
+    if (
+        !isSavedBuildId(record.id) ||
+        !isSavedBuildText(record.name) ||
+        !isPositiveSafeInteger(record.version) ||
+        !isTimestamp(record.createdAt) ||
+        !isTimestamp(record.updatedAt) ||
+        !isShareToken(shareToken)
+    ) {
+        throw new SavedBuildApiError(
+            "保存構成のレスポンスを解釈できませんでした",
+        )
+    }
+
+    const parsedParts = parseSavedBuildParts(parts)
+
+    return {
+        id: record.id,
+        name: record.name,
+        version: record.version,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        shareToken,
+        parts: parsedParts,
+    }
+}
+
+function parsePublicSavedBuild(value: unknown): PublicSavedBuild {
+    if (typeof value !== "object" || value === null) {
+        throw new SavedBuildApiError(
+            "共有構成のレスポンスを解釈できませんでした",
+        )
+    }
+
+    const record = value as Record<string, unknown>
+
+    if (!isSavedBuildText(record.name)) {
+        throw new SavedBuildApiError(
+            "共有構成のレスポンスを解釈できませんでした",
+        )
+    }
+
+    return {
+        name: record.name,
+        parts: parseSavedBuildParts(record.parts),
+    }
+}
+
+// 一覧レスポンスも1件ずつ検証し、不正な要素を黙って欠落させない
+function parseSavedBuildList(value: unknown): SavedBuild[] {
+    // API側の上限を超える一覧を受け取った場合は、表示だけでなくレスポンス自体を拒否する。
+    if (
+        !Array.isArray(value) ||
+        value.length > MAX_SAVED_BUILDS - FIXED_CONFIG_COUNT
+    ) {
+        throw new SavedBuildApiError(
+            "保存構成一覧のレスポンスを解釈できませんでした",
+        )
+    }
+
+    const builds = value.map(parseSavedBuild)
+
+    if (new Set(builds.map((build) => build.id)).size !== builds.length) {
+        // 同じIDが複数あると更新・削除対象を誤るため、重複を検出する。
+        throw new SavedBuildApiError(
+            "保存構成一覧のレスポンスに重複した構成があります",
+        )
+    }
+
+    return builds
+}
+
+// ログインユーザーの保存構成一覧を更新日時順で取得
+export async function fetchSavedBuilds(
+    signal?: AbortSignal,
+): Promise<SavedBuild[]> {
+    // 一覧取得はCookieセッションだけを使い、レスポンスは構造検証後に返す。
+    const response = await fetch("/api/builds", {
+        credentials: "same-origin",
+        signal,
+        headers: {Accept: "application/json"},
+    })
+
+    if (!response.ok) {
+        // 409競合や503マイグレーション未適用を、呼び出し元で分岐できる例外へ変換する。
+        return throwApiError(response, "保存構成一覧の取得に失敗しました")
+    }
+
+    return parseSavedBuildList(await response.json())
+}
+
+// localStorage移行で1構成をD1へ登録
+export async function createSavedBuild(
+    name: string,
+    parts: SavedBuildPartInput[],
+    signal?: AbortSignal,
+): Promise<SavedBuild> {
+    // D1の保存APIはCookie認証に加えてCSRFトークンを要求する
+    const csrfToken = await fetchCsrfToken()
+    // 作成操作では、入力名と選択中スロットを同じリクエストへまとめる。
+    const response = await fetch("/api/builds", {
+        method: "POST",
+        credentials: "same-origin",
+        signal,
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({name, parts, csrfToken}),
+    })
+
+    if (!response.ok) {
+        // 上限超過・不正パーツ・マイグレーション未適用をコード付きで返す。
+        return throwApiError(response, "構成の保存に失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// 現在の選択内容で保存構成を上書き
+export async function updateSavedBuild(
+    buildId: string,
+    version: number,
+    name: string,
+    parts: SavedBuildPartInput[],
+): Promise<SavedBuild> {
+    // versionを含めたPUTで、別端末の編集を検知できるようにする。
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({name, version, parts, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の上書きに失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// 保存済みパーツのスナップショットを維持したまま名称を変更
+export async function renameSavedBuild(
+    buildId: string,
+    version: number,
+    name: string,
+): Promise<SavedBuild> {
+    // パーツを送らず名前だけをPATCHし、保存済みスナップショットを維持する。
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({name, version, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成名の変更に失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// version一致時だけ保存構成を削除
+export async function deleteSavedBuild(
+    buildId: string,
+    version: number,
+): Promise<void> {
+    // version一致をサーバー側で確認し、古い画面からの削除を防ぐ。
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(`/api/builds/${encodeURIComponent(buildId)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({version, csrfToken}),
+    })
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の削除に失敗しました")
+    }
+}
+
+// 追加構成の公開URLを発行または無効化
+export async function updateSavedBuildSharing(
+    buildId: string,
+    version: number,
+    enabled: boolean,
+): Promise<SavedBuild> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch(
+        `/api/builds/${encodeURIComponent(buildId)}/sharing`,
+        {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({version, enabled, csrfToken}),
+        },
+    )
+
+    if (!response.ok) {
+        return throwApiError(response, "構成の共有設定に失敗しました")
+    }
+
+    return parseSavedBuild(await response.json())
+}
+
+// ログイン不要の共有URLから読み取り専用構成を取得
+export async function fetchPublicSavedBuild(
+    shareToken: string,
+    signal?: AbortSignal,
+): Promise<PublicSavedBuild> {
+    const response = await fetch(
+        `/api/builds/public/${encodeURIComponent(shareToken)}`,
+        {
+            credentials: "same-origin",
+            signal,
+            headers: {Accept: "application/json"},
+        },
+    )
+
+    if (!response.ok) {
+        return throwApiError(response, "共有構成の取得に失敗しました")
+    }
+
+    return parsePublicSavedBuild(await response.json())
+}

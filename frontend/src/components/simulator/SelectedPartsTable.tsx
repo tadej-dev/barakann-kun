@@ -9,6 +9,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import {getPartDisplayName, findBlockedSlotItem} from "@/features/simulator/partDisplay"
+import {getFrameCockpitBadge} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotPositionLabel,
     getPartSlots,
@@ -52,8 +54,9 @@ export function SelectedPartsTable({
         }
     }
 
+    // カテゴリーから前後位置を展開し、選択済みパーツがない枠も含めて常に同じ表構造を表示する。
     return (
-        <div className="overflow-hidden rounded-lg border bg-background">
+        <div className="overflow-x-auto rounded-lg border bg-background">
             <Table
                 aria-label="選択済みパーツ一覧"
                 className="min-w-[720px] table-fixed"
@@ -77,6 +80,7 @@ export function SelectedPartsTable({
 
                 <TableBody className="font-bold">
                     {categories.flatMap((category) => {
+                        // flatMapで前後スロットを同じ一覧へ並べ、行クリックを選択対象へ結び付ける。
                         return getPartSlots(category.key).map((slot) => {
                             const part = selectedParts[slot.key]
                             const positionLabel = getPartSlotPositionLabel(
@@ -86,6 +90,21 @@ export function SelectedPartsTable({
                             const isBlocked = blockedCategoryKeys.has(
                                 category.key,
                             )
+                            // 占有枠には提供元パーツの付属品名を表示する。
+                            const blockedItem = isBlocked
+                                ? findBlockedSlotItem(selectedParts, category.key)
+                                : null
+                            const blockedItemWeight = blockedItem
+                                ? blockedItem.quantity * blockedItem.weight
+                                : 0
+                            // セット構成品の参考価格(単品定価)。合計金額には加算しない表示専用の値。
+                            const blockedItemPrice = blockedItem?.price != null
+                                ? blockedItem.quantity * blockedItem.price
+                                : null
+                            // 規格未確認(unknown)やフレーム以外はバッジを表示しない
+                            const frameCockpitBadge = part
+                                ? getFrameCockpitBadge(part)
+                                : null
 
                             return (
                                 <TableRow
@@ -133,9 +152,20 @@ export function SelectedPartsTable({
                                                 }`}
                                             >
                                                 {isBlocked
-                                                    ? "解除して選択できます"
-                                                    : part?.name ?? "未選択"}
+                                                    ? blockedItem?.name ?? "解除して選択できます"
+                                                    : part
+                                                    ? getPartDisplayName(part)
+                                                    : "未選択"}
                                             </span>
+
+                                            {/* コンポセットなどのセット構成品と、フレーム付属品などを区別して表示する。 */}
+                                            {isBlocked && blockedItem && (
+                                                <Badge variant="outline">
+                                                    {blockedItem.isSetComponent
+                                                        ? "構成品"
+                                                        : "付属品"}
+                                                </Badge>
+                                            )}
 
                                             {part &&
                                                 !isBlocked &&
@@ -146,19 +176,55 @@ export function SelectedPartsTable({
                                                         ステム一体型
                                                     </Badge>
                                                 )}
+
+                                            {part &&
+                                                !isBlocked &&
+                                                frameCockpitBadge && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={frameCockpitBadge.className}
+                                                    >
+                                                        {frameCockpitBadge.label}
+                                                    </Badge>
+                                                )}
+
+                                            {/* サイズ・世代は選択漏れに気づきにくいため、選択中一覧でも明示する。 */}
+                                            {part && !isBlocked && part.edition && (
+                                                <Badge variant="outline">
+                                                    {part.edition}
+                                                </Badge>
+                                            )}
+
+                                            {part && !isBlocked && part.variantName && (
+                                                <Badge variant="secondary">
+                                                    {part.variantName}
+                                                </Badge>
+                                            )}
                                         </div>
                                     </TableCell>
 
                                     <TableCell className="text-left tabular-nums">
                                         {part && !isBlocked
                                             ? `${part.weight.toLocaleString("ja-JP")}g`
+                                            : isBlocked && blockedItemWeight > 0
+                                            ? `${blockedItemWeight.toLocaleString("ja-JP")}g`
                                             : "-"}
                                     </TableCell>
 
                                     <TableCell>
-                                        {part && !isBlocked
-                                            ? priceFormatter.format(part.price)
-                                            : "-"}
+                                        {part && !isBlocked ? (
+                                            priceFormatter.format(part.price)
+                                        ) : isBlocked && blockedItemPrice !== null ? (
+                                            // 単品定価は合計金額(セット価格)と一致しないため、参考値だと分かる表示にする。
+                                            <span
+                                                className="text-xs font-normal text-muted-foreground"
+                                                title="単品のメーカー希望小売価格（参考）。合計金額には含みません"
+                                            >
+                                                参考 {priceFormatter.format(blockedItemPrice)}
+                                            </span>
+                                        ) : (
+                                            "-"
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             )

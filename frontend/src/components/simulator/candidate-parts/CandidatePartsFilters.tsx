@@ -1,61 +1,80 @@
-import { Checkbox } from "@/components/ui/checkbox"
+import {Badge} from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {BrandSelect} from "@/components/simulator/candidate-parts/BrandSelect"
+import {CandidatePartsFilterMenu} from "@/components/simulator/candidate-parts/CandidatePartsFilterMenu"
+import type {
+    CandidateFilterState,
+    CockpitStatus,
+    SpecFilter,
+} from "@/features/simulator/candidatePartsFilter"
 
 type CandidatePartsFiltersProps = {
+    filters: CandidateFilterState
     brands: string[]
-    selectedBrand: string
-    searchQuery: string
-    integratedHandlebarOnly: boolean
+    specFilters: SpecFilter[]
+    showViewFilter: boolean
+    cockpitStatuses: CockpitStatus[]
+    modelYears: number[]
     showIntegratedHandlebarFilter: boolean
+    onFiltersChange: (next: CandidateFilterState) => void
+    searchQuery: string
     resultCount: number
-    onBrandChange: (brand: string) => void
     onSearchQueryChange: (query: string) => void
-    onIntegratedHandlebarOnlyChange: (checked: boolean) => void
+    slotPositionLabel?: string | null // 前後スロットの表示名(前輪・後輪)。単一スロットではnull
 }
 
 // 候補パーツの絞り込み欄
 export function CandidatePartsFilters({
+    filters,
     brands,
-    selectedBrand,
-    searchQuery,
-    integratedHandlebarOnly,
+    specFilters,
+    showViewFilter,
+    cockpitStatuses,
+    modelYears,
     showIntegratedHandlebarFilter,
+    onFiltersChange,
+    searchQuery,
     resultCount,
-    onBrandChange,
     onSearchQueryChange,
-    onIntegratedHandlebarOnlyChange,
+    slotPositionLabel,
 }: CandidatePartsFiltersProps) {
+    // 件数を絞り込みボタンの左に置き、絞り込みメニュー・検索の順で並べる。
+    // 検索は文字入力が主操作のため、メニューではなく入力欄として残す。
     return (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <BrandSelect
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* 件数の桁が変わっても横の要素が動かないようにする */}
+            <p className="ml-1 min-w-12 shrink-0 text-left text-sm tabular-nums text-slate-500 sm:mr-2">
+                {resultCount}件
+            </p>
+
+            <CandidatePartsFilterMenu
+                filters={filters}
                 brands={brands}
-                selectedBrand={selectedBrand}
-                onBrandChange={onBrandChange}
+                specFilters={specFilters}
+                showViewFilter={showViewFilter}
+                cockpitStatuses={cockpitStatuses}
+                modelYears={modelYears}
+                showIntegratedHandlebarFilter={showIntegratedHandlebarFilter}
+                onFiltersChange={onFiltersChange}
             />
 
             <Input
                 type="search"
-                aria-label="製品名で検索"
-                placeholder="製品名で検索"
+                aria-label="検索"
+                placeholder="検索"
                 className="w-full sm:max-w-sm"
                 value={searchQuery}
                 onChange={(event) => onSearchQueryChange(event.target.value)}
             />
 
-            {showIntegratedHandlebarFilter && (
-                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
-                    <Checkbox
-                        checked={integratedHandlebarOnly}
-                        onCheckedChange={onIntegratedHandlebarOnlyChange}
-                    />
-                    ステム一体型のみ
-                </label>
+            {/* 前後で別々に選ぶパーツの選択位置 */}
+            {slotPositionLabel && (
+                <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-slate-600">
+                    選択位置
+                    <Badge variant="outline">
+                        {slotPositionLabel}
+                    </Badge>
+                </div>
             )}
-
-            <p className="shrink-0 text-sm text-slate-500">
-                {resultCount}件
-            </p>
         </div>
     )
 }

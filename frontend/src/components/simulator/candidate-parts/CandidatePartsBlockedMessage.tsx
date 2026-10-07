@@ -5,6 +5,7 @@ import {buttonVariants} from "@/components/ui/button"
 
 type CandidatePartsBlockedMessageProps = {
     message: string
+    showVariantColumn: boolean
     blockingCategoryNames: string[]
     blockingPartNames: string[]
     onRemove: () => void
@@ -13,15 +14,20 @@ type CandidatePartsBlockedMessageProps = {
 // 選択不可カテゴリーの解除案内
 export function CandidatePartsBlockedMessage({
     message,
+    showVariantColumn,
     blockingCategoryNames,
     blockingPartNames,
     onRemove,
 }: CandidatePartsBlockedMessageProps) {
+    // 排他中のカテゴリー名と原因パーツを、解除前に利用者へ具体的に知らせる。
     const categoryLabel = blockingCategoryNames.join("・")
     const partLabel = blockingPartNames.join("、")
 
     return (
-        <CandidatePartsTableMessage message={message}>
+        <CandidatePartsTableMessage
+            message={message}
+            showVariantColumn={showVariantColumn}
+        >
             <AlertDialog.Root>
                 <AlertDialog.Trigger
                     className={buttonVariants({size: "sm"})}

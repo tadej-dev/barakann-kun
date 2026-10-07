@@ -57,6 +57,7 @@ export function createPartSlots(
 
 // カテゴリーに対応する選択枠一覧の取得
 export function getPartSlots(categoryKey: string) {
+    // 前後管理が必要なカテゴリーだけ2枠に展開し、それ以外は単一枠を返す。
     return createPartSlots(
         categoryKey,
         CATEGORY_SLOT_POSITIONS[categoryKey] ?? ["single"],
@@ -67,6 +68,7 @@ export function getPartSlots(categoryKey: string) {
 export function migrateLegacyPartSlotSelections<T>(
     selections: Record<string, T>,
 ) {
+    // 旧カテゴリーキーを残さず、現行のfront/rearキーへ一度だけ移す。
     const nextSelections = {...selections}
 
     for (const categoryKey of Object.keys(CATEGORY_SLOT_POSITIONS)) {

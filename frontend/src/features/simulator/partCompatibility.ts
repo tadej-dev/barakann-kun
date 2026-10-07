@@ -1,169 +1,237 @@
 import {
+    appliesToPosition,
+    compareParts,
+    findCompatibilityIssues,
+    getFrameCockpitStatus,
+} from "../../../../shared/part-compatibility-core"
+import type {
+    CompatibilityDetail,
+    CompatibilityStatus,
+    FrameCockpitStatus,
+} from "../../../../shared/part-compatibility-core"
+import {
     getPartSlotCategoryKey,
-    getPartSlotPosition,
     type PartSlot,
 } from "@/features/simulator/partSlots"
+import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
-export type CompatibilityStatus =
-    | "compatible"
-    | "unknown"
-    | "incompatible"
+export {getFrameCockpitStatus}
+export type {CompatibilityDetail}
+
+// 適合判定の相手となった選択済みパーツと、その結果。
+// 「どのパーツに対して非互換なのか」をUIで示すために保持する。
+export type CompatibilityCounterpart = {
+    slotKey: string
+    partName: string
+    status: CompatibilityStatus
+    reasons: string[]
+    details: CompatibilityDetail[] // 規格ごとの判定結果(表示で状態別にまとめるために使う)
+}
 
 export type CompatibilityResult = {
     status: CompatibilityStatus
     reasons: string[]
+    counterparts: CompatibilityCounterpart[]
     conflictingSlotKeys: string[]
     selectionBlocked: boolean
 }
 
-type EqualityRule = {
-    categories: readonly [string, string]
-    specificationKey: string
+// フレームのコックピットバッジ。種別ごとの色と、規格名が未登録のときの文言。
+export type FrameCockpitBadge = {
     label: string
-    protectedCategory?: string
-    protectedCategoryLabel?: string
+    className: string
 }
 
-const EQUALITY_RULES: EqualityRule[] = [
-    {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
-    {
-        categories: ["frame", "handlebar"],
-        specificationKey: "cockpit_interface",
-        label: "コックピット規格",
-        protectedCategory: "frame",
-        protectedCategoryLabel: "フレーム",
+const FRAME_COCKPIT_BADGES: Record<
+    Exclude<FrameCockpitStatus, "unknown">,
+    { className: string; fallback: string }
+> = {
+    included: {
+        className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+        fallback: "コックピット付属",
     },
-    {
-        categories: ["frame", "seatpost"],
-        specificationKey: "seatpost_diameter_mm",
-        label: "シートポスト径",
-        protectedCategory: "frame",
-        protectedCategoryLabel: "フレーム",
+    dedicated: {
+        className: "border-amber-300 bg-amber-50 text-amber-700",
+        fallback: "専用コックピット必須",
     },
-    {
-        categories: ["frame", "bottom_bracket"],
-        specificationKey: "bb_standard",
-        label: "BB規格",
-        protectedCategory: "frame",
-        protectedCategoryLabel: "フレーム",
+    open: {
+        className: "border-violet-300 bg-violet-50 text-violet-700",
+        fallback: "オープン規格対応",
     },
-]
+    standard: {
+        className: "border-sky-300 bg-sky-50 text-sky-700",
+        fallback: "1-1/8標準コラム",
+    },
+}
+
+export function getFrameCockpitBadge(part: Part): FrameCockpitBadge | null {
+    const status = getFrameCockpitStatus(part)
+
+    // 規格未確認(unknown)やフレーム以外はバッジを表示しない。
+    if (!status || status === "unknown") {
+        return null
+    }
+
+    const badge = FRAME_COCKPIT_BADGES[status]
+    const cockpitInterface = part.specifications?.cockpit_interface
+    const interfaceLabel = cockpitInterface
+        ? getSpecificationValueLabel("cockpit_interface", cockpitInterface)
+        : null
+
+    // 付属は規格名も併記し、標準付属か専用付属かを区別できるようにする。
+    const label = status === "included" && interfaceLabel
+        ? `コックピット付属（${interfaceLabel}）`
+        : interfaceLabel ?? badge.fallback
+
+    return { label, className: badge.className }
+}
 
 const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
     bb_standard: "BB規格",
+    brake_mount: "ブレーキマウント",
+    cleat_system: "クリート規格",
+    cockpit_connection: "コックピット接続方式",
     cockpit_interface: "コックピット規格",
+    cockpit_replaceable: "コックピット交換可否",
+    cockpit_system: "コックピットシステム",
     crank_spindle: "クランク軸規格",
+    drivetrain_speed: "対応段数",
     freehub_body: "フリーボディ",
+    handlebar_clamp_mm: "ハンドルクランプ径",
     max_tire_width_mm: "対応タイヤ幅（最大）",
     min_tire_width_mm: "対応タイヤ幅（最小）",
     package_unit: "販売単位",
     pad_family: "パッド形状",
     rotor_diameter_mm: "ローター径",
     rotor_mount: "ローター取付方式",
+    saddle_rail: "サドルレール規格",
     seatpost_diameter_mm: "シートポスト径",
+    shift_system: "変速方式",
     tire_width_mm: "タイヤ幅",
     wheel_diameter: "ホイール径",
 }
 
+// API内部キーを候補表で読める日本語へ変換する。
+
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "6_bolt": "6ボルト",
+    alloy_7mm: "アロイ 7mm",
+    argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
+    bmc_ics: "BMC ICS対応",
+    bb30: "BB30",
+    bb386: "BB386",
+    bb86: "BB86",
+    bb90: "BB90",
+    bb92: "BB92",
+    bbright: "Cervélo BBRight",
+    campagnolo_n3w: "Campagnolo N3W",
+    campagnolo_protech: "Campagnolo Pro-Tech",
+    campagnolo_ultra_torque: "Campagnolo Ultra-Torque",
+    carbon_7x9: "カーボン 7×9mm",
+    carbon_7x9_3: "カーボン 7×9.3mm",
+    carbon_7x9_6: "カーボン 7×9.6mm",
+    canyon_cp0018: "Canyon CP0018専用",
+    cannondale_delta: "Cannondale Delta Steerer対応",
+    cannondale_knot: "Cannondale KNOT対応",
+    cervelo_s5_hb19: "Cervélo S5 HB19専用",
+    colnago_cc01: "Colnago CC.01対応",
+    corratec_cct_icr: "Corratec CCT ICR専用",
+    deda_dcr: "Deda DCR",
     center_lock: "センターロック",
+    crankbrothers: "Crankbrothers",
     campagnolo_db310: "Campagnolo DB-310形状",
+    dub: "SRAM DUB",
+    electronic_wired: "有線電動",
+    electronic_wireless: "無線電動",
+    either: "一体型／ステム式対応",
+    felt_gravel_integrated: "Felt Gravel一体型専用",
+    factor_ostro_vam: "Factor OSTRO VAM対応",
+    focus_cis: "FOCUS C.I.S.対応",
+    fsa_acr: "FSA ACR対応",
+    flat_mount: "フラットマウント",
     front: "前輪専用",
+    hollowtech_ii: "Shimano HOLLOWTECH II",
+    hope_rx4: "HOPE RX4形状",
+    integrated_only: "一体型コックピット専用",
+    italian: "イタリアンねじ切り",
+    look_keo: "LOOK KEO",
+    look_aero_combo: "LOOK Aero Combo対応",
+    basso_sv_fuga: "Basso SV Fuga専用",
+    bianchi_oltre_rc: "Bianchi Oltre RC専用",
+    bianchi_specialissima_rc: "Bianchi Specialissima RC対応",
+    bsa: "BSA（ねじ切り）",
+    cube_litening_c68x: "CUBE Litening C:68X専用",
+    mechanical: "機械式",
     pair: "前後セット",
+    pf30: "PF30",
+    pf30a: "PF30A",
+    post_mount: "ポストマウント",
+    praxis_m30: "Praxis M30",
     rear: "後輪専用",
+    rotor_30: "Rotor 30mm",
+    shimano_hg: "Shimano HG",
+    shimano_k_type: "Shimano Kタイプ",
+    shimano_micro_spline: "Shimano マイクロスプライン",
     shimano_road_flat_mount: "Shimano ロード用フラットマウント形状",
+    shimano_spd: "Shimano SPD",
+    shimano_spd_sl: "Shimano SPD-SL",
     single: "1個単位",
+    sram_xdr: "SRAM XDR",
+    sram_gxp: "SRAM GXP",
+    sram_xd: "SRAM XD",
     sram_road_axs: "SRAM Road AXS形状",
+    standard_1_1_8: "1-1/8標準コラム",
+    stem: "ステム式",
+    giant_overdrive_aero: "Giant OverDrive Aero専用",
+    orbea_icr: "Orbea ICR対応",
+    pardus_robin_evo: "Pardus Robin EVO専用",
+    pinarello_ticr: "Pinarello TiCR対応",
+    scott_addict_ic: "Scott Addict iC専用",
+    scott_foil_ic: "Scott Foil iC専用",
+    t45: "T45（82.5mm）",
+    t47_68: "T47 68mm",
+    t47_73: "T47 73mm",
+    t47_85_5: "T47 85.5mm",
+    t47a: "T47A（76.75mm）",
+    time_iclic: "TIME ICLIC",
+    trp_hyrd: "TRP HY/RD形状",
+    trp_spyre: "TRP Spyre形状",
+    trek_madone_gen7: "Trek Madone Gen 7対応",
+    van_rysel_rcr_f: "Van Rysel RCR-F専用",
+    wilier_filante: "Wilier Filante対応",
+    wilier_verticale: "Wilier Verticale専用",
+    winspace_m6: "Winspace M6専用",
+    xelius_drs: "Lapierre Xelius DRS専用",
 }
 
 function getCategoryKey(part: Part, slotKey: string) {
+    // APIにcategoryKeyがない旧データでも、スロットキーから判定対象を補完する。
     return part.categoryKey ?? getPartSlotCategoryKey(slotKey)
 }
 
-function hasCategoryPair(
-    firstCategory: string,
-    secondCategory: string,
-    expectedCategories: readonly [string, string],
-) {
-    return (
-        expectedCategories.includes(firstCategory) &&
-        expectedCategories.includes(secondCategory) &&
-        firstCategory !== secondCategory
-    )
-}
-
-function appliesToPosition(targetSlot: PartSlot, selectedSlotKey: string) {
-    const selectedPosition = getPartSlotPosition(selectedSlotKey)
-
-    return (
-        targetSlot.position === "single" ||
-        selectedPosition === "single" ||
-        targetSlot.position === selectedPosition
-    )
-}
-
-function getSpecification(part: Part, key: string) {
-    return part.specifications?.[key]
-}
-
-function compareTireAndTube(tire: Part, tube: Part) {
-    const tireDiameter = getSpecification(tire, "wheel_diameter")
-    const tubeDiameter = getSpecification(tube, "wheel_diameter")
-    const tireWidth = Number(getSpecification(tire, "tire_width_mm"))
-    const minWidth = Number(getSpecification(tube, "min_tire_width_mm"))
-    const maxWidth = Number(getSpecification(tube, "max_tire_width_mm"))
-
-    if (
-        !tireDiameter ||
-        !tubeDiameter ||
-        !Number.isFinite(tireWidth) ||
-        !Number.isFinite(minWidth) ||
-        !Number.isFinite(maxWidth)
-    ) {
-        return {status: "unknown" as const, reasons: ["タイヤとチューブのサイズ情報が不足しています"]}
-    }
-
-    if (tireDiameter !== tubeDiameter) {
-        return {
-            status: "incompatible" as const,
-            reasons: [`ホイール径が一致しません（${tireDiameter} / ${tubeDiameter}）`],
-        }
-    }
-
-    if (tireWidth < minWidth || tireWidth > maxWidth) {
-        return {
-            status: "incompatible" as const,
-            reasons: [`${tireWidth}mmのタイヤはチューブの対応範囲${minWidth}〜${maxWidth}mm外です`],
-        }
-    }
-
-    return {
-        status: "compatible" as const,
-        reasons: [`${tireDiameter}・${tireWidth}mmで適合します`],
-    }
-}
-
 export function getSpecificationLabel(key: string) {
+    // 未知の規格キーも捨てず、APIキーをフォールバック表示する。
     return SPECIFICATION_LABELS[key] ?? key
 }
 
 export function getSpecificationValueLabel(key: string, value: string) {
-    if (SPECIFICATION_VALUE_LABELS[value]) {
-        return SPECIFICATION_VALUE_LABELS[value]
-    }
+    // 単一値もカンマ区切りも同じ経路で日本語化し、mm系だけ単位を補う。
+    const label = (single: string) =>
+        SPECIFICATION_VALUE_LABELS[single] ?? (key.endsWith("_mm") ? `${single}mm` : single)
 
-    return key.endsWith("_mm") ? `${value}mm` : value
+    return value.split(",").map((part) => label(part.trim())).filter(Boolean).join("／")
 }
 
 export function getPartPackageUnit(part: Part) {
+    // 販売単位が欠損した旧データは単品として扱う。
     return part.specifications?.package_unit ?? "single"
 }
 
 export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
+    // 前後スロットに同じペア商品が入っていても、価格・重量を一度だけ加算する。
     const countedPairIds = new Set<number>()
 
     return Object.values(selectedParts).reduce(
@@ -178,11 +246,21 @@ export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
 
             return {
                 price: totals.price + part.price,
-                weight: totals.weight + part.weight,
+                weight: totals.weight + part.weight +
+                    sumIncludedItemsWeight(part),
             }
         },
         {price: 0, weight: 0},
     )
+}
+
+// カテゴリー付き付属品の重量を数量込みで合計する。価格は加算しない。
+// セット構成品の重量はセット本体の重量に含まれるため、二重計算しないよう除外する。
+export function sumIncludedItemsWeight(part: Part): number {
+    return (part.includedItems ?? [])
+        .filter((item) => item.categoryKey !== null)
+        .filter((item) => !item.isSetComponent)
+        .reduce((total, item) => total + item.quantity * item.weight, 0)
 }
 
 export function evaluatePartCompatibility(
@@ -190,105 +268,122 @@ export function evaluatePartCompatibility(
     targetSlot: PartSlot,
     selectedParts: SelectedParts,
 ): CompatibilityResult | null {
+    // 候補パーツを現在の選択状態と比較し、理由・解除対象・選択可否をまとめて返す。
     const reasons: string[] = []
+    // 比較した相手パーツと結果を蓄積し、非互換の原因をUIで特定できるようにする。
+    const counterparts: CompatibilityCounterpart[] = []
     const conflictingSlotKeys = new Set<string>()
     let hasRelevantSelection = false
     let hasUnknown = false
     let hasCompatible = false
     let selectionBlocked = false
-    const allowedPosition = getSpecification(candidate, "allowed_position")
+    const allowedPosition = candidate.specifications?.allowed_position
 
     if (
         allowedPosition &&
         targetSlot.position !== "single" &&
         allowedPosition !== targetSlot.position
     ) {
+        // 前輪・後輪専用品を反対側へ登録できないよう、候補表示の段階で選択を止める。
         return {
             status: "incompatible",
             reasons: [`${getSpecificationValueLabel("allowed_position", allowedPosition)}の製品です`],
+            counterparts: [],
             conflictingSlotKeys: [],
             selectionBlocked: true,
         }
     }
 
     for (const [selectedSlotKey, selectedPart] of Object.entries(selectedParts)) {
-        if (selectedSlotKey === targetSlot.key || !appliesToPosition(targetSlot, selectedSlotKey)) {
+        // 同じスロット自身は比較せず、別位置にある関連パーツだけを適合判定する。
+        if (selectedSlotKey === targetSlot.key || !appliesToPosition(targetSlot.key, selectedSlotKey)) {
             continue
         }
 
         const candidateCategory = candidate.categoryKey ?? targetSlot.categoryKey
         const selectedCategory = getCategoryKey(selectedPart, selectedSlotKey)
 
-        if (hasCategoryPair(candidateCategory, selectedCategory, ["tire", "inner_tube"])) {
-            hasRelevantSelection = true
-            const tire = candidateCategory === "tire" ? candidate : selectedPart
-            const tube = candidateCategory === "inner_tube" ? candidate : selectedPart
-            const result = compareTireAndTube(tire, tube)
+        // ペア間の規格判定は候補選択と保存APIで共通のコアへ委ねる。
+        const result = compareParts(
+            candidate,
+            candidateCategory,
+            selectedPart,
+            selectedCategory,
+        )
 
-            reasons.push(...result.reasons)
-
-            if (result.status === "incompatible") {
-                conflictingSlotKeys.add(selectedSlotKey)
-            } else if (result.status === "unknown") {
-                hasUnknown = true
-            } else {
-                hasCompatible = true
-            }
-
+        if (!result) {
             continue
         }
 
-        for (const rule of EQUALITY_RULES) {
-            if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
-                continue
-            }
+        hasRelevantSelection = true
+        reasons.push(...result.reasons)
+        // どの選択済みパーツに対する結果かを記録する。
+        counterparts.push({
+            slotKey: selectedSlotKey,
+            partName: getPartDisplayName(selectedPart),
+            status: result.status,
+            reasons: result.reasons,
+            details: result.details ?? [],
+        })
 
-            const candidateValue = getSpecification(candidate, rule.specificationKey)
-            const selectedValue = getSpecification(selectedPart, rule.specificationKey)
-
-            if (!candidateValue && !selectedValue) {
-                continue
-            }
-
-            hasRelevantSelection = true
-
-            if (!candidateValue || !selectedValue) {
-                hasUnknown = true
-                reasons.push(`${rule.label}が未確認です`)
-            } else if (candidateValue !== selectedValue) {
-                if (selectedCategory === rule.protectedCategory) {
-                    selectionBlocked = true
-                    reasons.push(
-                        `${rule.label}が一致しないため、${rule.protectedCategoryLabel}を維持したまま選択できません`,
-                    )
-                } else {
-                    conflictingSlotKeys.add(selectedSlotKey)
-                    reasons.push(`${rule.label}が一致しません`)
-                }
+        if (result.status === "incompatible") {
+            // フレームは基準パーツ。基準(フレーム)と合わない候補は選択を止める。
+            // それ以外の競合は、該当する選択済みパーツを解除対象にする。
+            if (selectedCategory === "frame") {
+                selectionBlocked = true
             } else {
-                hasCompatible = true
-                reasons.push(`${rule.label}が適合します`)
+                conflictingSlotKeys.add(selectedSlotKey)
             }
+        } else if (result.status === "unknown") {
+            hasUnknown = true
+        } else {
+            hasCompatible = true
         }
     }
 
     if (selectionBlocked || conflictingSlotKeys.size > 0) {
+        // 保護対象の不一致や解除が必要な競合は、候補行を非互換として表示する。
         return {
             status: "incompatible",
             reasons,
+            counterparts,
             conflictingSlotKeys: Array.from(conflictingSlotKeys),
             selectionBlocked,
         }
     }
 
     if (!hasRelevantSelection) {
+        // 比較対象の規格がない候補には、誤って適合バッジを付けない。
         return null
     }
 
     return {
         status: hasUnknown ? "unknown" : hasCompatible ? "compatible" : "unknown",
         reasons,
+        counterparts,
         conflictingSlotKeys: [],
         selectionBlocked: false,
     }
+}
+
+export type SelectedPartsCompatibilityIssue = {
+    status: "unknown" | "incompatible"
+    reasons: string[]
+    slotKeys: string[]
+}
+
+// 選択済み構成を候補選択時と同じ規格ルールで再評価
+export function evaluateSelectedPartsCompatibility(
+    selectedParts: SelectedParts,
+): SelectedPartsCompatibilityIssue[] {
+    return findCompatibilityIssues(
+        Object.entries(selectedParts).map(([slotKey, part]) => ({
+            slotKey,
+            part,
+        })),
+    ).map((issue) => ({
+        status: issue.status,
+        reasons: issue.reasons,
+        slotKeys: issue.slotKeys,
+    }))
 }

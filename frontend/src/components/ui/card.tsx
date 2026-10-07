@@ -2,6 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// カードの余白・枠・タイトル領域を分割し、SummaryCardsやダイアログで共通利用する。
 function Card({
   className,
   size = "default",
@@ -21,6 +22,7 @@ function Card({
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  // Actionがあるカードでは、タイトルと右上操作をCSSグリッドで分ける。
   return (
     <div
       data-slot="card-header"
@@ -34,6 +36,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  // size属性に応じて見出しの基準サイズを切り替える。
   return (
     <div
       data-slot="card-title"
@@ -47,6 +50,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+  // 補足文の色を共通化し、タイトルとの階層を保つ。
   return (
     <div
       data-slot="card-description"
@@ -57,6 +61,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardAction({ className, ...props }: React.ComponentProps<"div">) {
+  // ヘッダーの右上にボタンやドラッグハンドルを配置する。
   return (
     <div
       data-slot="card-action"
@@ -70,6 +75,7 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  // 本文だけにカードの左右余白を適用する。
   return (
     <div
       data-slot="card-content"
@@ -80,6 +86,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  // 確認・キャンセルなどの操作をカード下部へまとめる。
   return (
     <div
       data-slot="card-footer"
