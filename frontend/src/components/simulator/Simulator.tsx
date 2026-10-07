@@ -1,7 +1,8 @@
 import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
-import {useState, type CSSProperties} from "react"
+import type {CSSProperties} from "react"
 
 import {ConfigList} from "@/components/simulator/ConfigList"
+import {AutoSaveConflictAlert} from "@/components/simulator/config-list/AutoSaveConflictAlert"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
@@ -9,6 +10,8 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
+import {useConfigAutoSave} from "@/features/simulator/useConfigAutoSave"
+import {useConfigCollection} from "@/features/simulator/useConfigCollection"
 import {
     useSimulatorController,
     type UseSimulatorControllerProps,
@@ -35,45 +38,59 @@ export function Simulator({
     // controllerの戻り値を表示コンポーネントへ配線し、このファイルでは状態を直接変更しない。
     const controller = useSimulatorController(controllerProps)
 
-    // 構成名は左カラムのConfigListが取得するため、通知を受けて上部カードへ渡す。
-    // setStateは参照が安定しているので、ConfigListのuseEffectを無駄に再実行しない。
-    const [activeConfigName, setActiveConfigName] = useState("")
+    // 構成データ(固定枠・追加構成・表示順)は、構成一覧・自動保存・上部カードの構成名で共有するため、ここで1回だけ取得する。
+    const collection = useConfigCollection({
+        savedBuildsReloadKey,
+        activeConfigId: controller.activeConfigId,
+        activeSavedBuildId: controller.activeSavedBuildId,
+        onConfigChange: controller.changeConfig,
+    })
+    // 選択中のパーツとサーバーの保存内容を同期する。構成一覧の表示とは独立した処理。
+    const autoSave = useConfigAutoSave({
+        collection,
+        configStates: controller.configs,
+        selectedParts: controller.selectedParts,
+        activeConfigId: controller.activeConfigId,
+        activeSavedBuildId: controller.activeSavedBuildId,
+        isSavedBuildLoading: controller.isSavedBuildLoading,
+        autoSaveEnabled: controller.autoSaveEnabled,
+        onConfigChange: controller.changeConfig,
+        onRestoreConfigSlot: controller.restoreConfigSlot,
+        onRestoreSavedBuild: controller.selectSavedBuild,
+    })
 
     // 画面レイアウトは表示だけを担当し、選択・保存・復元の状態遷移はcontrollerへ集約する。
     return (
-        // 構成名が切れにくいよう、開いたときの幅は標準の16remより広い19remにする。
-        // stickyのSidebar本体が幅を持つため、fixed用の幅確保の要素（sidebar-gap）は非表示にする。
-        // 角丸Sidebarの周りの余白を右側の本体（SidebarInset）と同じ色にし、ページ背景が透けて色の帯に見えないようにする。
+        // サイドバーの幅と配置を、構成一覧に合わせて調整する。
         <SidebarProvider
             className="min-h-[calc(100svh-4rem)] bg-slate-100 [&_[data-slot=sidebar-gap]]:hidden"
             style={{"--sidebar-width": "19rem"} as CSSProperties}
         >
-            {/* 左のSidebarは構成選択に使う。パーツのカテゴリ切り替えは選択済みパーツ表の行クリックで行う。 */}
-                <ConfigList
-                    categories={categories}
-                    activeConfigId={controller.activeConfigId}
-                    activeSavedBuildId={controller.activeSavedBuildId}
-                    configStates={controller.configs}
-                    selectedParts={controller.selectedParts}
-                    isSavedBuildLoading={controller.isSavedBuildLoading}
-                    savedBuildErrorMessage={controller.savedBuildError}
-                    savedBuildsReloadKey={savedBuildsReloadKey}
-                    autoSaveEnabled={controller.autoSaveEnabled}
-                    onConfigChange={controller.changeConfig}
-                    onRestoreSavedBuild={controller.selectSavedBuild}
-                    onSavedBuildPrefetch={controller.prefetchSavedBuild}
-                    onSavedBuildSelect={controller.selectSavedBuild}
-                    onClearActiveConfig={controller.clearActiveConfig}
-                    onClearConfig={controller.clearConfig}
-                    onRestoreConfigSlot={controller.restoreConfigSlot}
-                    onActiveConfigNameChange={setActiveConfigName}
+            <ConfigList
+                categories={categories}
+                collection={collection}
+                activeConfigId={controller.activeConfigId}
+                activeSavedBuildId={controller.activeSavedBuildId}
+                configStates={controller.configs}
+                selectedParts={controller.selectedParts}
+                isSavedBuildLoading={controller.isSavedBuildLoading}
+                savedBuildErrorMessage={controller.savedBuildError}
+                onConfigChange={controller.changeConfig}
+                onSavedBuildSelect={controller.selectSavedBuild}
+                onSavedBuildPrefetch={controller.prefetchSavedBuild}
+                onClearActiveConfig={controller.clearActiveConfig}
+                onClearConfig={controller.clearConfig}
+            >
+                {/* 自動保存の競合通知 */}
+                <AutoSaveConflictAlert
+                    conflict={autoSave.autoSaveConflict}
+                    onResolve={(resolution) => void autoSave.resolveAutoSaveConflict(resolution)}
                 />
+            </ConfigList>
 
             <SidebarInset className="min-w-0 bg-slate-100 p-4">
-                {/* 中身が短いときもサイドバーと下端がそろうよう、縦方向に伸ばす。 */}
                 <section className="min-w-0 flex-1 overflow-hidden rounded-lg border border-slate-300 bg-white p-4">
-                    {/* 通常はSidebar内の見出し横の開閉ボタンを使う。 */}
-                    {/* スマホ幅ではSidebarが閉じると中のボタンを押せないため、本体側にも開くボタンを置く。 */}
+                    {/* スマホ幅でサイドバーを開くボタン */}
                     <div className="mb-3 md:hidden">
                         <SidebarTrigger aria-label="構成選択を開く" />
                     </div>
@@ -81,7 +98,7 @@ export function Simulator({
                     <SummaryCards
                         totalPrice={controller.totalPrice}
                         totalWeight={controller.totalWeight}
-                        activeConfigName={activeConfigName}
+                        activeConfigName={collection.activeConfigName}
                     />
 
                     {controller.restoreError && (

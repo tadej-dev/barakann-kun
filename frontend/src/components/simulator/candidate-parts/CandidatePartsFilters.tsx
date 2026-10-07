@@ -41,7 +41,7 @@ export function CandidatePartsFilters({
     // 検索は文字入力が主操作のため、メニューではなく入力欄として残す。
     return (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {/* 桁数で幅が変わると右隣のボタンが動くため、固定幅・左寄せ・等幅数字にする。 */}
+            {/* 件数の桁が変わっても横の要素が動かないようにする */}
             <p className="ml-1 min-w-12 shrink-0 text-left text-sm tabular-nums text-slate-500 sm:mr-2">
                 {resultCount}件
             </p>
@@ -66,7 +66,7 @@ export function CandidatePartsFilters({
                 onChange={(event) => onSearchQueryChange(event.target.value)}
             />
 
-            {/* 前後で別々に選ぶパーツは、どちらの位置を選んでいるかを検索欄の右に示す。 */}
+            {/* 前後で別々に選ぶパーツの選択位置 */}
             {slotPositionLabel && (
                 <div className="flex shrink-0 items-center gap-2 text-sm font-medium text-slate-600">
                     選択位置

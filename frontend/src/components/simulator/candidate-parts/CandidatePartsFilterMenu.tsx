@@ -150,7 +150,7 @@ export function CandidatePartsFilterMenu({
                     絞り込み
                 </span>
 
-                {/* 2桁分の幅を常時確保し、件数の有無でボタン幅が変わらないようにする。 */}
+                {/* 件数の有無でボタンの幅が変わらないようにする */}
                 <span className="flex w-7 justify-center">
                     {activeFilterCount > 0 && (
                         <Badge variant="secondary" aria-label={`適用中${activeFilterCount}件`}>

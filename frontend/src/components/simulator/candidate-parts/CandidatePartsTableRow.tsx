@@ -61,7 +61,7 @@ const compatibilityLabels = {
 }
 
 // 互換・非互換の相手を「カテゴリ（前後）「製品名」」の形で表す。
-// 適合判定の行見出しの色。非互換・未確認・互換を色でも見分けられるようにする。
+// 判定の状態ごとの見出しの色
 const compatibilitySummaryLabelStyles = {
     incompatible: "text-red-600",
     unknown: "text-amber-600",
@@ -244,7 +244,7 @@ function CandidatePartsTableRowComponent({
                                         <span className={`font-semibold ${compatibilitySummaryLabelStyles[line.status]}`}>
                                             {line.label}：
                                         </span>
-                                        {/* 各項目にマウスを乗せると、両側の値を詳細として表示する。 */}
+                                        {/* マウスを乗せると両側の値を表示する */}
                                         {line.items.map((item, index) => (
                                             <span key={item.text} title={item.title}>
                                                 {index > 0 && "\u3000"}
