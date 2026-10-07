@@ -12,6 +12,8 @@
     "check:production": "node scripts/check-production-config.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "master:export": "node scripts/export-master-data.mjs",
+    "master:audit": "node scripts/audit-master-data.mjs",
     "predeploy": "npm run check:production && npm run build",
     "deploy": "wrangler deploy"
   },
