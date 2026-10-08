@@ -45,3 +45,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # マスターデータの欠落・不整合を検知する。監査はローカルD1を参照するため、先にマイグレーションを適用する。
+      - run: npm run db:migrate:local
+      - run: npm run master:audit
