@@ -7,7 +7,8 @@
 //   1. フレームの付属品で weight が 0 以下(0は登録しない方針)
 //   2. フレームが占有しているカテゴリ(シートポスト/ハンドル/ステム/BB)に対応する
 //      付属品が登録されていない(付属品の登録漏れ)
-//   3. 同じプラットフォーム(モデル名の先頭一致)で、付属品の有無が揃っていない
+//   3. 同じプラットフォーム(モデル名の先頭一致)で、専用パーツの占有カテゴリが
+//      あるにもかかわらず付属品の有無が揃っていない(標準規格の機種は対象外)
 // 使い方(api ディレクトリで): npm run master:audit
 
 import { execFileSync } from "node:child_process";
@@ -77,9 +78,16 @@ for (const frame of frames) {
 
 // チェック3: 同一プラットフォーム内で付属品の有無が揃っていない
 // モデル名の先頭2語(例: "Cannondale SuperSix")でグルーピングする。
+// 標準規格のパーツを使う機種(占有カテゴリが無い)は、そもそも付属品が不要なため
+// 比較対象から除く。専用パーツでカテゴリを占有している機種どうしでだけ揃いを見る。
 const platformOf = (frame) => (frame.model_name ?? frame.name).split(" ").slice(0, 2).join(" ");
+const occupiesComponentCategory = (frame) => {
+    const blockedCats = blockedByPart.get(frame.id) ?? new Set();
+    return [...blockedCats].some((categoryId) => COMPONENT_BLOCK_CATEGORIES.has(categoryId));
+};
 const platforms = new Map();
 for (const frame of frames) {
+    if (!occupiesComponentCategory(frame)) continue;
     const key = `${frame.brand_id}:${platformOf(frame)}`;
     if (!platforms.has(key)) platforms.set(key, []);
     platforms.get(key).push(frame);
