@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/combobox"
 import { TableCell, TableRow } from "@/components/ui/table"
 import {
-    getPartPackageUnit,
     getFrameCockpitBadge,
+    getFrameWeightBadge,
+    getPartPackageUnit,
     getSpecificationLabel,
     getSpecificationValueLabel,
+    getWeightBreakdown,
     type CompatibilityCounterpart,
     type CompatibilityResult,
 } from "@/features/simulator/partCompatibility"
@@ -106,6 +108,10 @@ function CandidatePartsTableRowComponent({
     const isFrame = part.categoryKey === "frame"
     // 規格未確認(unknown)やフレーム以外はバッジを表示しない
     const frameCockpitBadge = getFrameCockpitBadge(part)
+    // 重量にフロントフォークを含むフレームは、合計の内訳が分かるように示す。
+    const frameWeightBadge = getFrameWeightBadge(part)
+    // 合計が何の足し算かを重量欄の2行目に示す(例: (755g + 378g))。
+    const weightBreakdown = getWeightBreakdown(part)
 
     // サイズ・バリアントの選択肢（Combobox用）。値はpart id、表示はバリアント名。
     const variantOptions = variants.map((variant) => ({
@@ -204,6 +210,16 @@ function CandidatePartsTableRowComponent({
                                 className={frameCockpitBadge.className}
                             >
                                 {frameCockpitBadge.label}
+                            </Badge>
+                        )}
+
+                        {frameWeightBadge && (
+                            <Badge
+                                variant="outline"
+                                className={frameWeightBadge.className}
+                                title="重量はフレーム＋フロントフォークの合計です"
+                            >
+                                {frameWeightBadge.label}
                             </Badge>
                         )}
 
@@ -336,7 +352,16 @@ function CandidatePartsTableRowComponent({
             )}
 
             <TableCell className="text-right tabular-nums">
-                {part.weight.toLocaleString("ja-JP")}g
+                {/* 幅の広い内訳の中央に合計を置き、ピラミッド型に見せる。塊の右端は列の右揃えに合わせる。 */}
+                <div className="ml-auto flex w-fit flex-col items-center leading-tight">
+                    <span>{part.weight.toLocaleString("ja-JP")}g</span>
+
+                    {weightBreakdown && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                            ({weightBreakdown})
+                        </span>
+                    )}
+                </div>
             </TableCell>
 
             <TableCell className="text-right tabular-nums">

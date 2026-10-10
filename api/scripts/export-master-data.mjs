@@ -24,7 +24,9 @@ const outDir = resolve(apiDir, "master-data");
 // マスターデータを構成する6テーブルと、出力する列・並び順。
 // 個人情報やユーザー生成物(users/auth_accounts/sessions/saved_builds など)は対象外。
 const tables = [
-    { name: "categories", columns: ["id", "key", "display_name"], order: "id" },
+    // sort_order は表示順の根拠になるため seed にも含める。欠けると投入後に全カテゴリが0へ戻り、
+    // ボトムブラケットの並び替え(0039)やフロントフォークの追加(0059)が失われる。
+    { name: "categories", columns: ["id", "key", "display_name", "sort_order"], order: "id" },
     { name: "brands", columns: ["id", "name", "created_at", "updated_at"], order: "id" },
     {
         name: "parts",
@@ -82,6 +84,11 @@ function sqlValue(value) {
     if (typeof value === "number") return String(value);
     return `'${String(value).replace(/'/g, "''")}'`;
 }
+
+// 作成・更新の時刻はDBへマイグレーションを適用した時刻で決まり、DBを作り直すと変わる。
+// 値そのものを出力すると環境ごとに差分が出るため、投入時刻を表す CURRENT_TIMESTAMP を書く。
+// これで同じデータなら何度生成しても同じバイト列になる(差分が実際の変更だけになる)。
+const VOLATILE_COLUMNS = new Set(["created_at", "updated_at"]);
 
 // ---- データ取得 ----
 const data = {};
@@ -141,7 +148,9 @@ for (const table of tables) {
     const rows = data[table.name];
     sqlLines.push(`-- ${table.name} (${rows.length}件)`);
     for (const row of rows) {
-        const values = table.columns.map((column) => sqlValue(row[column])).join(", ");
+        const values = table.columns
+            .map((column) => VOLATILE_COLUMNS.has(column) ? "CURRENT_TIMESTAMP" : sqlValue(row[column]))
+            .join(", ");
         sqlLines.push(`INSERT INTO ${table.name} (${table.columns.join(", ")}) VALUES (${values});`);
     }
     sqlLines.push("");
