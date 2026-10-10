@@ -4,7 +4,9 @@ import {
     calculateSelectedPartsTotals,
     evaluatePartCompatibility,
     getFrameCockpitBadge,
+    getFrameWeightBadge,
     getSpecificationValueLabel,
+    getWeightBreakdown,
 } from "@/features/simulator/partCompatibility"
 import {createPartSlot} from "@/features/simulator/partSlots"
 import type {Part, PartIncludedItem} from "@/types/part"
@@ -44,6 +46,11 @@ describe("evaluatePartCompatibility", () => {
             "handlebar_clamp_mm",
             "31.8",
         )).toBe("31.8mm")
+        // 重量も同じ規則で単位を補い、重量の内訳を読めるようにする。
+        expect(getSpecificationValueLabel(
+            "frame_weight_g",
+            "755",
+        )).toBe("755g")
     })
 
     // 複数対応の規格値は、各値を日本語ラベルで並べて表示する。
@@ -891,5 +898,72 @@ describe("getFrameCockpitBadge", () => {
 
         expect(getFrameCockpitBadge(standardFrame)?.label).toBe("1-1/8標準コラム")
         expect(getFrameCockpitBadge(unknownFrame)).toBeNull()
+    })
+})
+
+// フレームの重量がフロントフォークを含むことを示すバッジを確認する。
+describe("getFrameWeightBadge", () => {
+    // 重量の範囲がフレーム＋フロントフォークのときだけバッジを出す。
+    it("フレーム＋フロントフォークのフレームはバッジを返す", () => {
+        const frameset = createPart(1, "Frameset", "frame", {
+            weight_scope: "frame_and_fork",
+        })
+
+        expect(getFrameWeightBadge(frameset)).toEqual({
+            label: "フォーク込み",
+            className: "border-slate-300 bg-slate-50 text-slate-600",
+        })
+    })
+
+    // 非公式・別条件の値は、公式の値と混ざらないよう「参考値」と併記する。
+    it("参考値のフレームは参考値つきのバッジを返す", () => {
+        const referenceFrameset = createPart(2, "Frameset", "frame", {
+            weight_scope: "frame_and_fork",
+            weight_source: "reference",
+        })
+
+        expect(getFrameWeightBadge(referenceFrameset)).toEqual({
+            label: "フォーク込み・参考値",
+            className: "border-amber-300 bg-amber-50 text-amber-700",
+        })
+    })
+
+    // 範囲が未登録のフレームと、フレーム以外にはバッジを出さない。
+    it("範囲が未登録のフレームとフレーム以外は null を返す", () => {
+        const unknownFrame = createPart(1, "Frame", "frame", {})
+        const wheel = createPart(2, "Wheel", "wheel", {
+            weight_scope: "frame_and_fork",
+        })
+
+        expect(getFrameWeightBadge(unknownFrame)).toBeNull()
+        expect(getFrameWeightBadge(wheel)).toBeNull()
+    })
+})
+
+// 完成重量が何の足し算かを示す内訳を確認する。
+describe("getWeightBreakdown", () => {
+    // フレーム＋フロントフォークの内訳を、単位つきで並べて返す。
+    it("フレームとフロントフォークの内訳を返す", () => {
+        const frameset = createPart(1, "Frameset", "frame", {
+            weight_scope: "frame_and_fork",
+            frame_weight_g: "755",
+            fork_weight_g: "378",
+        })
+
+        expect(getWeightBreakdown(frameset)).toBe("755g + 378g")
+    })
+
+    // 内訳が未登録、または重量の範囲が違う場合は null を返す。
+    it("内訳が未登録なら null を返す", () => {
+        const missingBreakdown = createPart(1, "Frameset", "frame", {
+            weight_scope: "frame_and_fork",
+        })
+        const frameOnly = createPart(2, "Frame", "frame", {
+            frame_weight_g: "755",
+            fork_weight_g: "378",
+        })
+
+        expect(getWeightBreakdown(missingBreakdown)).toBeNull()
+        expect(getWeightBreakdown(frameOnly)).toBeNull()
     })
 })

@@ -38,8 +38,8 @@ export type CompatibilityResult = {
     selectionBlocked: boolean
 }
 
-// フレームのコックピットバッジ。種別ごとの色と、規格名が未登録のときの文言。
-export type FrameCockpitBadge = {
+// フレームの行に出すバッジ。コックピットの状態と、重量に含む範囲を表す。
+export type FrameBadge = {
     label: string
     className: string
 }
@@ -66,7 +66,7 @@ const FRAME_COCKPIT_BADGES: Record<
     },
 }
 
-export function getFrameCockpitBadge(part: Part): FrameCockpitBadge | null {
+export function getFrameCockpitBadge(part: Part): FrameBadge | null {
     const status = getFrameCockpitStatus(part)
 
     // 規格未確認(unknown)やフレーム以外はバッジを表示しない。
@@ -88,6 +88,32 @@ export function getFrameCockpitBadge(part: Part): FrameCockpitBadge | null {
     return { label, className: badge.className }
 }
 
+// フレームの重量がフロントフォークを含むことを示すバッジ。
+// フレームはフォークとセットで売られるため、重量を比べる前に範囲が分かるようにする。
+export function getFrameWeightBadge(part: Part): FrameBadge | null {
+    if (part.categoryKey !== "frame") {
+        return null
+    }
+
+    // 重量の範囲が未登録のフレームにはバッジを出さない(未確認を付属扱いしない)。
+    if (part.specifications?.weight_scope !== "frame_and_fork") {
+        return null
+    }
+
+    // 非公式・別条件の値は、公式の値と混ざらないよう「参考値」と併記する。
+    if (part.specifications?.weight_source === "reference") {
+        return {
+            label: "フォーク込み・参考値",
+            className: "border-amber-300 bg-amber-50 text-amber-700",
+        }
+    }
+
+    return {
+        label: "フォーク込み",
+        className: "border-slate-300 bg-slate-50 text-slate-600",
+    }
+}
+
 const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
     bb_standard: "BB規格",
@@ -100,6 +126,9 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     crank_spindle: "クランク軸規格",
     drivetrain_speed: "対応段数",
     freehub_body: "フリーボディ",
+    fork_weight_g: "フロントフォーク重量",
+    frame_weight_g: "フレーム重量",
+    front_axle: "フロントアクスル",
     handlebar_clamp_mm: "ハンドルクランプ径",
     max_tire_width_mm: "対応タイヤ幅（最大）",
     min_tire_width_mm: "対応タイヤ幅（最小）",
@@ -110,13 +139,17 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     saddle_rail: "サドルレール規格",
     seatpost_diameter_mm: "シートポスト径",
     shift_system: "変速方式",
+    steerer_standard: "コラム規格",
     tire_width_mm: "タイヤ幅",
+    weight_scope: "重量の範囲",
+    weight_source: "重量の出典",
     wheel_diameter: "ホイール径",
 }
 
 // API内部キーを候補表で読める日本語へ変換する。
 
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
+    "12x100": "12x100mm（スルーアクスル）",
     "6_bolt": "6ボルト",
     alloy_7mm: "アロイ 7mm",
     argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
@@ -152,6 +185,9 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     focus_cis: "FOCUS C.I.S.対応",
     fsa_acr: "FSA ACR対応",
     flat_mount: "フラットマウント",
+    official: "メーカー公式",
+    reference: "参考値（非公式・別条件）",
+    frame_and_fork: "フレーム＋フロントフォーク",
     front: "前輪専用",
     hollowtech_ii: "Shimano HOLLOWTECH II",
     hope_rx4: "HOPE RX4形状",
@@ -218,11 +254,32 @@ export function getSpecificationLabel(key: string) {
 }
 
 export function getSpecificationValueLabel(key: string, value: string) {
-    // 単一値もカンマ区切りも同じ経路で日本語化し、mm系だけ単位を補う。
-    const label = (single: string) =>
-        SPECIFICATION_VALUE_LABELS[single] ?? (key.endsWith("_mm") ? `${single}mm` : single)
+    // 単一値もカンマ区切りも同じ経路で日本語化し、mm系とg系だけ単位を補う。
+    const label = (single: string) => {
+        const unit = key.endsWith("_mm") ? "mm" : key.endsWith("_g") ? "g" : ""
+
+        return SPECIFICATION_VALUE_LABELS[single] ?? `${single}${unit}`
+    }
 
     return value.split(",").map((part) => label(part.trim())).filter(Boolean).join("／")
+}
+
+// 重量の内訳(フレーム＋フロントフォーク)。画面で「1,133g」の下に「(755g + 378g)」と示すために使う。
+// 内訳が未登録のフレームでは null を返し、合計だけを表示する。
+export function getWeightBreakdown(part: Part): string | null {
+    if (part.specifications?.weight_scope !== "frame_and_fork") {
+        return null
+    }
+
+    const frameWeight = part.specifications?.frame_weight_g
+    const forkWeight = part.specifications?.fork_weight_g
+
+    if (!frameWeight || !forkWeight) {
+        return null
+    }
+
+    // 数字と単位の並びなので、記号は半角で揃えて幅を一定にする。
+    return `${frameWeight}g + ${forkWeight}g`
 }
 
 export function getPartPackageUnit(part: Part) {

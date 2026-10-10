@@ -10,7 +10,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import {getPartDisplayName, findBlockedSlotItem} from "@/features/simulator/partDisplay"
-import {getFrameCockpitBadge} from "@/features/simulator/partCompatibility"
+import {getFrameCockpitBadge, getFrameWeightBadge, getWeightBreakdown} from "@/features/simulator/partCompatibility"
 import {
     getPartSlotPositionLabel,
     getPartSlots,
@@ -105,6 +105,14 @@ export function SelectedPartsTable({
                             const frameCockpitBadge = part
                                 ? getFrameCockpitBadge(part)
                                 : null
+                            // 重量にフロントフォークを含むフレームは、合計の内訳が分かるように示す。
+                            const frameWeightBadge = part
+                                ? getFrameWeightBadge(part)
+                                : null
+                            // 合計が何の足し算かを重量欄の2行目に示す(例: (755g + 378g))。
+                            const weightBreakdown = part
+                                ? getWeightBreakdown(part)
+                                : null
 
                             return (
                                 <TableRow
@@ -188,6 +196,18 @@ export function SelectedPartsTable({
                                                     </Badge>
                                                 )}
 
+                                            {part &&
+                                                !isBlocked &&
+                                                frameWeightBadge && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={frameWeightBadge.className}
+                                                        title="重量はフレーム＋フロントフォークの合計です"
+                                                    >
+                                                        {frameWeightBadge.label}
+                                                    </Badge>
+                                                )}
+
                                             {/* サイズ・世代は選択漏れに気づきにくいため、選択中一覧でも明示する。 */}
                                             {part && !isBlocked && part.edition && (
                                                 <Badge variant="outline">
@@ -204,11 +224,26 @@ export function SelectedPartsTable({
                                     </TableCell>
 
                                     <TableCell className="text-left tabular-nums">
-                                        {part && !isBlocked
-                                            ? `${part.weight.toLocaleString("ja-JP")}g`
-                                            : isBlocked && blockedItemWeight > 0
-                                            ? `${blockedItemWeight.toLocaleString("ja-JP")}g`
-                                            : "-"}
+                                        {/* 幅の広い内訳の中央に合計を置き、ピラミッド型に見せる。塊の左端は列の左揃えに合わせる。 */}
+                                        <div className="flex w-fit flex-col items-center leading-tight">
+                                            {part && !isBlocked ? (
+                                                <span>
+                                                    {`${part.weight.toLocaleString("ja-JP")}g`}
+                                                </span>
+                                            ) : isBlocked && blockedItemWeight > 0 ? (
+                                                <span>
+                                                    {`${blockedItemWeight.toLocaleString("ja-JP")}g`}
+                                                </span>
+                                            ) : (
+                                                <span>-</span>
+                                            )}
+
+                                            {part && !isBlocked && weightBreakdown && (
+                                                <span className="text-xs font-normal text-muted-foreground">
+                                                    ({weightBreakdown})
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
 
                                     <TableCell>
