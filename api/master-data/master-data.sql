@@ -859,7 +859,7 @@ INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, pr
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (763, 1, 2, 'Cannondale SuperSix EVO Hi-MOD Frameset (Gen 5)', 'Cannondale SuperSix EVO Hi-MOD Frameset', NULL, 670000, '2026-10-05 00:00:00', 1188, 'Cannondale公式(C1133GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (764, 1, 2, 'Cannondale SuperSix EVO LAB71 Frameset (Gen 5)', 'Cannondale SuperSix EVO LAB71 Frameset', NULL, 890000, '2026-10-05 00:00:00', 1133, 'Cannondale公式(C1102GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- part_specifications (1492件)
+-- part_specifications (1539件)
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1, 129, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (2, 129, 'tire_width_mm', '25', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (3, 130, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -2348,10 +2348,57 @@ INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, 
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1700, 764, 'frame_weight_g', '755', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1701, 764, 'fork_weight_g', '378', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1702, 764, 'weight_source', 'official', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1703, 763, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1704, 763, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1705, 764, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1706, 764, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1707, 1, 'steerer_standard', 'tapered_1_1_8_1_3_8', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1708, 1, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1709, 2, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1710, 2, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1711, 4, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1712, 4, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1713, 5, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1714, 5, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1715, 8, 'steerer_standard', 'giant_overdrive_aero', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1716, 8, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1717, 9, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1718, 10, 'steerer_standard', 'straight_1_1_4', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1719, 10, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1720, 11, 'steerer_standard', 'tapered_1_1_4_1_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1721, 11, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1722, 12, 'steerer_standard', 'bmc_ics', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1723, 12, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1724, 13, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1725, 13, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1726, 14, 'steerer_standard', 'straight_1_1_8', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1727, 14, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1728, 15, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1729, 15, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1730, 18, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1731, 18, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1732, 19, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1733, 19, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1734, 20, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1735, 23, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1736, 24, 'steerer_standard', 'straight_1_1_4', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1737, 24, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1738, 26, 'steerer_standard', 'bmc_ics', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1739, 26, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1740, 28, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1741, 28, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1742, 29, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1743, 363, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1744, 534, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1745, 541, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1746, 756, 'steerer_standard', 'bmc_ics', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1747, 756, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1748, 758, 'steerer_standard', 'bmc_ics', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1749, 758, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1750, 759, 'steerer_standard', 'bmc_ics', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1751, 759, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1752, 762, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1753, 762, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1754, 763, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1755, 763, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1756, 764, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1757, 764, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- part_included_items (244件)
 INSERT INTO part_included_items (id, part_id, item_name, quantity, included_category_id, price, is_set_component, weight, created_at, updated_at) VALUES (1, 87, 'ステム', 1, 17, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

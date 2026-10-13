@@ -225,7 +225,7 @@ export function SelectedPartsTable({
 
                                     <TableCell className="text-left tabular-nums">
                                         {/* 幅の広い内訳の中央に合計を置き、ピラミッド型に見せる。塊の左端は列の左揃えに合わせる。 */}
-                                        <div className="flex w-fit flex-col items-center leading-tight">
+                                        <div className="flex w-fit flex-col leading-tight">
                                             {part && !isBlocked ? (
                                                 <span>
                                                     {`${part.weight.toLocaleString("ja-JP")}g`}
