@@ -1,9 +1,8 @@
 // 認証APIのレスポンス型
+// メールアドレスとプロフィール画像は保存していないため、IDと表示名だけを持つ。
 export type AuthUser = {
     id: string
     displayName: string
-    email: string
-    image: string | null
 }
 
 export type AuthSession =
@@ -94,10 +93,7 @@ function parseAuthSession(payload: unknown): AuthSession {
         payloadRecord.authenticated !== true ||
         !userRecord ||
         typeof userRecord.id !== "string" ||
-        typeof userRecord.displayName !== "string" ||
-        typeof userRecord.email !== "string" ||
-        (userRecord.image !== null &&
-            typeof userRecord.image !== "string")
+        typeof userRecord.displayName !== "string"
     ) {
         throw createAuthApiError("ログイン状態の取得に失敗しました")
     }
@@ -107,8 +103,6 @@ function parseAuthSession(payload: unknown): AuthSession {
         user: {
             id: userRecord.id,
             displayName: userRecord.displayName,
-            email: userRecord.email,
-            image: userRecord.image,
         },
     }
 }
@@ -234,4 +228,29 @@ export async function deleteAccount(): Promise<void> {
         // エラー本文を共通パーサーで読み、設定・CSRF・サーバーエラーを同じ形式で伝える。
         await readJson(response, "アカウントの削除に失敗しました")
     }
+}
+
+// CSRF検証付きで、ログイン中のユーザーの表示名を変更し、保存された表示名を返す
+export async function updateDisplayName(displayName: string): Promise<string> {
+    const csrfToken = await fetchCsrfToken()
+    const response = await fetch("/api/account", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({csrfToken, displayName}),
+    })
+    const payload = await readJson(
+        response,
+        "表示名の変更に失敗しました",
+    ) as {displayName?: unknown}
+
+    // サーバーが前後の空白を除いた値を返すため、画面にはその値を表示する
+    if (typeof payload.displayName !== "string") {
+        throw createAuthApiError("表示名の変更に失敗しました")
+    }
+
+    return payload.displayName
 }

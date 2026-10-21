@@ -5,6 +5,7 @@ import {createApp} from "../src/app"
 import type {
     AccountRepository,
     DeleteAccountResult,
+    UpdateDisplayNameResult,
 } from "../src/db/account-repository"
 import type {CatalogRepository} from "../src/db/catalog-repository"
 import type {ConfigOrderRepository} from "../src/db/config-order-repository"
@@ -68,6 +69,7 @@ function createAuthBindings(): Bindings {
     return {
         DB: {} as D1Database,
         AUTH_SECRET: "test-auth-secret-that-is-long-enough",
+        ACCOUNT_ID_HASH_SECRET: "test-account-id-hash-secret-long-enough",
         GOOGLE_CLIENT_ID: "test-client-id",
         GOOGLE_CLIENT_SECRET: "test-client-secret",
     }
@@ -298,11 +300,25 @@ class TestSavedBuildRepository implements SavedBuildRepository {
 class TestAccountRepository implements AccountRepository {
     lastUserId: string | null = null
     result: DeleteAccountResult = {kind: "deleted"}
+    lastDisplayName: string | null = null
+    updateResult: "updated" | "not_found" = "updated"
 
     async deleteUser(userId: string): Promise<DeleteAccountResult> {
         this.lastUserId = userId
 
         return this.result
+    }
+
+    async updateDisplayName(
+        userId: string,
+        displayName: string,
+    ): Promise<UpdateDisplayNameResult> {
+        this.lastUserId = userId
+        this.lastDisplayName = displayName
+
+        return this.updateResult === "updated"
+            ? {kind: "updated", displayName}
+            : {kind: "not_found"}
     }
 }
 
@@ -607,8 +623,6 @@ describe("authentication API", () => {
             user: {
                 id: "user-1",
                 displayName: "Test User",
-                email: "test@example.com",
-                image: null,
             },
         })
     })
@@ -1594,5 +1608,135 @@ describe("saved builds API", () => {
 
         expect(response.status).toBe(204)
         expect(await response.text()).toBe("")
+    })
+})
+
+// 表示名の変更APIと、アカウントID用の鍵の設定確認
+describe("display name API", () => {
+    const accountRepository = new TestAccountRepository()
+    const app = createApp({
+        catalogRepository: createRepository(),
+        authAdapter: createAuthAdapter(),
+        accountRepository,
+    })
+
+    // CSRFトークンとCookieを取得し、変更系リクエストに使えるようにする
+    async function getCsrf() {
+        const csrfResponse = await app.request("/api/auth/csrf", {}, createAuthBindings())
+        const csrfPayload = await csrfResponse.json() as {csrfToken: string}
+        const csrfCookie = csrfResponse.headers.get("set-cookie")?.split(";", 1)[0] ?? ""
+
+        return {csrfToken: csrfPayload.csrfToken, csrfCookie}
+    }
+
+    async function patchDisplayName(displayName: unknown) {
+        const {csrfToken, csrfCookie} = await getCsrf()
+
+        return app.request(
+            "/api/account",
+            {
+                method: "PATCH",
+                headers: {
+                    "content-type": "application/json",
+                    cookie: `${csrfCookie}; authjs.session-token=test-session-token`,
+                },
+                body: JSON.stringify({csrfToken, displayName}),
+            },
+            createAuthBindings(),
+        )
+    }
+
+    it("rejects an unauthenticated display name change", async () => {
+        accountRepository.lastDisplayName = null
+        const response = await app.request(
+            "/api/account",
+            {
+                method: "PATCH",
+                headers: {"content-type": "application/json"},
+                body: JSON.stringify({csrfToken: "invalid", displayName: "名前"}),
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(401)
+        expect(accountRepository.lastDisplayName).toBeNull()
+    })
+
+    it("rejects a display name change without a valid CSRF token", async () => {
+        accountRepository.lastDisplayName = null
+        const response = await app.request(
+            "/api/account",
+            {
+                method: "PATCH",
+                headers: {
+                    "content-type": "application/json",
+                    cookie: "authjs.session-token=test-session-token",
+                },
+                body: JSON.stringify({csrfToken: "invalid", displayName: "名前"}),
+            },
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(403)
+        expect(accountRepository.lastDisplayName).toBeNull()
+    })
+
+    it("saves a trimmed display name for the authenticated user", async () => {
+        const response = await patchDisplayName("  サイクリスト  ")
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({displayName: "サイクリスト"})
+        expect(accountRepository.lastUserId).toBe("user-1")
+        expect(accountRepository.lastDisplayName).toBe("サイクリスト")
+    })
+
+    it.each([
+        ["空の名前", "   "],
+        ["101文字の名前", "あ".repeat(101)],
+        ["文字列ではない名前", 123],
+    ])("rejects %s", async (_label, displayName) => {
+        accountRepository.lastDisplayName = null
+        const response = await patchDisplayName(displayName)
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toMatchObject({
+            error: {code: "INVALID_DISPLAY_NAME"},
+        })
+        expect(accountRepository.lastDisplayName).toBeNull()
+    })
+
+    it("accepts a 100-character display name counted by characters", async () => {
+        // 絵文字も1文字として数える(DBのlength()と同じ)
+        const response = await patchDisplayName("🚲".repeat(100))
+
+        expect(response.status).toBe(200)
+    })
+
+    it("returns 404 when the account no longer exists", async () => {
+        accountRepository.updateResult = "not_found"
+        const response = await patchDisplayName("名前")
+        accountRepository.updateResult = "updated"
+
+        expect(response.status).toBe(404)
+    })
+
+    it("reports missing ACCOUNT_ID_HASH_SECRET at the login entry point", async () => {
+        const response = await app.request(
+            "/api/auth/google?callbackUrl=%2Fsimulator",
+            {},
+            {
+                ...createAuthBindings(),
+                ACCOUNT_ID_HASH_SECRET: "",
+            },
+        )
+
+        expect(response.status).toBe(503)
+        expect(await response.json()).toEqual({
+            error: {
+                code: "AUTH_NOT_CONFIGURED",
+                message:
+                    "認証設定が未完了です。api/.dev.varsにACCOUNT_ID_HASH_SECRETを設定してください。",
+            },
+        })
     })
 })

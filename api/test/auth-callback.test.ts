@@ -8,6 +8,7 @@ function bindings(): Bindings {
     return {
         DB: {} as D1Database,
         AUTH_SECRET: "test-auth-secret-that-is-long-enough",
+        ACCOUNT_ID_HASH_SECRET: "test-account-id-hash-secret-long-enough",
         GOOGLE_CLIENT_ID: "test-client-id",
         GOOGLE_CLIENT_SECRET: "test-client-secret",
     }

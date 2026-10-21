@@ -1,6 +1,11 @@
 import {describe, expect, it} from "vitest"
 
-import {createD1AuthAdapter} from "../src/auth/d1-auth-adapter"
+import {toGoogleAccountUser} from "../src/auth/auth-config"
+import {
+    createD1AuthAdapter,
+    hashProviderAccountId,
+} from "../src/auth/d1-auth-adapter"
+import {hashProviderAccountId as hashInScript} from "../scripts/hash-account-ids.mjs"
 import {D1AccountRepository} from "../src/db/d1-account-repository"
 import {D1ConfigOrderRepository} from "../src/db/config-order-repository"
 import {D1SavedBuildRepository} from "../src/db/d1-saved-build-repository"
@@ -39,7 +44,7 @@ function createDatabaseStub(
 }
 
 describe("security-sensitive D1 queries", () => {
-    it("Google表示名をusers.display_nameの上限内へ整形する", async () => {
+    it("Googleの名前・メール・画像を保存せず、仮の表示名でユーザーを作る", async () => {
         const statements: PreparedStatement[] = []
         const database = {
             prepare(sql: string) {
@@ -55,18 +60,65 @@ describe("security-sensitive D1 queries", () => {
             },
         } as unknown as D1Database
         const adapter = createD1AuthAdapter(database)
-        const longName = "あ".repeat(101)
 
+        // Auth.jsから名前などが渡されても、保存してはいけない
         const user = await adapter.createUser!({
             id: "user-1",
-            name: longName,
-            email: "test@example.com",
+            name: "山田 太郎",
+            email: "taro@example.com",
             emailVerified: null,
-            image: null,
+            image: "https://example.com/photo.png",
+        })
+        const savedValues = statements[0]?.parameters ?? []
+
+        expect(user.name).toBe("ユーザー")
+        expect(savedValues).not.toContain("山田 太郎")
+        expect(savedValues).not.toContain("taro@example.com")
+        expect(savedValues).not.toContain("https://example.com/photo.png")
+        // メール・画像の列には書き込まない(列自体を削除済み)
+        expect(statements[0]?.sql).not.toContain("email")
+        expect(statements[0]?.sql).not.toContain("image_url")
+        expect(savedValues).toEqual(["user-1", "ユーザー", expect.any(String), expect.any(String)])
+    })
+
+    it("Auth.jsからの更新では、名前・メール・画像を書き換えない", async () => {
+        const statements: PreparedStatement[] = []
+        const database = {
+            prepare(sql: string) {
+                return {
+                    bind(...parameters: unknown[]) {
+                        statements.push({sql, parameters})
+
+                        return {
+                            first: async () => ({
+                                id: "user-1",
+                                display_name: "自分で付けた名前",
+                            }),
+                            run: async () => ({meta: {changes: 1}}),
+                        }
+                    },
+                }
+            },
+        } as unknown as D1Database
+        const adapter = createD1AuthAdapter(database)
+
+        const user = await adapter.updateUser!({
+            id: "user-1",
+            name: "Googleの名前",
+            email: "taro@example.com",
+            image: "https://example.com/photo.png",
         })
 
-        expect(user.name).toHaveLength(100)
-        expect(statements[0]?.parameters[1]).toBe("あ".repeat(100))
+        expect(user.name).toBe("自分で付けた名前")
+        expect(statements.some((statement) => statement.sql.includes("UPDATE"))).toBe(false)
+    })
+
+    it("メールアドレスでユーザーを探さない", async () => {
+        const {database, statements} = createDatabaseStub()
+        const adapter = createD1AuthAdapter(database)
+
+        await expect(adapter.getUserByEmail!("taro@example.com")).resolves.toBeNull()
+        expect(statements).toHaveLength(0)
     })
 
     it("期限切れセッションを取得対象から除外する", async () => {
@@ -309,5 +361,164 @@ describe("security-sensitive D1 queries", () => {
             }],
             partIds: [1, 2],
         } satisfies Partial<InvalidSavedBuildPartsError>)
+    })
+})
+
+describe("Googleから受け取る情報", () => {
+    it("プロフィールからアカウントID(sub)だけを取り出す", () => {
+        const user = toGoogleAccountUser({
+            sub: "108123456789012345678",
+            name: "山田 太郎",
+            email: "taro@example.com",
+            picture: "https://example.com/photo.png",
+        })
+
+        expect(user).toEqual({id: "108123456789012345678"})
+    })
+
+    it("アカウントIDがないプロフィールは受け付けない", () => {
+        expect(() => toGoogleAccountUser({email: "taro@example.com"})).toThrow()
+    })
+})
+
+describe("アカウントIDのハッシュ化", () => {
+    const secret = "test-account-id-hash-secret-long-enough"
+    const googleId = "108123456789012345678"
+
+    type AccountRow = {
+        user_id: string
+        provider: string
+        provider_account_id: string
+    }
+
+    // auth_accountsとusersの行を持ち、SQLの種類に応じて応答する簡易スタブ
+    function createAccountDatabase(accountRows: AccountRow[]) {
+        const statements: PreparedStatement[] = []
+        const database = {
+            prepare(sql: string) {
+                return {
+                    bind(...parameters: unknown[]) {
+                        statements.push({sql, parameters})
+
+                        return {
+                            first: async () => {
+                                if (sql.includes("FROM auth_accounts")) {
+                                    const [provider, accountId] = parameters
+
+                                    return accountRows.find((row) =>
+                                        row.provider === provider &&
+                                        row.provider_account_id === accountId,
+                                    ) ?? null
+                                }
+
+                                if (sql.includes("FROM users")) {
+                                    return {
+                                        id: parameters[0],
+                                        display_name: "ユーザー",
+                                    }
+                                }
+
+                                return null
+                            },
+                            run: async () => {
+                                // ハッシュ値への置き換えを、スタブの行にも反映する
+                                if (sql.includes("UPDATE auth_accounts")) {
+                                    const [newId, , provider, oldId] = parameters
+                                    const row = accountRows.find((candidate) =>
+                                        candidate.provider === provider &&
+                                        candidate.provider_account_id === oldId,
+                                    )
+
+                                    if (row) {
+                                        row.provider_account_id = newId as string
+                                    }
+                                }
+
+                                return {meta: {changes: 1}}
+                            },
+                        }
+                    },
+                }
+            },
+        } as unknown as D1Database
+
+        return {database, statements}
+    }
+
+    const linkGoogleAccount = {
+        userId: "user-1",
+        provider: "google",
+        providerAccountId: googleId,
+        type: "oidc" as const,
+    }
+
+    it("アカウントIDを平文で保存せず、ハッシュ値で保存する", async () => {
+        const {database, statements} = createAccountDatabase([])
+
+        await createD1AuthAdapter(database, secret).linkAccount!(linkGoogleAccount)
+
+        const storedId = statements[0]?.parameters[2]
+
+        expect(storedId).not.toBe(googleId)
+        expect(storedId).toMatch(/^[0-9a-f]{64}$/)
+    })
+
+    it("保存したハッシュ値で、同じアカウントを見つけられる", async () => {
+        const storedId = await hashProviderAccountId(secret, "google", googleId)
+        const {database} = createAccountDatabase([{
+            user_id: "user-1",
+            provider: "google",
+            provider_account_id: storedId,
+        }])
+
+        const user = await createD1AuthAdapter(database, secret).getUserByAccount!({
+            provider: "google",
+            providerAccountId: googleId,
+        })
+
+        expect(user?.id).toBe("user-1")
+    })
+
+    it("平文で保存されていた既存の行は、ログイン時にハッシュ値へ置き換える", async () => {
+        const rows: AccountRow[] = [{
+            user_id: "user-1",
+            provider: "google",
+            provider_account_id: googleId,
+        }]
+        const {database} = createAccountDatabase(rows)
+
+        const user = await createD1AuthAdapter(database, secret).getUserByAccount!({
+            provider: "google",
+            providerAccountId: googleId,
+        })
+
+        expect(user?.id).toBe("user-1")
+        expect(rows[0]?.provider_account_id).toBe(
+            await hashProviderAccountId(secret, "google", googleId),
+        )
+    })
+
+    it("秘密鍵が違うと、別のハッシュ値になる", async () => {
+        const first = await hashProviderAccountId(secret, "google", googleId)
+        const second = await hashProviderAccountId(`${secret}-other`, "google", googleId)
+
+        expect(first).not.toBe(second)
+    })
+
+    it("秘密鍵が未設定なら、平文で保存せずに失敗する", async () => {
+        const {database, statements} = createAccountDatabase([])
+
+        await expect(
+            createD1AuthAdapter(database).linkAccount!(linkGoogleAccount),
+        ).rejects.toThrow("Missing ACCOUNT_ID_HASH_SECRET")
+        expect(statements).toHaveLength(0)
+    })
+
+    it("一括置き換えのスクリプトと、アプリが同じハッシュ値を作る", async () => {
+        // 値がずれると、一括置き換えのあとに既存ユーザーがログインできなくなる
+        const fromApp = await hashProviderAccountId(secret, "google", googleId)
+        const fromScript = hashInScript(secret, "google", googleId)
+
+        expect(fromScript).toBe(fromApp)
     })
 })

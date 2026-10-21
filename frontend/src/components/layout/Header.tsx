@@ -2,6 +2,7 @@ import {
     Bike,
     ChevronDown,
     LogOut,
+    Pencil,
     Trash2,
 } from "lucide-react"
 import {NavLink} from "react-router"
@@ -10,7 +11,6 @@ import {useState} from "react"
 import {
     Avatar,
     AvatarFallback,
-    AvatarImage,
 } from "@/components/ui/avatar"
 import {Button} from "@/components/ui/button"
 import {
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {GoogleIcon} from "@/features/auth/GoogleIcon"
 import {AccountDeleteDialog} from "@/features/auth/AccountDeleteDialog"
+import {DisplayNameDialog} from "@/features/auth/DisplayNameDialog"
 import {useAuth} from "@/features/auth/useAuth"
 
 // ユーザー名からアバター用の頭文字を作成
@@ -44,9 +45,19 @@ export function Header() {
         login,
         logout,
         status,
+        updateDisplayName,
         user,
     } = useAuth()
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+    const [isNameDialogOpen, setIsNameDialogOpen] = useState(false)
+    // 開くたびに値を変え、ダイアログの入力内容を現在の表示名から始め直す
+    const [nameDialogKey, setNameDialogKey] = useState(0)
+
+    // 表示名の変更ダイアログを開く
+    function openNameDialog() {
+        setNameDialogKey((current) => current + 1)
+        setIsNameDialogOpen(true)
+    }
 
     // 削除成功時だけダイアログを閉じ、失敗時はエラーを確認できるように残す
     async function handleDeleteAccount() {
@@ -108,13 +119,8 @@ export function Header() {
                                     className="group flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 p-1 pr-2 text-left text-white shadow-xs transition-colors hover:border-slate-600 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-sky-400/40"
                                     aria-label="アカウントメニューを開く"
                                 >
+                                    {/* プロフィール画像は保存していないため、表示名の頭文字を出す */}
                                     <Avatar className="size-8">
-                                        {user.image && (
-                                            <AvatarImage
-                                                src={user.image}
-                                                alt=""
-                                            />
-                                        )}
                                         <AvatarFallback className="bg-sky-100 text-sky-800">
                                             {getUserInitials(user.displayName)}
                                         </AvatarFallback>
@@ -132,12 +138,17 @@ export function Header() {
                                         <p className="truncate text-sm font-semibold text-foreground">
                                             {user.displayName}
                                         </p>
-                                        <p className="truncate text-xs text-muted-foreground">
-                                            {user.email}
-                                        </p>
                                     </div>
 
                                     <div className="my-1 h-px bg-border" />
+
+                                    <DropdownMenuItem
+                                        disabled={isLoggingOut || isDeletingAccount}
+                                        onClick={openNameDialog}
+                                    >
+                                        <Pencil className="size-4" />
+                                        表示名を変更
+                                    </DropdownMenuItem>
 
                                     {/* ログアウト後のセッション再取得はAuthProviderへ集約する。 */}
                                     <DropdownMenuItem
@@ -196,6 +207,14 @@ export function Header() {
 
                 </div>
             </div>
+
+            <DisplayNameDialog
+                key={nameDialogKey}
+                open={isNameDialogOpen && status === "authenticated"}
+                currentName={user?.displayName ?? ""}
+                onSubmit={updateDisplayName}
+                onDismiss={() => setIsNameDialogOpen(false)}
+            />
 
             <AccountDeleteDialog
                 open={isDeleteDialogOpen && status === "authenticated"}

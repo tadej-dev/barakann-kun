@@ -18,6 +18,8 @@ export type AuthContextValue = AuthState & {
     login: () => Promise<void>
     logout: () => Promise<void>
     refreshSession: () => Promise<void>
+    // 表示名を変更する。失敗時はエラーを投げ、呼び出し側(ダイアログ)で表示する
+    updateDisplayName: (displayName: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

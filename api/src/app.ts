@@ -12,6 +12,8 @@ import type {Adapter} from "@auth/core/adapters"
 
 import type {AppEnv} from "./app-env"
 import {createAuthConfig} from "./auth/auth-config"
+import {MISSING_ACCOUNT_ID_HASH_SECRET_MESSAGE} from "./auth/d1-auth-adapter"
+import {DEFAULT_DISPLAY_NAME} from "./auth/display-name"
 import type {AccountRepository} from "./db/account-repository"
 import type {CatalogRepository} from "./db/catalog-repository"
 import type {ConfigOrderRepository} from "./db/config-order-repository"
@@ -43,8 +45,6 @@ type AuthSessionPayload = {
     user?: {
         id?: string
         name?: string | null
-        email?: string | null
-        image?: string | null
     } | null
 } | null
 
@@ -54,10 +54,18 @@ const AUTH_SECRET_ERROR_MESSAGE =
     "認証設定が未完了です。api/.dev.varsにAUTH_SECRETを設定してください。"
 const GOOGLE_CONFIG_ERROR_MESSAGE =
     "Googleログイン設定が未完了です。GOOGLE_CLIENT_IDとGOOGLE_CLIENT_SECRETを設定してください。"
+const ACCOUNT_ID_HASH_SECRET_ERROR_MESSAGE =
+    "認証設定が未完了です。api/.dev.varsにACCOUNT_ID_HASH_SECRETを設定してください。"
 
 // 認証設定不足のエラー判定
 function isMissingAuthSecret(error: unknown): boolean {
     return error instanceof Error && error.message === "Missing AUTH_SECRET"
+}
+
+// アカウントIDのハッシュ化用の秘密鍵が未設定かの判定
+function isMissingAccountIdHashSecret(error: unknown): boolean {
+    return error instanceof Error &&
+        error.message === MISSING_ACCOUNT_ID_HASH_SECRET_MESSAGE
 }
 
 // 認証設定不足のAPI応答
@@ -132,11 +140,10 @@ async function normalizeSessionResponse(response: Response): Promise<Response> {
     const normalizedPayload = user?.id
         ? {
             authenticated: true,
+            // メールアドレスと画像は保存していないため返さない。表示名は利用者が付けた名前。
             user: {
                 id: user.id,
-                displayName: user.name ?? user.email ?? "",
-                email: user.email ?? "",
-                image: user.image ?? null,
+                displayName: user.name ?? DEFAULT_DISPLAY_NAME,
             },
         }
         : {
@@ -252,6 +259,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         // OAuthを開始する前に必須設定を確認して原因の分かる応答を返す
         if (!context.env.AUTH_SECRET) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)
+        }
+
+        // 未設定のままだとログイン後のアカウント保存で失敗するため、開始前に止める
+        if (!context.env.ACCOUNT_ID_HASH_SECRET) {
+            return authConfigError(context, ACCOUNT_ID_HASH_SECRET_ERROR_MESSAGE)
         }
 
         if (!context.env.GOOGLE_CLIENT_ID ||
@@ -379,6 +391,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         // 認証秘密鍵の不足は設定で解決できるため専用の503応答にする
         if (isMissingAuthSecret(error)) {
             return authConfigError(context, AUTH_SECRET_ERROR_MESSAGE)
+        }
+
+        if (isMissingAccountIdHashSecret(error)) {
+            return authConfigError(context, ACCOUNT_ID_HASH_SECRET_ERROR_MESSAGE)
         }
 
         return context.json(

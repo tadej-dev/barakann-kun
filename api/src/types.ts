@@ -55,6 +55,9 @@ export type Bindings = {
     // Workers環境で使用するD1データベース
     DB: D1Database
     AUTH_SECRET?: string
+    // GoogleなどのアカウントIDをハッシュにして保存するための秘密鍵
+    // AUTH_SECRETとは分け、AUTH_SECRETを作り直してもアカウントの紐付けが切れないようにする。
+    ACCOUNT_ID_HASH_SECRET?: string
     AUTH_URL?: string
     // OAuthコールバックの原因調査時だけ有効にするAuth.jsの詳細ログ設定
     AUTH_DEBUG?: string

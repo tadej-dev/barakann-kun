@@ -5,6 +5,7 @@ const devVarsPath = fileURLToPath(new URL("../.dev.vars", import.meta.url))
 const expectedAuthUrl = "http://localhost:5173"
 const requiredKeys = [
     "AUTH_SECRET",
+    "ACCOUNT_ID_HASH_SECRET",
     "AUTH_URL",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
@@ -77,6 +78,19 @@ function validate(values) {
 
     if (authSecret && !placeholderValues.has(authSecret) && authSecret.length < 32) {
         errors.push("AUTH_SECRETは32文字以上にしてください。")
+    }
+
+    const accountIdHashSecret = values.get("ACCOUNT_ID_HASH_SECRET") ?? ""
+    const isAccountIdHashSecretSet =
+        accountIdHashSecret !== "" && !placeholderValues.has(accountIdHashSecret)
+
+    if (isAccountIdHashSecretSet && accountIdHashSecret.length < 32) {
+        errors.push("ACCOUNT_ID_HASH_SECRETは32文字以上にしてください。")
+    }
+
+    // 同じ値だと、AUTH_SECRETを作り直したときにアカウントの紐付けまで切れてしまう
+    if (isAccountIdHashSecretSet && accountIdHashSecret === authSecret) {
+        errors.push("ACCOUNT_ID_HASH_SECRETはAUTH_SECRETと別の値にしてください。")
     }
 
     const authUrl = values.get("AUTH_URL")

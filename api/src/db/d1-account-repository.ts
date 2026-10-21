@@ -1,6 +1,7 @@
 import type {
     AccountRepository,
     DeleteAccountResult,
+    UpdateDisplayNameResult,
 } from "./account-repository"
 
 // 表示順マイグレーション前のD1でもアカウント削除を止めないための判定
@@ -75,6 +76,22 @@ export class D1AccountRepository implements AccountRepository {
 
         return userDelete.meta.changes > 0
             ? {kind: "deleted"}
+            : {kind: "not_found"}
+    }
+
+    async updateDisplayName(
+        userId: string,
+        displayName: string,
+    ): Promise<UpdateDisplayNameResult> {
+        // 本人の行だけを更新する。対象がなければ、アカウントが削除済みと判断する
+        const result = await this.database.prepare(
+            `UPDATE users
+             SET display_name = ?, updated_at = ?
+             WHERE id = ?`,
+        ).bind(displayName, new Date().toISOString(), userId).run()
+
+        return result.meta.changes > 0
+            ? {kind: "updated", displayName}
             : {kind: "not_found"}
     }
 }
