@@ -859,7 +859,7 @@ INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, pr
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (763, 1, 2, 'Cannondale SuperSix EVO Hi-MOD Frameset (Gen 5)', 'Cannondale SuperSix EVO Hi-MOD Frameset', NULL, 670000, '2026-10-05 00:00:00', 1188, 'Cannondale公式(C1133GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (764, 1, 2, 'Cannondale SuperSix EVO LAB71 Frameset (Gen 5)', 'Cannondale SuperSix EVO LAB71 Frameset', NULL, 890000, '2026-10-05 00:00:00', 1133, 'Cannondale公式(C1102GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- part_specifications (1539件)
+-- part_specifications (1570件)
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1, 129, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (2, 129, 'tire_width_mm', '25', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (3, 130, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -2399,6 +2399,37 @@ INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, 
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1755, 763, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1756, 764, 'steerer_standard', 'cannondale_delta', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1757, 764, 'front_axle', '12x100', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1758, 9, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1759, 20, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1760, 23, 'steerer_standard', 'straight_1_1_4', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1761, 29, 'steerer_standard', 'tapered_1_1_8_1_3_8', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1762, 363, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1763, 541, 'steerer_standard', 'tapered_1_1_8_1_5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1764, 281, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1765, 282, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1766, 283, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1767, 284, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1768, 285, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1769, 286, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1770, 287, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1771, 288, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1772, 491, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1773, 492, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1774, 493, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1775, 494, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1776, 495, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1777, 496, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1778, 497, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1779, 498, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1780, 87, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1781, 88, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1782, 91, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1783, 92, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1784, 483, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1785, 484, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1786, 489, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1787, 490, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1788, 546, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- part_included_items (244件)
 INSERT INTO part_included_items (id, part_id, item_name, quantity, included_category_id, price, is_set_component, weight, created_at, updated_at) VALUES (1, 87, 'ステム', 1, 17, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

@@ -3,6 +3,7 @@
 
 export type CompatibilityStatus =
     | "compatible"
+    | "warning"
     | "unknown"
     | "incompatible"
 
@@ -221,6 +222,91 @@ export function getFrameCockpitStatus(
         : "dedicated"
 }
 
+// コラム規格(steerer_standard)から、上端のコラム径(mm)を引く。
+// 専用形状(Cannondale Delta / BMC ICS / Giant OverDrive Aero)は丸型ではないため含めず、
+// 径の比較対象外にする。
+const STEERER_TOP_MM: Record<string, number> = {
+    tapered_1_1_8_1_5: 28.6,
+    tapered_1_1_8_1_3_8: 28.6,
+    tapered_1_1_8_1_1_4: 28.6,
+    straight_1_1_8: 28.6,
+    tapered_1_1_4_1_1_5: 31.8,
+    straight_1_1_4: 31.8,
+}
+
+// 丸型のコラムか判定する。専用形状や未登録は径の比較をしない。
+function isRoundSteerer(steererStandard: string | undefined) {
+    return (
+        steererStandard !== undefined &&
+        STEERER_TOP_MM[steererStandard] !== undefined
+    )
+}
+
+// フレームのコラム径と、ステム・一体型ハンドルのクランプ径を比較する。
+// どちらかの径が分からない場合は判定しない(未確認にもしない)。
+function compareSteererClamp(
+    frame: CompatibilityInput,
+    connectedPart: CompatibilityInput,
+): PairCompatibilityResult | null {
+    const steererStandard = getSpecification(frame, "steerer_standard")
+    const frameTopMm = steererStandard ? STEERER_TOP_MM[steererStandard] : undefined
+    const clampValue = getSpecification(connectedPart, "steerer_clamp_mm")
+
+    if (frameTopMm === undefined || !clampValue) {
+        return null
+    }
+
+    const clampMm = Number(clampValue)
+
+    if (!Number.isFinite(clampMm)) {
+        return null
+    }
+
+    return clampMm === frameTopMm
+        ? {
+            status: "compatible",
+            reasons: [`コラム径${frameTopMm}mmが適合します`],
+            details: [{label: "コラム径", status: "compatible"}],
+        }
+        : {
+            status: "incompatible",
+            reasons: [`コラム径が一致しません（フレーム${frameTopMm}mm / パーツ${clampValue}mm）`],
+            details: [{label: "コラム径", status: "incompatible"}],
+        }
+}
+
+// フレームがコラム内配線を要求する場合に、パーツ側が対応しているかを確認する。
+// 物理的には組み付けられるため、非互換ではなく警告(選択可能)として返す。
+function compareInternalRouting(
+    frame: CompatibilityInput,
+    connectedPart: CompatibilityInput,
+): PairCompatibilityResult | null {
+    if (getSpecification(frame, "internal_routing") !== "steerer") {
+        return null
+    }
+
+    if (getSpecification(connectedPart, "internal_routing") === "steerer") {
+        return null
+    }
+
+    return {
+        status: "warning",
+        reasons: [
+            "コラム内にブレーキホースを通すフレームのため、このパーツでは配線できません",
+        ],
+        details: [{label: "コラム内配線", status: "warning"}],
+    }
+}
+
+// null を除いてコックピット系の判定を1つにまとめる。
+function combineCockpitChecks(
+    ...results: (PairCompatibilityResult | null)[]
+) {
+    return combinePairResults(
+        results.filter((result): result is PairCompatibilityResult => result !== null),
+    )
+}
+
 // 丸型1-1/8コラムのフレームは、専用規格でも標準コックピットを装着できる。
 // 標準規格そのもの、または丸型コラムのオープン規格であればtrueを返す。
 function acceptsStandardCockpit(frame: CompatibilityInput) {
@@ -230,6 +316,15 @@ function acceptsStandardCockpit(frame: CompatibilityInput) {
         return true
     }
 
+    // コラム規格が登録されていれば、上端が1-1/8インチの丸型コラムかで判定する。
+    // 専用形状(Delta/ICS/OverDrive Aero)は丸型ではないため対象外になる。
+    const steererStandard = getSpecification(frame, "steerer_standard")
+
+    if (steererStandard && isRoundSteerer(steererStandard)) {
+        return STEERER_TOP_MM[steererStandard] === 28.6
+    }
+
+    // コラム規格が未登録のフレームは、従来の丸型コラム一覧で判定する(後方互換)。
     return (
         !!cockpitInterface &&
         ROUND_STEERER_OPEN_COCKPIT_INTERFACES.includes(cockpitInterface)
@@ -395,8 +490,13 @@ function compareCockpitParts(
         }
 
         // 一体型ハンドルはステムを兼ねてフォークへ直結するため、フォーク規格と比較する。
+        // コラム径が分かる場合は径も比較し、コラム内配線の要否は警告として添える。
         if (isIntegratedHandlebar(handlebar)) {
-            return compareCockpitInterface(frame, handlebar)
+            return combineCockpitChecks(
+                compareCockpitInterface(frame, handlebar),
+                compareSteererClamp(frame, handlebar),
+                compareInternalRouting(frame, handlebar),
+            )
         }
 
         // フレームに専用ステムが付属する車種では、そのステムへ通常ハンドルをクランプ径で組み付ける。
@@ -443,7 +543,12 @@ function compareCockpitParts(
             }
         }
 
-        return compareCockpitInterface(frame, stem)
+        // コックピット規格(形状)に加え、コラム径とコラム内配線の要否も判定する。
+        return combineCockpitChecks(
+            compareCockpitInterface(frame, stem),
+            compareSteererClamp(frame, stem),
+            compareInternalRouting(frame, stem),
+        )
     }
 
     if (hasCategoryPair(candidateCategory, selectedCategory, ["stem", "handlebar"])) {
@@ -552,13 +657,18 @@ function combinePairResults(
         return null
     }
 
+    // 重い順に採用する。warning は「取り付けはできるが注意点がある」状態で、
+    // 適合の確認が取れていない unknown より軽く、互換より重い。
     const hasIncompatible = results.some((result) => result.status === "incompatible")
     const hasUnknown = results.some((result) => result.status === "unknown")
+    const hasWarning = results.some((result) => result.status === "warning")
     const status: CompatibilityStatus = hasIncompatible
         ? "incompatible"
         : hasUnknown
             ? "unknown"
-            : "compatible"
+            : hasWarning
+                ? "warning"
+                : "compatible"
 
     return {
         status,
@@ -738,7 +848,8 @@ export type CompatibilityIssue = {
     slotKeys: string[]
     partIds: number[]
     reasons: string[]
-    status: "incompatible" | "unknown"
+    // warning は「取り付けはできるが注意点がある」組み合わせ。
+    status: "incompatible" | "unknown" | "warning"
 }
 
 function partPositionFromSlotKey(slotKey: string): "single" | "front" | "rear" {
@@ -802,11 +913,11 @@ export function findCompatibilityIssues(
             const key = `${slotKeys.join("|")}::${reasons.join("|")}`
             const existing = issues.get(key)
 
-            // 同じパーツ組み合わせの両方向の結果は、重要度の高い方を残す
-            if (
-                !existing ||
-                (result.status === "incompatible" && existing.status === "unknown")
-            ) {
+            // 同じパーツ組み合わせの両方向の結果は、重要度の高い方を残す。
+            // 重い順: 非互換 > 未確認 > 注意
+            const statusRank = {warning: 1, unknown: 2, incompatible: 3} as const
+
+            if (!existing || statusRank[result.status] > statusRank[existing.status]) {
                 issues.set(key, {
                     slotKeys,
                     partIds: pair.map((item) => item.part.id),

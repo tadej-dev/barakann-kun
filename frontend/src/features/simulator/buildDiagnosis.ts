@@ -144,7 +144,8 @@ export function diagnoseBuild(
         selectedParts,
     ).map((issue, index) => ({
         id: `${issue.status}:${issue.slotKeys.join(":")}:${index}`,
-        severity: issue.status,
+        // 警告(取り付けはできるが注意点がある)は、完成チェックでは「要確認」として扱う。
+        severity: issue.status === "warning" ? "unknown" : issue.status,
         title: issue.status === "incompatible"
             ? "規格が一致しない組み合わせがあります"
             : "規格情報の確認が必要です",
