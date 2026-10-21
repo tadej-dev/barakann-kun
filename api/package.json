@@ -14,6 +14,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "master:export": "node scripts/export-master-data.mjs",
     "master:audit": "node scripts/audit-master-data.mjs",
+    "account-ids:hash": "node scripts/hash-account-ids.mjs",
     "predeploy": "npm run check:production && npm run build",
     "deploy": "wrangler deploy"
   },

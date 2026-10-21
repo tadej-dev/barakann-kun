@@ -2,6 +2,11 @@
 # 例: openssl rand -hex 32
 AUTH_SECRET=replace-with-a-random-secret
 
+# GoogleのアカウントIDをハッシュにして保存するための秘密鍵（AUTH_SECRETとは別の値にする）
+# 一度決めたら変えない。変えると既存ユーザーがログイン後に別人として扱われる。
+# 例: openssl rand -hex 32
+ACCOUNT_ID_HASH_SECRET=replace-with-a-random-secret
+
 # フロントエンドの開発サーバーを経由するローカルURL
 AUTH_URL=http://localhost:5173
 

@@ -12,6 +12,20 @@ const GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/a
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
 
+// GoogleのプロフィールからアカウントID(sub)だけを取り出す
+// openidスコープだけを求めても、名前や画像が返る場合があるとGoogleの資料にあるため、
+// 受け取った内容にかかわらず、ID以外の情報(名前・メール・画像)は捨てる。
+// ここで返したidが、Auth.jsのproviderAccountIdになる(ユーザーIDは別に自動生成される)。
+export function toGoogleAccountUser(profile: Record<string, unknown>): {id: string} {
+    const subject = profile.sub
+
+    if (typeof subject !== "string" || subject.length === 0) {
+        throw new Error("Google profile does not include sub")
+    }
+
+    return {id: subject}
+}
+
 /**
  * Googleの認可レスポンスに `iss` が付かない環境でも処理できるOAuth設定。
  *
@@ -37,7 +51,8 @@ function createGoogleProvider(
         authorization: {
             url: GOOGLE_AUTHORIZATION_ENDPOINT,
             params: {
-                scope: "openid profile email",
+                // 本人を見分けるためのアカウントIDだけを求め、名前・メール・画像は求めない
+                scope: "openid",
             },
         },
         token: {
@@ -46,6 +61,7 @@ function createGoogleProvider(
         userinfo: {
             url: GOOGLE_USERINFO_ENDPOINT,
         },
+        profile: toGoogleAccountUser,
         // Googleのレスポンスに依存せず、Auth.js側でstateとPKCEを検証する。
         checks: ["pkce", "state"],
     }
@@ -74,7 +90,10 @@ export function createAuthConfig(
         debug: AUTH_DEBUG === "true",
         ...(AUTH_URL ? {url: AUTH_URL} : {}),
         // テストから渡されたAdapterを優先し通常時だけD1実装を生成する
-        adapter: adapter ?? createD1AuthAdapter(context.env.DB),
+        adapter: adapter ?? createD1AuthAdapter(
+            context.env.DB,
+            context.env.ACCOUNT_ID_HASH_SECRET,
+        ),
         providers: [
             createGoogleProvider(
                 GOOGLE_CLIENT_ID ?? "",

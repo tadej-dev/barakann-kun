@@ -13,6 +13,7 @@ import {
     getCurrentCallbackUrl,
     logout as logoutAuthSession,
     startGoogleLogin,
+    updateDisplayName as updateAuthDisplayName,
 } from "@/features/auth/authApi"
 import {
     AuthContext,
@@ -168,6 +169,24 @@ export function AuthProvider({children}: AuthProviderProps) {
         }
     }, [])
 
+    // 表示名の変更
+    // セッションを取り直すと画面全体が読み込み中に戻るため、保存された名前だけを差し替える。
+    const updateDisplayName = useCallback(async (displayName: string) => {
+        const savedDisplayName = await updateAuthDisplayName(displayName)
+
+        setAuthState((current) => (
+            current.user
+                ? {
+                    ...current,
+                    user: {
+                        ...current.user,
+                        displayName: savedDisplayName,
+                    },
+                }
+                : current
+        ))
+    }, [])
+
     // 初回表示時のログイン状態
     useEffect(() => {
         const controller = new AbortController()
@@ -186,6 +205,7 @@ export function AuthProvider({children}: AuthProviderProps) {
         login,
         logout,
         refreshSession: async () => refreshSession(),
+        updateDisplayName,
     }), [
         authState,
         deleteAccount,
@@ -194,6 +214,7 @@ export function AuthProvider({children}: AuthProviderProps) {
         login,
         logout,
         refreshSession,
+        updateDisplayName,
     ])
 
     return (

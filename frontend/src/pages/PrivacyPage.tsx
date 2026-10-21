@@ -16,6 +16,10 @@ export function PrivacyPage() {
                     <p className="mt-4 text-sm leading-7 text-slate-600">
                         本プライバシーポリシーは、barakann-kunにおけるユーザー情報の取り扱いについて定めるものです。
                     </p>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                        最終改定日: 2026年10月21日
+                    </p>
                 </div>
 
                 <article className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -34,8 +38,13 @@ export function PrivacyPage() {
                         </h2>
 
                         <p className="leading-8 text-slate-700">
-                            Googleアカウントでログインした場合、表示名、メールアドレス、プロフィール画像、
-                            Googleアカウントを識別するための情報を取得します。
+                            Googleアカウントでログインした場合、Googleアカウントを識別するための情報だけを取得します。
+                            この情報は、元の値に戻せない形（ハッシュ値）に変換して保存します。
+                            Googleアカウントの名前、メールアドレス、プロフィール画像は取得しません。
+                        </p>
+
+                        <p className="mt-3 leading-8 text-slate-700">
+                            ログイン後にユーザーが設定した表示名は、本サービスに保存します。
                         </p>
 
                         <p className="mt-3 leading-8 text-slate-700">

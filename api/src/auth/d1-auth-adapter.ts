@@ -5,11 +5,13 @@ import type {
     AdapterUser,
 } from "@auth/core/adapters"
 
+import {DEFAULT_DISPLAY_NAME} from "./display-name"
+
+// usersテーブルの行
+// メールアドレスとプロフィール画像は保存しない(0062のマイグレーションで列を削除)。
 type UserRow = {
     id: string
     display_name: string
-    email: string
-    image_url: string | null
 }
 
 type SessionRow = {
@@ -34,7 +36,8 @@ type UserSessionRow = UserRow & {
     session_expires_at: string
 }
 
-const MAX_DISPLAY_NAME_LENGTH = 100
+// アカウントIDのハッシュ化に使う秘密鍵が未設定のときのエラー
+export const MISSING_ACCOUNT_ID_HASH_SECRET_MESSAGE = "Missing ACCOUNT_ID_HASH_SECRET"
 
 // D1から1行を型付きで取得する共通処理
 async function firstRow<T>(
@@ -45,52 +48,79 @@ async function firstRow<T>(
     return database.prepare(sql).bind(...parameters).first<T>()
 }
 
+// バイト列を16進数の文字列へ変換
+function toHex(buffer: ArrayBuffer): string {
+    return Array.from(new Uint8Array(buffer), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+    ).join("")
+}
+
 // セッションCookieの値をD1へ保存するためのSHA-256ハッシュを生成
 async function hashSessionToken(token: string): Promise<string> {
     const data = new TextEncoder().encode(token)
     const digest = await crypto.subtle.digest("SHA-256", data)
 
-    return Array.from(new Uint8Array(digest), (byte) =>
-        byte.toString(16).padStart(2, "0"),
-    ).join("")
+    return toHex(digest)
+}
+
+// GoogleなどのアカウントIDを、サーバーだけが知る秘密鍵でHMAC-SHA256ハッシュにする
+// DBが流出しても元のIDが分からず、他の流出データとの突き合わせを防ぐため。
+// 同じ入力からは常に同じ値になるので、ログイン時の照合はこれまでどおりできる。
+// 一括置き換えのスクリプト(scripts/hash-account-ids.mjs)も同じ計算方法を使う。
+export async function hashProviderAccountId(
+    secret: string,
+    provider: string,
+    providerAccountId: string,
+): Promise<string> {
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(secret),
+        {name: "HMAC", hash: "SHA-256"},
+        false,
+        ["sign"],
+    )
+    // プロバイダーごとに別の値になるよう、プロバイダー名も含めてハッシュにする
+    const message = encoder.encode(`${provider}:${providerAccountId}`)
+    const signature = await crypto.subtle.sign("HMAC", key, message)
+
+    return toHex(signature)
 }
 
 // DBのユーザー行をAuth.jsのユーザー形式へ変換
+// Auth.jsの型はemailを文字列で必須にしているため、空文字を渡す(メールは保存していない)。
+// 画面へ返すセッション情報にはemailを含めない(app.ts)。
 function toAdapterUser(row: UserRow): AdapterUser {
     return {
         id: row.id,
         name: row.display_name,
-        email: row.email,
+        email: "",
         emailVerified: null,
-        image: row.image_url,
+        image: null,
     }
 }
 
-// Auth.jsから渡されたメールアドレスを一意性判定用に正規化
-function normalizeEmail(email: string): string {
-    return email.trim().toLowerCase()
-}
-
-// Auth.jsから渡された表示名をusers.display_nameの制約に合わせて整形
-function displayName(name: string | null | undefined, email: string): string {
-    const normalizedName = name?.trim()
-    const candidate = normalizedName || email || "ユーザー"
-
-    // Googleプロフィールの長い表示名でもDBのCHECK制約でログインを失敗させない。
-    return Array.from(candidate).slice(0, MAX_DISPLAY_NAME_LENGTH).join("")
-}
-
 // D1を利用するAuth.jsデータベースアダプター
-export function createD1AuthAdapter(database: D1Database): Adapter {
+// accountIdHashSecret: アカウントIDのハッシュ化に使う秘密鍵(ACCOUNT_ID_HASH_SECRET)
+export function createD1AuthAdapter(
+    database: D1Database,
+    accountIdHashSecret?: string,
+): Adapter {
     // 複数のAdapterメソッドで同じユーザー列を使うためSQLを共有する
     const selectUserSql = `
-        SELECT id, display_name, email, image_url
+        SELECT id, display_name
         FROM users
     `
 
     const selectSessionSql = `
         SELECT id, user_id, token_hash, expires_at, created_at, updated_at
         FROM sessions
+    `
+
+    const selectAccountSql = `
+        SELECT user_id, provider, provider_account_id
+        FROM auth_accounts
+        WHERE provider = ? AND provider_account_id = ?
     `
 
     const loadUser = async (id: string): Promise<AdapterUser | null> => {
@@ -104,26 +134,80 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
         return row ? toAdapterUser(row) : null
     }
 
+    // 保存用のアカウントID(ハッシュ値)を作る
+    const toStoredAccountId = async (
+        provider: string,
+        providerAccountId: string,
+    ): Promise<string> => {
+        // 秘密鍵がないと照合できないため、平文で保存・検索せずに失敗させる
+        if (!accountIdHashSecret) {
+            throw new Error(MISSING_ACCOUNT_ID_HASH_SECRET_MESSAGE)
+        }
+
+        return hashProviderAccountId(accountIdHashSecret, provider, providerAccountId)
+    }
+
+    const findAccountRow = async (
+        provider: string,
+        providerAccountId: string,
+    ): Promise<AccountRow | null> => {
+        // ハッシュ値で保存されたアカウントを探す
+        const storedAccountId = await toStoredAccountId(provider, providerAccountId)
+        const hashedRow = await firstRow<AccountRow>(
+            database,
+            selectAccountSql,
+            [provider, storedAccountId],
+        )
+
+        if (hashedRow) {
+            return hashedRow
+        }
+
+        // ハッシュ化を導入する前の行は平文のIDで保存されている。
+        // 一括置き換え(scripts/hash-account-ids.mjs)の前にログインした場合に備え、
+        // 見つかったらその場でハッシュ値へ置き換えて、既存ユーザーのデータを引き継ぐ。
+        const plainRow = await firstRow<AccountRow>(
+            database,
+            selectAccountSql,
+            [provider, providerAccountId],
+        )
+
+        if (!plainRow) {
+            return null
+        }
+
+        await database.prepare(
+            `UPDATE auth_accounts
+             SET provider_account_id = ?, updated_at = ?
+             WHERE provider = ? AND provider_account_id = ?`,
+        ).bind(
+            storedAccountId,
+            new Date().toISOString(),
+            provider,
+            providerAccountId,
+        ).run()
+
+        return {
+            ...plainRow,
+            provider_account_id: storedAccountId,
+        }
+    }
+
     const loadAccount = async (
         providerAccountId: string,
         provider: string,
     ): Promise<AdapterAccount | null> => {
         // プロバイダー内のアカウントIDから紐づくアプリユーザーを探す
-        const row = await firstRow<AccountRow>(
-            database,
-            `SELECT user_id, provider, provider_account_id
-             FROM auth_accounts
-             WHERE provider = ? AND provider_account_id = ?`,
-            [provider, providerAccountId],
-        )
+        const row = await findAccountRow(provider, providerAccountId)
 
         if (!row) {
             return null
         }
 
+        // Auth.jsへは、受け取った元のIDをそのまま返す(ハッシュ値はDB内だけで使う)
         return {
             provider: row.provider,
-            providerAccountId: row.provider_account_id,
+            providerAccountId,
             userId: row.user_id,
             type: "oidc",
         } satisfies AdapterAccount
@@ -131,31 +215,28 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
 
     return {
         async createUser(user) {
-            // メールアドレスの大文字小文字による重複を防いでから保存する
-            const email = normalizeEmail(user.email)
+            // Googleから受け取った名前・メール・画像は保存しない。
+            // 表示名は仮の名前で作り、利用者が自分で変更する。
             const id = user.id || crypto.randomUUID()
-            const name = displayName(user.name, email)
             const timestamp = new Date().toISOString()
 
             await database.prepare(
                 `INSERT INTO users (
-                     id, display_name, email, image_url, created_at, updated_at
-                 ) VALUES (?, ?, ?, ?, ?, ?)`,
+                     id, display_name, created_at, updated_at
+                 ) VALUES (?, ?, ?, ?)`,
             ).bind(
                 id,
-                name,
-                email,
-                user.image ?? null,
+                DEFAULT_DISPLAY_NAME,
                 timestamp,
                 timestamp,
             ).run()
 
             return {
                 id,
-                name,
-                email,
-                emailVerified: user.emailVerified ?? null,
-                image: user.image ?? null,
+                name: DEFAULT_DISPLAY_NAME,
+                email: "",
+                emailVerified: null,
+                image: null,
             }
         },
 
@@ -163,66 +244,34 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
             return loadUser(id)
         },
 
-        async getUserByEmail(email) {
-            // 作成時と同じ正規化規則を適用してユーザーを検索する
-            const normalizedEmail = normalizeEmail(email)
-            const row = await firstRow<UserRow>(
-                database,
-                `${selectUserSql} WHERE email = ?`,
-                [normalizedEmail],
-            )
-
-            return row ? toAdapterUser(row) : null
+        async getUserByEmail() {
+            // メールアドレスを保存していないため、メールでユーザーを探すことはない。
+            // Auth.jsはメールがない場合にこの処理を呼ばないが、念のため常に見つからない扱いにする。
+            return null
         },
 
         async getUserByAccount({provider, providerAccountId}) {
             // OAuthアカウントの組み合わせからログイン対象のユーザーを取得する
-            const row = await firstRow<UserRow>(
-                database,
-                `${selectUserSql}
-                 JOIN auth_accounts
-                   ON auth_accounts.user_id = users.id
-                 WHERE auth_accounts.provider = ?
-                   AND auth_accounts.provider_account_id = ?`,
-                [provider, providerAccountId],
-            )
+            // (平文で保存されていた行は、ここでハッシュ値へ置き換わる)
+            const account = await findAccountRow(provider, providerAccountId)
 
-            return row ? toAdapterUser(row) : null
+            if (!account) {
+                return null
+            }
+
+            return loadUser(account.user_id)
         },
 
         async updateUser(user) {
-            // Auth.jsから未指定の項目は現在値を残して部分更新する
+            // Auth.jsから渡される名前・メール・画像は外部サービス由来のため保存しない。
+            // 表示名の変更は、利用者の操作だけを受け付けるアカウントAPIで行う。
             const currentUser = await loadUser(user.id)
 
             if (!currentUser) {
                 throw new Error("Auth user not found")
             }
 
-            const email = user.email === undefined || user.email === null
-                ? currentUser.email
-                : normalizeEmail(user.email)
-            const name = displayName(
-                user.name === undefined ? currentUser.name : user.name,
-                email,
-            )
-            const image = user.image === undefined
-                ? currentUser.image
-                : user.image
-            const timestamp = new Date().toISOString()
-
-            await database.prepare(
-                `UPDATE users
-                 SET display_name = ?, email = ?, image_url = ?, updated_at = ?
-                 WHERE id = ?`,
-            ).bind(name, email, image ?? null, timestamp, user.id).run()
-
-            const updatedUser = await loadUser(user.id)
-
-            if (!updatedUser) {
-                throw new Error("Auth user could not be loaded after update")
-            }
-
-            return updatedUser
+            return currentUser
         },
 
         async deleteUser(userId) {
@@ -242,6 +291,11 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
 
         async linkAccount(account) {
             const timestamp = new Date().toISOString()
+            // アカウントIDは平文で保存せず、秘密鍵でハッシュにした値だけを保存する
+            const storedAccountId = await toStoredAccountId(
+                account.provider,
+                account.providerAccountId,
+            )
 
             // OAuthトークンはこのアプリでは利用せず、漏えいリスクを避けて保存しない。
             await database.prepare(
@@ -251,19 +305,21 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
             ).bind(
                 account.userId,
                 account.provider,
-                account.providerAccountId,
+                storedAccountId,
                 timestamp,
                 timestamp,
             ).run()
         },
 
         async unlinkAccount({provider, providerAccountId}) {
+            // 平文の行もハッシュ値へ置き換えてから、ハッシュ値で削除する
             const account = await loadAccount(providerAccountId, provider)
+            const storedAccountId = await toStoredAccountId(provider, providerAccountId)
 
             await database.prepare(
                 `DELETE FROM auth_accounts
                  WHERE provider = ? AND provider_account_id = ?`,
-            ).bind(provider, providerAccountId).run()
+            ).bind(provider, storedAccountId).run()
 
             return account ?? undefined
         },
@@ -300,8 +356,6 @@ export function createD1AuthAdapter(database: D1Database): Adapter {
                 database,
                 `SELECT users.id,
                         users.display_name,
-                        users.email,
-                        users.image_url,
                         sessions.id AS session_id,
                         sessions.user_id AS session_user_id,
                         sessions.token_hash AS session_token_hash,
