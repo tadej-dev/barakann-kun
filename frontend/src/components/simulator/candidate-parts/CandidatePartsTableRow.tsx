@@ -52,12 +52,14 @@ const priceFormatter = new Intl.NumberFormat("ja-JP", {
 
 const compatibilityBadgeStyles = {
     compatible: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    warning: "border-orange-300 bg-orange-50 text-orange-700",
     unknown: "border-amber-300 bg-amber-50 text-amber-700",
     incompatible: "border-red-300 bg-red-50 text-red-700",
 }
 
 const compatibilityLabels = {
     compatible: "互換",
+    warning: "注意",
     unknown: "規格未確認",
     incompatible: "非互換",
 }
@@ -67,6 +69,7 @@ const compatibilityLabels = {
 const compatibilitySummaryLabelStyles = {
     incompatible: "text-red-600",
     unknown: "text-amber-600",
+    warning: "text-orange-600",
     compatible: "text-emerald-600",
 }
 
