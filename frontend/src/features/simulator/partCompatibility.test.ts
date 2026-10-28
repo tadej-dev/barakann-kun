@@ -448,6 +448,90 @@ describe("evaluatePartCompatibility", () => {
         expect(dShapedResult?.status).toBe("incompatible")
     })
 
+    // コラム規格から上端径を引ける場合、ステムのコラムクランプ径と比較する。
+    it("コラム径が一致するフレームとステムは適合にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_standard: "tapered_1_1_8_1_5",
+        })
+        const stem = createPart(2, "Stem", "stem", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_clamp_mm: "28.6",
+        })
+
+        const result = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // 1-1/4インチのコラムに1-1/8インチ用ステムは取り付けられない。
+    it("コラム径が異なるステムは選択不可にする", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_standard: "straight_1_1_4",
+        })
+        const stem = createPart(2, "Stem", "stem", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_clamp_mm: "28.6",
+        })
+
+        const result = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 専用形状(Delta/ICS/OverDrive Aero)は径の比較をしない。
+    it("専用形状のコラムはコラム径で判定しない", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "bmc_ics",
+            steerer_standard: "bmc_ics",
+        })
+        const stem = createPart(2, "Stem", "stem", {
+            cockpit_interface: "bmc_ics",
+        })
+
+        const result = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // コラム内配線のフレームに、配線穴のないステムは「注意」として選択は許可する。
+    it("コラム内配線に対応しないステムは注意として選択を許可する", () => {
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_standard: "tapered_1_1_8_1_5",
+            internal_routing: "steerer",
+        })
+        const stem = createPart(2, "Stem", "stem", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_clamp_mm: "28.6",
+        })
+
+        const result = evaluatePartCompatibility(
+            stem,
+            createPartSlot("stem"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("warning")
+        expect(result?.selectionBlocked).toBe(false)
+        expect(result?.reasons.join("")).toContain("配線")
+    })
+
     // システムタグが交差すれば、規格名が異なっても装着できる(例: DCR車とEXS)。
     it("コックピットシステムが交差するフレームとハンドルは適合にする", () => {
         const dedaFrame = createPart(1, "Frame", "frame", {

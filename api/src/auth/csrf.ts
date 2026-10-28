@@ -36,6 +36,20 @@ function readCookie(cookieHeader: string, name: string): string | null {
     return null
 }
 
+// リクエストのスキームに応じたAuth.jsのCSRF Cookie名を返す。
+//
+// HTTPSではAuth.jsは __Host- 接頭辞のCookieだけを発行する。__Host- は
+// 「Secure・Path=/・Domain属性なし」を条件とするため、同じ登録ドメイン配下の
+// 別サブドメインからは発行できない。接頭辞なしの同名Cookieを候補に入れると、
+// サブドメインから差し込まれた値が先に採用され、この保護が効かなくなる。
+// そのためHTTPSでは __Host- だけを読み、接頭辞なしの名前はHTTP(ローカル開発)
+// のときだけ読む。__Secure- は接頭辞だけでは発行元を制限できないため候補にしない。
+function csrfCookieName(request: Request): string {
+    const isHttps = new URL(request.url).protocol === "https:"
+
+    return isHttps ? "__Host-authjs.csrf-token" : "authjs.csrf-token"
+}
+
 // Auth.jsのCSRF Cookieに保存されるトークンとハッシュを検証
 export async function verifyCsrfToken(
     request: Request,
@@ -48,15 +62,7 @@ export async function verifyCsrfToken(
     }
 
     const cookieHeader = request.headers.get("cookie") ?? ""
-    const cookieNames = [
-        "authjs.csrf-token",
-        "__Host-authjs.csrf-token",
-        "__Secure-authjs.csrf-token",
-    ]
-    // HTTPとHTTPSで異なるAuth.jsのCookie名を許可された候補から探す
-    const cookieValue = cookieNames
-        .map((name) => readCookie(cookieHeader, name))
-        .find((value): value is string => Boolean(value))
+    const cookieValue = readCookie(cookieHeader, csrfCookieName(request))
 
     if (!cookieValue) {
         return false
