@@ -859,7 +859,7 @@ INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, pr
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (763, 1, 2, 'Cannondale SuperSix EVO Hi-MOD Frameset (Gen 5)', 'Cannondale SuperSix EVO Hi-MOD Frameset', NULL, 670000, '2026-10-05 00:00:00', 1188, 'Cannondale公式(C1133GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム789g＋フォーク399g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO parts (id, category_id, brand_id, name, model_name, variant_name, price, price_updated_at, weight, description, model_year, edition, created_at, updated_at) VALUES (764, 1, 2, 'Cannondale SuperSix EVO LAB71 Frameset (Gen 5)', 'Cannondale SuperSix EVO LAB71 Frameset', NULL, 890000, '2026-10-05 00:00:00', 1133, 'Cannondale公式(C1102GU, Gen 5)。価格はページ内JSON-LD(JPY)。重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。BSA 68mm、flat mount、UDH、Deltaステアラー、タイヤ最大32mm。C1 Aero 40 Carbon V2(Ti)シートポストとAeroボトル/ケージ付属。 重量はフレーム＋フロントフォークの合計(フレーム755g＋フォーク378g、56cm・塗装済み)。重量の出典: メーカー公式。', NULL, 'Gen 5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
--- part_specifications (1570件)
+-- part_specifications (1589件)
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1, 129, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (2, 129, 'tire_width_mm', '25', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (3, 130, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -2430,6 +2430,25 @@ INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, 
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1786, 489, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1787, 490, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1788, 546, 'steerer_clamp_mm', '28.6', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1789, 1, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1790, 2, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1791, 4, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1792, 5, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1793, 8, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1794, 9, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1795, 10, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1796, 11, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1797, 13, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1798, 14, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1799, 15, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1800, 18, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1801, 19, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1802, 20, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1803, 23, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1804, 24, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1805, 28, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1806, 29, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (1807, 541, 'brake_mount', 'flat_mount', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- part_included_items (244件)
 INSERT INTO part_included_items (id, part_id, item_name, quantity, included_category_id, price, is_set_component, weight, created_at, updated_at) VALUES (1, 87, 'ステム', 1, 17, NULL, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
