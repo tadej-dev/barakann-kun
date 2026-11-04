@@ -509,29 +509,6 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // コラム内配線のフレームに、配線穴のないステムは「注意」として選択は許可する。
-    it("コラム内配線に対応しないステムは注意として選択を許可する", () => {
-        const frame = createPart(1, "Frame", "frame", {
-            cockpit_interface: "standard_1_1_8",
-            steerer_standard: "tapered_1_1_8_1_5",
-            internal_routing: "steerer",
-        })
-        const stem = createPart(2, "Stem", "stem", {
-            cockpit_interface: "standard_1_1_8",
-            steerer_clamp_mm: "28.6",
-        })
-
-        const result = evaluatePartCompatibility(
-            stem,
-            createPartSlot("stem"),
-            {frame},
-        )
-
-        expect(result?.status).toBe("warning")
-        expect(result?.selectionBlocked).toBe(false)
-        expect(result?.reasons.join("")).toContain("配線")
-    })
-
     // システムタグが交差すれば、規格名が異なっても装着できる(例: DCR車とEXS)。
     it("コックピットシステムが交差するフレームとハンドルは適合にする", () => {
         const dedaFrame = createPart(1, "Frame", "frame", {

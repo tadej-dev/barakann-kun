@@ -130,7 +130,6 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     frame_weight_g: "フレーム重量",
     front_axle: "フロントアクスル",
     steerer_clamp_mm: "コラムクランプ径",
-    internal_routing: "コラム内配線",
     handlebar_clamp_mm: "ハンドルクランプ径",
     max_tire_width_mm: "対応タイヤ幅（最大）",
     min_tire_width_mm: "対応タイヤ幅（最小）",
@@ -340,7 +339,6 @@ export function evaluatePartCompatibility(
     const conflictingSlotKeys = new Set<string>()
     let hasRelevantSelection = false
     let hasUnknown = false
-    let hasWarning = false
     let hasCompatible = false
     let selectionBlocked = false
     const allowedPosition = candidate.specifications?.allowed_position
@@ -402,9 +400,6 @@ export function evaluatePartCompatibility(
             }
         } else if (result.status === "unknown") {
             hasUnknown = true
-        } else if (result.status === "warning") {
-            // 取り付けはできるが注意点がある組み合わせ。選択は止めない。
-            hasWarning = true
         } else {
             hasCompatible = true
         }
@@ -427,13 +422,7 @@ export function evaluatePartCompatibility(
     }
 
     return {
-        status: hasUnknown
-            ? "unknown"
-            : hasWarning
-                ? "warning"
-                : hasCompatible
-                    ? "compatible"
-                    : "unknown",
+        status: hasUnknown ? "unknown" : hasCompatible ? "compatible" : "unknown",
         reasons,
         counterparts,
         conflictingSlotKeys: [],
@@ -442,7 +431,7 @@ export function evaluatePartCompatibility(
 }
 
 export type SelectedPartsCompatibilityIssue = {
-    status: "unknown" | "warning" | "incompatible"
+    status: "unknown" | "incompatible"
     reasons: string[]
     slotKeys: string[]
 }

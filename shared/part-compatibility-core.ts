@@ -3,7 +3,6 @@
 
 export type CompatibilityStatus =
     | "compatible"
-    | "warning"
     | "unknown"
     | "incompatible"
 
@@ -275,29 +274,6 @@ function compareSteererClamp(
         }
 }
 
-// フレームがコラム内配線を要求する場合に、パーツ側が対応しているかを確認する。
-// 物理的には組み付けられるため、非互換ではなく警告(選択可能)として返す。
-function compareInternalRouting(
-    frame: CompatibilityInput,
-    connectedPart: CompatibilityInput,
-): PairCompatibilityResult | null {
-    if (getSpecification(frame, "internal_routing") !== "steerer") {
-        return null
-    }
-
-    if (getSpecification(connectedPart, "internal_routing") === "steerer") {
-        return null
-    }
-
-    return {
-        status: "warning",
-        reasons: [
-            "コラム内にブレーキホースを通すフレームのため、このパーツでは配線できません",
-        ],
-        details: [{label: "コラム内配線", status: "warning"}],
-    }
-}
-
 // null を除いてコックピット系の判定を1つにまとめる。
 function combineCockpitChecks(
     ...results: (PairCompatibilityResult | null)[]
@@ -490,12 +466,11 @@ function compareCockpitParts(
         }
 
         // 一体型ハンドルはステムを兼ねてフォークへ直結するため、フォーク規格と比較する。
-        // コラム径が分かる場合は径も比較し、コラム内配線の要否は警告として添える。
+        // コラム径が分かる場合は径も比較する。
         if (isIntegratedHandlebar(handlebar)) {
             return combineCockpitChecks(
                 compareCockpitInterface(frame, handlebar),
                 compareSteererClamp(frame, handlebar),
-                compareInternalRouting(frame, handlebar),
             )
         }
 
@@ -543,11 +518,10 @@ function compareCockpitParts(
             }
         }
 
-        // コックピット規格(形状)に加え、コラム径とコラム内配線の要否も判定する。
+        // コックピット規格(形状)に加え、コラム径も判定する。
         return combineCockpitChecks(
             compareCockpitInterface(frame, stem),
             compareSteererClamp(frame, stem),
-            compareInternalRouting(frame, stem),
         )
     }
 
@@ -657,18 +631,14 @@ function combinePairResults(
         return null
     }
 
-    // 重い順に採用する。warning は「取り付けはできるが注意点がある」状態で、
-    // 適合の確認が取れていない unknown より軽く、互換より重い。
+    // 重い順に採用する。
     const hasIncompatible = results.some((result) => result.status === "incompatible")
     const hasUnknown = results.some((result) => result.status === "unknown")
-    const hasWarning = results.some((result) => result.status === "warning")
     const status: CompatibilityStatus = hasIncompatible
         ? "incompatible"
         : hasUnknown
             ? "unknown"
-            : hasWarning
-                ? "warning"
-                : "compatible"
+            : "compatible"
 
     return {
         status,
@@ -848,8 +818,7 @@ export type CompatibilityIssue = {
     slotKeys: string[]
     partIds: number[]
     reasons: string[]
-    // warning は「取り付けはできるが注意点がある」組み合わせ。
-    status: "incompatible" | "unknown" | "warning"
+    status: "incompatible" | "unknown"
 }
 
 function partPositionFromSlotKey(slotKey: string): "single" | "front" | "rear" {
@@ -914,8 +883,8 @@ export function findCompatibilityIssues(
             const existing = issues.get(key)
 
             // 同じパーツ組み合わせの両方向の結果は、重要度の高い方を残す。
-            // 重い順: 非互換 > 未確認 > 注意
-            const statusRank = {warning: 1, unknown: 2, incompatible: 3} as const
+            // 重い順: 非互換 > 未確認
+            const statusRank = {unknown: 2, incompatible: 3} as const
 
             if (!existing || statusRank[result.status] > statusRank[existing.status]) {
                 issues.set(key, {
