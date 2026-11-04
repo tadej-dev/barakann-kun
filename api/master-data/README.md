@@ -58,6 +58,10 @@
 
 `bb_standard`、`brake_mount`、`cockpit_connection`、`cockpit_interface`、`cockpit_system` は、アプリ側が判定に使うトークンを登録する。値を独自に作ると、対応するパーツと一致しない。
 
+## コックピットのコラム径（steerer_clamp_mm）
+
+ステムとステム一体型ハンドルには、クランプできるコラム径を `steerer_clamp_mm` として登録する。フレーム側の `steerer_standard` から上端の径（1-1/8インチ=28.6mm、1-1/4インチ=31.8mm など）を引き、一致しなければ取り付け不可と判定する。通常のハンドルはステムにクランプされるため対象外。専用形状（`cannondale_delta` など）のフレームは径を比べず、形状の判定だけを使う。
+
 ## 専用パーツの占有（part_blocked_categories）
 
 専用のシートポストや一体型コックピットが付属するフレームでは、そのカテゴリを他の候補から選べないようにする。`part_id` と `category_id` の組を1行にする。主なカテゴリIDを次に示す。

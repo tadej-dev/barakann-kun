@@ -53,6 +53,31 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("755g")
     })
 
+    // 真偽値で持つ規格は、英語のまま出さず日本語で示す。
+    it("真偽値の規格は日本語で表示する", () => {
+        expect(getSpecificationValueLabel(
+            "cockpit_replaceable",
+            "true",
+        )).toBe("交換可")
+        expect(getSpecificationValueLabel(
+            "cockpit_replaceable",
+            "false",
+        )).toBe("交換不可")
+    })
+
+    // 値ラベルを登録した規格値と、未登録の値のフォールバックを固定する。
+    it("規格値のラベルと未登録時の表示を固定する", () => {
+        expect(getSpecificationValueLabel(
+            "bb_standard",
+            "bb30a",
+        )).toBe("BB30A")
+        // 未登録の値は、キーの単位規則だけを適用してそのまま表示する。
+        expect(getSpecificationValueLabel(
+            "bb_standard",
+            "unknown_value",
+        )).toBe("unknown_value")
+    })
+
     // 複数対応の規格値は、各値を日本語ラベルで並べて表示する。
     it("複数対応の規格値を並べて表示する", () => {
         expect(getSpecificationValueLabel(
