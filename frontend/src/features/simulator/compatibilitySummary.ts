@@ -26,7 +26,6 @@ export type CompatibilitySummaryLine = {
 const STATUS_ORDER: {status: CompatibilityStatus; label: string}[] = [
     {status: "incompatible", label: "非互換"},
     {status: "unknown", label: "未確認"},
-    {status: "warning", label: "注意"},
     {status: "compatible", label: "互換"},
 ]
 
