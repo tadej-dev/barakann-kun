@@ -156,6 +156,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     argon_atten_chb_01: "Argon 18 ATTEN CHB-01専用",
     bmc_ics: "BMC ICS対応",
     bb30: "BB30",
+    bb30a: "BB30A",
     bb386: "BB386",
     bb86: "BB86",
     bb90: "BB90",
@@ -255,6 +256,11 @@ function getCategoryKey(part: Part, slotKey: string) {
     return part.categoryKey ?? getPartSlotCategoryKey(slotKey)
 }
 
+// 真偽値(true/false)で持つ規格は、キーごとに日本語へ置き換える。
+const BOOLEAN_SPECIFICATION_LABELS: Record<string, Record<string, string>> = {
+    cockpit_replaceable: {true: "交換可", false: "交換不可"},
+}
+
 export function getSpecificationLabel(key: string) {
     // 未知の規格キーも捨てず、APIキーをフォールバック表示する。
     return SPECIFICATION_LABELS[key] ?? key
@@ -263,6 +269,13 @@ export function getSpecificationLabel(key: string) {
 export function getSpecificationValueLabel(key: string, value: string) {
     // 単一値もカンマ区切りも同じ経路で日本語化し、mm系とg系だけ単位を補う。
     const label = (single: string) => {
+        // 真偽値の規格は「true」ではなく日本語で示す
+        const booleanLabel = BOOLEAN_SPECIFICATION_LABELS[key]?.[single]
+
+        if (booleanLabel) {
+            return booleanLabel
+        }
+
         const unit = key.endsWith("_mm") ? "mm" : key.endsWith("_g") ? "g" : ""
 
         return SPECIFICATION_VALUE_LABELS[single] ?? `${single}${unit}`
