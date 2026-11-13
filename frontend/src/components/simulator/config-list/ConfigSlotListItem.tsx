@@ -35,6 +35,8 @@ type ConfigSlotListItemProps = {
     onSelect: () => void // 行の選択
     onRename: () => void // 名前変更ダイアログを開く
     onClear: () => void // クリア確認を開く
+    // 保存先が無い間(未ログイン時)は、名前変更だけを操作できないようにする
+    isRenameDisabled?: boolean
 }
 
 // 構成一覧の固定枠(構成1〜4)の1行
@@ -47,6 +49,7 @@ export function ConfigSlotListItem({
     onSelect,
     onRename,
     onClear,
+    isRenameDisabled = false,
 }: ConfigSlotListItemProps) {
     return (
         <SortableItem
@@ -154,7 +157,10 @@ export function ConfigSlotListItem({
                         >
                             <DropdownMenuGroup>
                                 <DropdownMenuItem
-                                    disabled={isOperating}
+                                    disabled={isOperating || isRenameDisabled}
+                                    title={isRenameDisabled
+                                        ? "名前の保存はログイン後に利用できます"
+                                        : undefined}
                                     onClick={onRename}
                                 >
                                     <Pencil />

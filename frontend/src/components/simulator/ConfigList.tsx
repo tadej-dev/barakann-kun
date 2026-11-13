@@ -1,5 +1,9 @@
+import {useState} from "react"
 import type {ReactNode} from "react"
 
+import {AlertDialog} from "@base-ui/react/alert-dialog"
+
+import type {ConfigSlot} from "@/api/configSlots"
 import {MAX_SAVED_BUILDS, type SavedBuild} from "@/api/savedBuilds"
 import type {ComparisonBuild} from "@/components/simulator/BuildComparisonDialog"
 import {ConfigListActions} from "@/components/simulator/config-list/ConfigListActions"
@@ -9,13 +13,11 @@ import {ConfigSlotListItem} from "@/components/simulator/config-list/ConfigSlotL
 import {SavedBuildListItem} from "@/components/simulator/config-list/SavedBuildListItem"
 import {Sortable} from "@/components/reui/sortable"
 import {Badge} from "@/components/ui/badge"
+import {buttonVariants} from "@/components/ui/button"
 import {
     Sidebar,
     SidebarContent,
     SidebarHeader,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
     SidebarRail,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
@@ -25,7 +27,11 @@ import {
     type ConfigStates,
     type SelectedParts,
 } from "@/features/simulator/simulatorTypes"
-import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
+import {orderSlotsByIds} from "@/features/simulator/configSlotOrder"
+import {
+    configSlotItemKey,
+    type ConfigCollection,
+} from "@/features/simulator/useConfigCollection"
 import {useConfigListController} from "@/features/simulator/useConfigListController"
 import type {Category} from "@/types/category"
 
@@ -42,7 +48,6 @@ type ConfigListProps = {
     onConfigChange: (configId: ConfigId) => void // 固定枠の選択
     onSavedBuildSelect: (build: SavedBuild) => void | Promise<void> // 追加構成の選択
     onSavedBuildPrefetch: (build: SavedBuild) => void // 追加構成の先読み
-    onClearActiveConfig: () => void // ログイン前の選択中構成の初期化
     onClearConfig: (configId: ConfigId) => Promise<void> // 固定枠の初期化
     children?: ReactNode // 一覧の下に差し込む通知(自動保存の競合など)
 }
@@ -61,7 +66,6 @@ export function ConfigList({
     onConfigChange,
     onSavedBuildSelect,
     onSavedBuildPrefetch,
-    onClearActiveConfig,
     onClearConfig,
     children,
 }: ConfigListProps) {
@@ -85,6 +89,25 @@ export function ConfigList({
         onClearConfig,
     })
 
+    // 未ログイン時も、ログイン時と同じカードで構成1〜4を表示する。
+    // 保存先がまだ無いため、名前変更は行わず、並び順は画面内だけで保持する。
+    const guestSlots: ConfigSlot[] = CONFIG_IDS.map((configId) => ({
+        configId,
+        name: `構成${configId}`,
+        version: 0,
+        updatedAt: null,
+        parts: Object.entries(configStates[configId]).map(([slotKey, part]) => ({
+            slotKey,
+            partId: part.id,
+            price: part.price,
+            weight: part.weight,
+        })),
+    }))
+    const [guestOrder, setGuestOrder] = useState<ConfigId[]>(() => [...CONFIG_IDS])
+    // 未ログイン時のクリアは、カードの操作メニューから確認して実行する
+    const [clearConfirmId, setClearConfirmId] = useState<ConfigId | null>(null)
+    const orderedGuestSlots = orderSlotsByIds(guestSlots, guestOrder)
+
     // 比較ダイアログに渡す構成。ログイン後は保存済みの構成、ログイン前は手元の構成1〜4。
     const comparisonBuilds: ComparisonBuild[] = isAuthenticated
         ? orderedItems.map((item) => item.kind === "slot"
@@ -98,18 +121,11 @@ export function ConfigList({
                 name: item.build.name,
                 parts: item.build.parts,
             })
-        : CONFIG_IDS.map((configId) => ({
-            key: `config:${configId}`,
-            name: `構成${configId}`,
-            parts: Object.entries(configStates[configId]).map(([
-                slotKey,
-                part,
-            ]) => ({
-                slotKey,
-                partId: part.id,
-                price: part.price,
-                weight: part.weight,
-            })),
+        // 未ログイン時も、一覧の並び順と同じ順で比較できるようにする
+        : orderedGuestSlots.map((slot) => ({
+            key: configSlotItemKey(slot.configId),
+            name: slot.name,
+            parts: slot.parts,
         }))
     // 認証確認が終わり、ログインしていない状態か
     const isGuest = !isAuthenticated && !isAuthLoading
@@ -137,63 +153,108 @@ export function ConfigList({
                     <span className="text-sm font-bold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
                         構成選択
                     </span>
-                    {/* 構成1〜4も保存枠に含める */}
-                    {isAuthenticated && (
-                        <Badge
-                            variant="secondary"
-                            className="group-data-[collapsible=icon]:hidden"
-                            aria-label="保存枠使用数"
-                            title="構成1〜4を含むアカウントの保存枠使用数"
-                        >
-                            {isSlotsLoading || isSavedBuildsLoading
-                                ? `… / ${MAX_SAVED_BUILDS}`
-                                : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
-                        </Badge>
-                    )}
+                    {/* 構成1〜4も保存枠に含める。未ログインでも同じ位置に出す */}
+                    <Badge
+                        variant="secondary"
+                        className="group-data-[collapsible=icon]:hidden"
+                        aria-label="保存枠使用数"
+                        title="構成1〜4を含む保存枠使用数"
+                    >
+                        {isAuthLoading || isSlotsLoading || isSavedBuildsLoading
+                            ? `… / ${MAX_SAVED_BUILDS}`
+                            : `${totalSavedCount} / ${MAX_SAVED_BUILDS}`}
+                    </Badge>
                 </div>
 
                 <ConfigListActions
                     categories={categories}
                     comparisonBuilds={comparisonBuilds}
                     isAuthenticated={isAuthenticated}
-                    isAuthLoading={isAuthLoading}
-                    activeConfigId={activeConfigId}
                     canCreate={controller.canCreateSavedBuild}
                     isOperating={controller.isOperating}
                     selectedCount={controller.selectedSavedBuilds.length}
                     onCreate={controller.openCreateSavedBuildDialog}
                     onDeleteSelected={controller.openDeleteSelectedBuildsDialog}
-                    onClearActiveConfig={onClearActiveConfig}
                 />
             </SidebarHeader>
 
             <SidebarContent className="gap-3 px-2 pb-2">
-                {/* ログイン前の構成1〜4 */}
+                {/* ログイン前も同じカードで構成1〜4を並べる */}
                 {isGuest && (
-                    <SidebarMenu className="gap-1">
-                        {CONFIG_IDS.map((configId) => {
-                            const isActive = configId === activeConfigId
+                    <div className="w-full overflow-hidden rounded-lg">
+                        <Sortable
+                            value={orderedGuestSlots}
+                            onValueChange={(next) => setGuestOrder(
+                                next.map((slot) => slot.configId),
+                            )}
+                            getItemValue={(slot) => configSlotItemKey(slot.configId)}
+                            strategy="grid"
+                            render={<ul className="grid grid-cols-1 gap-2 p-0" />}
+                        >
+                            {orderedGuestSlots.map((slot, index) => (
+                                <ConfigSlotListItem
+                                    key={slot.configId}
+                                    itemKey={configSlotItemKey(slot.configId)}
+                                    slot={slot}
+                                    index={index}
+                                    isActive={slot.configId === activeConfigId}
+                                    isOperating={false}
+                                    // 保存先ができるまでは、名前変更だけを無効にする
+                                    isRenameDisabled
+                                    onSelect={() => onConfigChange(slot.configId)}
+                                    onRename={() => {}}
+                                    onClear={() => setClearConfirmId(slot.configId)}
+                                />
+                            ))}
+                        </Sortable>
+                    </div>
+                )}
 
-                            return (
-                                <SidebarMenuItem key={configId}>
-                                    <SidebarMenuButton
-                                        isActive={isActive}
-                                        aria-selected={isActive}
-                                        tooltip={`構成${configId}`}
-                                        className="font-bold data-active:bg-sky-50 data-active:text-sky-950"
-                                        onClick={() => onConfigChange(configId)}
+                {/* 未ログイン時のクリアも、確認してから実行する */}
+                {isGuest && clearConfirmId && (
+                    <AlertDialog.Root
+                        open
+                        onOpenChange={(open) => {
+                            if (!open) {
+                                setClearConfirmId(null)
+                            }
+                        }}
+                    >
+                        <AlertDialog.Portal>
+                            <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0"/>
+                            <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-5 text-foreground shadow-xl transition-[scale,opacity] duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+                                <AlertDialog.Title className="text-base font-bold">
+                                    構成{clearConfirmId}をクリアしますか？
+                                </AlertDialog.Title>
+                                <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+                                    この構成のパーツがすべて解除されます。
+                                    <br/>
+                                    この操作は元に戻せません。
+                                </AlertDialog.Description>
+
+                                <div className="mt-5 flex justify-center gap-2">
+                                    <AlertDialog.Close
+                                        className={buttonVariants({
+                                            variant: "destructive",
+                                        })}
+                                        onClick={() => {
+                                            void onClearConfig(clearConfirmId)
+                                            setClearConfirmId(null)
+                                        }}
                                     >
-                                        <span className="flex size-4 shrink-0 items-center justify-center text-xs">
-                                            {configId}
-                                        </span>
-                                        <span>
-                                            構成{configId}
-                                        </span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            )
-                        })}
-                    </SidebarMenu>
+                                        クリアする
+                                    </AlertDialog.Close>
+                                    <AlertDialog.Close
+                                        className={buttonVariants({
+                                            variant: "outline",
+                                        })}
+                                    >
+                                        キャンセル
+                                    </AlertDialog.Close>
+                                </div>
+                            </AlertDialog.Popup>
+                        </AlertDialog.Portal>
+                    </AlertDialog.Root>
                 )}
 
                 {/* 初回の読み込み中(並び順が確定するまで一覧を出さない) */}

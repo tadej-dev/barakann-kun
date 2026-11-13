@@ -78,7 +78,6 @@ export function Simulator({
                 onConfigChange={controller.changeConfig}
                 onSavedBuildSelect={controller.selectSavedBuild}
                 onSavedBuildPrefetch={controller.prefetchSavedBuild}
-                onClearActiveConfig={controller.clearActiveConfig}
                 onClearConfig={controller.clearConfig}
             >
                 {/* 自動保存の競合通知 */}

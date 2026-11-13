@@ -294,7 +294,8 @@ describe("simulatorReducer", () => {
             part: groupset,
         })
         state = simulatorReducer(state, {
-            type: "clearActiveConfig",
+            type: "clearConfig",
+            configId: "1",
         })
 
         expect(state.activeSlot).toEqual(createPartSlot("frame"))
