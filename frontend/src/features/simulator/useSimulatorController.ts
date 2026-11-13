@@ -73,7 +73,6 @@ export type SimulatorController = {
     changeConfig: (configId: ConfigId) => void
     restoreConfigSlot: (slot: ConfigSlot) => Promise<void>
     changeSlot: (slot: PartSlot) => void
-    clearActiveConfig: () => void
     clearConfig: (configId: ConfigId) => Promise<void>
     onRemoveBlockingParts: () => void
     onSelectPart: (
@@ -662,14 +661,6 @@ export function useSimulatorController({
         })
     }, [blockingSelections, dispatch])
 
-    // 現在構成の初期化処理
-    const clearActiveConfig = useCallback(() => {
-        // 未ログイン時の確認ダイアログから呼ばれ、現在編集中の枠だけを空にする。
-        dispatch({
-            type: "clearActiveConfig",
-        })
-    }, [dispatch])
-
     // 指定構成のローカル選択を初期化し、アクティブ構成ならフレーム選択へ戻す
     const clearConfig = useCallback(async (configId: ConfigId) => {
         // ローカルReducerのクリア後、自動保存フックがD1同期を担当する。
@@ -707,7 +698,6 @@ export function useSimulatorController({
         changeConfig,
         restoreConfigSlot,
         changeSlot,
-        clearActiveConfig,
         clearConfig,
         onRemoveBlockingParts,
         onSelectPart,

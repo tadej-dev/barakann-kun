@@ -42,9 +42,6 @@ type SimulatorAction =
     slotKeys: string[]
 }
     | {
-    type: "clearActiveConfig"
-}
-    | {
     type: "clearConfig"
     configId: ConfigId
 }
@@ -210,13 +207,6 @@ export function simulatorReducer(
 
             return replaceActiveSelectedParts(state, nextSelectedParts)
         }
-
-        case "clearActiveConfig":
-            // 未ログイン時のクリア後は、次に選ぶ入口としてフレーム枠へ戻す。
-            return {
-                ...replaceActiveSelectedParts(state, {}),
-                activeSlot: getPartSlots("frame")[0], // フレーム選択へ戻す
-            }
 
         case "clearConfig":
             // 非アクティブ枠をクリアした場合は、現在の候補位置をそのまま維持する。
