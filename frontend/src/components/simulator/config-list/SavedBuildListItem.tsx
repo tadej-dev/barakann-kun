@@ -1,16 +1,12 @@
 import {
-    Copy,
     Ellipsis,
     GripVertical,
-    Link,
     Pencil,
     Save,
     Trash2,
-    Unlink,
 } from "lucide-react"
 
 import type {SavedBuild} from "@/api/savedBuilds"
-import type {ShareActions} from "@/components/simulator/config-list/useShareActions"
 import {
     SortableItem,
     SortableItemHandle,
@@ -39,7 +35,6 @@ type SavedBuildListItemProps = {
     isActive: boolean // 選択中か
     isOperating: boolean // 通信中は選択・保存を止める
     isChecked: boolean // 一括削除の対象として選ばれているか
-    share: ShareActions // 共有URLの作成・コピー・停止
     onSelect: () => void // 行の選択
     onPrefetch: () => void // ホバー・フォーカス時の先読み
     onSave: () => void // 現在の選択を保存
@@ -57,7 +52,6 @@ export function SavedBuildListItem({
     isActive,
     isOperating,
     isChecked,
-    share,
     onSelect,
     onPrefetch,
     onSave,
@@ -185,29 +179,6 @@ export function SavedBuildListItem({
                                     <Pencil />
                                     名前変更
                                 </DropdownMenuItem>
-                                {build.shareToken ? (
-                                    <>
-                                        <DropdownMenuItem
-                                            onClick={() => void share.copyShareUrl(build.shareToken!)}
-                                        >
-                                            <Copy />
-                                            共有URLをコピー
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            onClick={() => void share.stopSavedBuildSharing(build)}
-                                        >
-                                            <Unlink />
-                                            共有を停止
-                                        </DropdownMenuItem>
-                                    </>
-                                ) : (
-                                    <DropdownMenuItem
-                                        onClick={() => void share.startSavedBuildSharing(build)}
-                                    >
-                                        <Link />
-                                        共有URLを作成
-                                    </DropdownMenuItem>
-                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     variant="destructive"

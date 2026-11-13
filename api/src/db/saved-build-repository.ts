@@ -27,8 +27,6 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
-    // nullは非公開、値がある場合だけ読み取り専用URLから参照できる
-    shareToken: string | null
     parts: SavedBuildPart[]
 }
 
@@ -53,7 +51,6 @@ export interface SavedBuildRepository {
     count(userId: string): Promise<number>
     list(userId: string): Promise<SavedBuild[]>
     findById(userId: string, buildId: string): Promise<SavedBuild | null>
-    findPublicByToken(shareToken: string): Promise<SavedBuild | null>
     create(
         userId: string,
         name: string,
@@ -72,12 +69,6 @@ export interface SavedBuildRepository {
         version: number,
         name: string,
     ): Promise<RenameSavedBuildResult>
-    setSharing(
-        userId: string,
-        buildId: string,
-        version: number,
-        enabled: boolean,
-    ): Promise<UpdateSavedBuildResult>
     delete(
         userId: string,
         buildId: string,
@@ -136,7 +127,7 @@ export function isMissingSavedBuildSchemaError(error: unknown): boolean {
         return false
     }
 
-    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot|share_token)/i.test(error.message)) {
+    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot)/i.test(error.message)) {
         return true
     }
 

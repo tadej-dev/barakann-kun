@@ -14,7 +14,6 @@ import {
 } from "../db/saved-build-repository"
 import {
     parseClearConfigSlotPayload,
-    parseConfigSlotSharingPayload,
     parseConfigSlotId,
     parseRenameConfigSlotPayload,
     parseSaveConfigSlotPayload,
@@ -188,46 +187,6 @@ async function getConfigSlotRequest(
 
     return {userId, configId: parsedConfigId.data}
 }
-
-// 固定構成の読み取り専用共有を開始または停止
-configSlotsRoute.patch("/:configId/sharing", async (context) => {
-    const request = await getConfigSlotRequest(context)
-
-    if (request instanceof Response) {
-        return request
-    }
-
-    const payload = await readJson(context)
-
-    if (!(await hasValidCsrfToken(context, payload))) {
-        return invalidCsrf(context)
-    }
-
-    const parsedPayload = parseConfigSlotSharingPayload(payload)
-
-    if (!parsedPayload.success) {
-        return invalidPayload(context)
-    }
-
-    try {
-        const result = await context.var.configSlotRepository.setSharing(
-            request.userId,
-            request.configId,
-            parsedPayload.data.version,
-            parsedPayload.data.enabled,
-        )
-
-        return mutationResponse(context, result)
-    } catch (error) {
-        const response = migrationResponse(context, error)
-
-        if (response) {
-            return response
-        }
-
-        throw error
-    }
-})
 
 // 構成名だけを変更
 configSlotsRoute.patch("/:configId", async (context) => {

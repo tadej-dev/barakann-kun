@@ -33,12 +33,8 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
-    shareToken: string | null
     parts: SavedBuildPart[]
 }
-
-// 公開URLでは所有者向け識別子や世代情報を受け取らない
-export type PublicSavedBuild = Pick<SavedBuild, "name" | "parts">
 
 type ApiErrorPayload = {
     error?: {
@@ -124,13 +120,6 @@ function isTimestamp(value: unknown): value is string {
         value.length <= MAX_TIMESTAMP_LENGTH
 }
 
-// 非公開はnull、公開中はUUID由来の固定長トークンだけを受け付ける
-function isShareToken(value: unknown): value is string | null {
-    return value === null || (
-        typeof value === "string" && /^[a-f0-9]{32}$/.test(value)
-    )
-}
-
 function parseSavedBuildParts(value: unknown): SavedBuildPart[] {
     if (!Array.isArray(value) || value.length > MAX_PARTS_PER_BUILD) {
         throw new SavedBuildApiError(
@@ -190,15 +179,13 @@ function parseSavedBuild(value: unknown): SavedBuild {
 
     const record = value as Record<string, unknown>
     const parts = record.parts
-    const shareToken = record.shareToken ?? null
 
     if (
         !isSavedBuildId(record.id) ||
         !isSavedBuildText(record.name) ||
         !isPositiveSafeInteger(record.version) ||
         !isTimestamp(record.createdAt) ||
-        !isTimestamp(record.updatedAt) ||
-        !isShareToken(shareToken)
+        !isTimestamp(record.updatedAt)
     ) {
         throw new SavedBuildApiError(
             "保存構成のレスポンスを解釈できませんでした",
@@ -213,29 +200,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
         version: record.version,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
-        shareToken,
         parts: parsedParts,
-    }
-}
-
-function parsePublicSavedBuild(value: unknown): PublicSavedBuild {
-    if (typeof value !== "object" || value === null) {
-        throw new SavedBuildApiError(
-            "共有構成のレスポンスを解釈できませんでした",
-        )
-    }
-
-    const record = value as Record<string, unknown>
-
-    if (!isSavedBuildText(record.name)) {
-        throw new SavedBuildApiError(
-            "共有構成のレスポンスを解釈できませんでした",
-        )
-    }
-
-    return {
-        name: record.name,
-        parts: parseSavedBuildParts(record.parts),
     }
 }
 
@@ -381,52 +346,4 @@ export async function deleteSavedBuild(
     if (!response.ok) {
         return throwApiError(response, "構成の削除に失敗しました")
     }
-}
-
-// 追加構成の公開URLを発行または無効化
-export async function updateSavedBuildSharing(
-    buildId: string,
-    version: number,
-    enabled: boolean,
-): Promise<SavedBuild> {
-    const csrfToken = await fetchCsrfToken()
-    const response = await fetch(
-        `/api/builds/${encodeURIComponent(buildId)}/sharing`,
-        {
-            method: "PATCH",
-            credentials: "same-origin",
-            headers: {
-                Accept: "application/json",
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({version, enabled, csrfToken}),
-        },
-    )
-
-    if (!response.ok) {
-        return throwApiError(response, "構成の共有設定に失敗しました")
-    }
-
-    return parseSavedBuild(await response.json())
-}
-
-// ログイン不要の共有URLから読み取り専用構成を取得
-export async function fetchPublicSavedBuild(
-    shareToken: string,
-    signal?: AbortSignal,
-): Promise<PublicSavedBuild> {
-    const response = await fetch(
-        `/api/builds/public/${encodeURIComponent(shareToken)}`,
-        {
-            credentials: "same-origin",
-            signal,
-            headers: {Accept: "application/json"},
-        },
-    )
-
-    if (!response.ok) {
-        return throwApiError(response, "共有構成の取得に失敗しました")
-    }
-
-    return parsePublicSavedBuild(await response.json())
 }

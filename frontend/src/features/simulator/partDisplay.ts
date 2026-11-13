@@ -113,7 +113,7 @@ export function comparePartVariants(a: Part, b: Part): number {
     )
 }
 
-// サマリー・比較・共有表示で使う、サイズや世代まで含めた表示名。
+// サマリー・比較で使う、サイズや世代まで含めた表示名。
 // 候補表の行内では候補の絞り込みに使うため、ここでは付加情報を明示する。
 export function getPartVariantLabel(
     part: Pick<Part, "name" | "modelName" | "brandName" | "variantName" | "edition">,
