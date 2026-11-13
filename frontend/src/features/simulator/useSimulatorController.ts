@@ -580,7 +580,6 @@ export function useSimulatorController({
             version: slot.version,
             createdAt: slot.updatedAt ?? new Date(0).toISOString(),
             updatedAt: slot.updatedAt ?? new Date(0).toISOString(),
-            shareToken: null,
             parts: slot.parts,
         }
 

@@ -183,7 +183,6 @@ export function useConfigCollection({
         clearSlot: configSlots.clear,
         renameSlot: configSlots.rename,
         reloadConfigSlots: configSlots.reload,
-        setConfigSlotSharing: configSlots.setSharing,
         // 追加構成
         savedBuilds,
         savedBuildsOperation: savedBuildsState.operation,
@@ -194,7 +193,6 @@ export function useConfigCollection({
         renameSavedBuild: savedBuildsState.rename,
         removeSavedBuild: savedBuildsState.remove,
         reloadSavedBuilds: savedBuildsState.reload,
-        setSavedBuildSharing: savedBuildsState.setSharing,
         // 表示順
         configOrderErrorMessage: configOrder.errorMessage,
         isLoadingConfigOrder: configOrder.isLoading,

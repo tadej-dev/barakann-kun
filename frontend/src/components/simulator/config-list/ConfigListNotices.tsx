@@ -1,8 +1,6 @@
 import {Button} from "@/components/ui/button"
 
 type ConfigListNoticesProps = {
-    shareNotice: string // 共有URLのコピー結果など
-    onDismissShareNotice: () => void
     slotsErrorMessage: string // 固定枠の取得・保存エラー
     savedBuildsErrorMessage: string // 追加構成一覧の取得・保存エラー
     savedBuildErrorMessage: string // 追加構成の読み込みエラー
@@ -11,10 +9,8 @@ type ConfigListNoticesProps = {
     onReloadConfigOrder: () => void
 }
 
-// 構成一覧の下に出す通知(共有の結果・エラー)
+// 構成一覧の下に出す通知(エラー)
 export function ConfigListNotices({
-    shareNotice,
-    onDismissShareNotice,
     slotsErrorMessage,
     savedBuildsErrorMessage,
     savedBuildErrorMessage,
@@ -32,25 +28,6 @@ export function ConfigListNotices({
 
     return (
         <>
-            {shareNotice && (
-                <div
-                    className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 group-data-[collapsible=icon]:hidden bg-emerald-50 p-3 text-sm text-emerald-900"
-                    role="status"
-                >
-                    <span className="min-w-0 break-all">
-                        {shareNotice}
-                    </span>
-                    <Button
-                        type="button"
-                        size="xs"
-                        variant="ghost"
-                        onClick={onDismissShareNotice}
-                    >
-                        閉じる
-                    </Button>
-                </div>
-            )}
-
             {/* API失敗を一覧の外へ逃がさず、再読み込み可能な状態として表示する。 */}
             {errorMessage && (
                 <div

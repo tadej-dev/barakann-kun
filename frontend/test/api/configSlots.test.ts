@@ -4,7 +4,6 @@ import {
     fetchConfigSlots,
     renameConfigSlot,
     saveConfigSlot,
-    updateConfigSlotSharing,
 } from "@/api/configSlots"
 
 function slotPayload() {
@@ -13,7 +12,6 @@ function slotPayload() {
         name: `構成${configId}`,
         version: 0,
         updatedAt: null,
-        shareToken: null,
         parts: [],
     }))
 }
@@ -112,44 +110,7 @@ describe("configSlots API", () => {
         })
     })
 
-    it("標準枠の共有URLをCSRFトークン付きで発行する", async () => {
-        const fetchMock = vi.fn()
-            .mockResolvedValueOnce(new Response(JSON.stringify({
-                csrfToken: "csrf-token",
-            }), {
-                headers: {"content-type": "application/json"},
-            }))
-            .mockResolvedValueOnce(new Response(JSON.stringify({
-                configId: "1",
-                name: "構成1",
-                version: 1,
-                updatedAt: "2026-08-16T00:00:00.000Z",
-                shareToken: "cccccccccccccccccccccccccccccccc",
-                parts: [],
-            }), {
-                headers: {"content-type": "application/json"},
-            }))
-        vi.stubGlobal("fetch", fetchMock)
-
-        await expect(updateConfigSlotSharing("1", 0, true)).resolves.toMatchObject({
-            version: 1,
-            shareToken: "cccccccccccccccccccccccccccccccc",
-        })
-        expect(fetchMock).toHaveBeenNthCalledWith(
-            2,
-            "/api/config-slots/1/sharing",
-            expect.objectContaining({
-                method: "PATCH",
-                body: JSON.stringify({
-                    version: 0,
-                    enabled: true,
-                    csrfToken: "csrf-token",
-                }),
-            }),
-        )
-    })
-
-    // 1つのスロットに同じ位置が重複するレスポンスは、復元前に拒否する。
+    // 壊れたレスポンスは画面へ流さず、契約違反として拒否する。
     it("同じスロットが重複するレスポンスを拒否する", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify(
             slotPayload().map((slot, index) => index === 0

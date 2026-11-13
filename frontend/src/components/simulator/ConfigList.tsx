@@ -7,7 +7,6 @@ import {ConfigListDialogs} from "@/components/simulator/config-list/ConfigListDi
 import {ConfigListNotices} from "@/components/simulator/config-list/ConfigListNotices"
 import {ConfigSlotListItem} from "@/components/simulator/config-list/ConfigSlotListItem"
 import {SavedBuildListItem} from "@/components/simulator/config-list/SavedBuildListItem"
-import {useShareActions} from "@/components/simulator/config-list/useShareActions"
 import {Sortable} from "@/components/reui/sortable"
 import {Badge} from "@/components/ui/badge"
 import {
@@ -85,7 +84,6 @@ export function ConfigList({
         onConfigChange,
         onClearConfig,
     })
-    const share = useShareActions(collection)
 
     // 比較ダイアログに渡す構成。ログイン後は保存済みの構成、ログイン前は手元の構成1〜4。
     const comparisonBuilds: ComparisonBuild[] = isAuthenticated
@@ -244,7 +242,6 @@ export function ConfigList({
                                                     item.slot.configId === activeConfigId
                                                 }
                                                 isOperating={controller.isOperating}
-                                                share={share}
                                                 onSelect={() => onConfigChange(item.slot.configId)}
                                                 onRename={() => controller.openNameDialog(item.slot)}
                                                 onClear={() => controller.openClearConfirmation(item.slot)}
@@ -259,7 +256,6 @@ export function ConfigList({
                                                 isActive={item.build.id === activeSavedBuildId}
                                                 isOperating={controller.isOperating}
                                                 isChecked={controller.selectedSavedBuildIds.includes(item.build.id)}
-                                                share={share}
                                                 onSelect={() => void onSavedBuildSelect(item.build)}
                                                 onPrefetch={() => onSavedBuildPrefetch(item.build)}
                                                 onSave={() => void controller.saveToSavedBuild(item.build)}
@@ -274,8 +270,6 @@ export function ConfigList({
                         )}
 
                         <ConfigListNotices
-                            shareNotice={share.shareNotice}
-                            onDismissShareNotice={share.dismissShareNotice}
                             slotsErrorMessage={collection.slotsErrorMessage}
                             savedBuildsErrorMessage={collection.savedBuildsErrorMessage}
                             savedBuildErrorMessage={savedBuildErrorMessage}

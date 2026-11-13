@@ -1,15 +1,11 @@
 import {
-    Copy,
     Ellipsis,
     GripVertical,
-    Link,
     Pencil,
     Trash2,
-    Unlink,
 } from "lucide-react"
 
 import type {ConfigSlot} from "@/api/configSlots"
-import type {ShareActions} from "@/components/simulator/config-list/useShareActions"
 import {
     SortableItem,
     SortableItemHandle,
@@ -36,7 +32,6 @@ type ConfigSlotListItemProps = {
     index: number // 並び順(閉じたレールで番号として表示)
     isActive: boolean // 選択中か
     isOperating: boolean // 通信中は操作メニューを止める
-    share: ShareActions // 共有URLの作成・コピー・停止
     onSelect: () => void // 行の選択
     onRename: () => void // 名前変更ダイアログを開く
     onClear: () => void // クリア確認を開く
@@ -49,7 +44,6 @@ export function ConfigSlotListItem({
     index,
     isActive,
     isOperating,
-    share,
     onSelect,
     onRename,
     onClear,
@@ -166,32 +160,6 @@ export function ConfigSlotListItem({
                                     <Pencil />
                                     名前変更
                                 </DropdownMenuItem>
-                                {slot.shareToken ? (
-                                    <>
-                                        <DropdownMenuItem
-                                            disabled={isOperating}
-                                            onClick={() => void share.copyShareUrl(slot.shareToken!)}
-                                        >
-                                            <Copy />
-                                            共有URLをコピー
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            disabled={isOperating}
-                                            onClick={() => void share.stopConfigSlotSharing(slot)}
-                                        >
-                                            <Unlink />
-                                            共有を停止
-                                        </DropdownMenuItem>
-                                    </>
-                                ) : (
-                                    <DropdownMenuItem
-                                        disabled={isOperating}
-                                        onClick={() => void share.startConfigSlotSharing(slot)}
-                                    >
-                                        <Link />
-                                        共有URLを作成
-                                    </DropdownMenuItem>
-                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     variant="destructive"

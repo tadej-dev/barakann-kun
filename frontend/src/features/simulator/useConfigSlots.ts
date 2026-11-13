@@ -5,7 +5,6 @@ import {
     fetchConfigSlots,
     renameConfigSlot,
     saveConfigSlot,
-    updateConfigSlotSharing,
     type ConfigSlot,
 } from "@/api/configSlots"
 import type {SavedBuildPartInput} from "@/api/savedBuilds"
@@ -13,7 +12,7 @@ import {
     CONFIG_IDS,
 } from "@/features/simulator/simulatorTypes"
 
-type ConfigSlotOperation = "rename" | "save" | "clear" | "sharing"
+type ConfigSlotOperation = "rename" | "save" | "clear"
 
 type UseConfigSlotsOptions = {
     enabled: boolean
@@ -29,7 +28,6 @@ function createDefaultConfigSlots(): ConfigSlot[] {
         name: `構成${configId}`,
         version: 0,
         updatedAt: null,
-        shareToken: null,
         parts: [],
     }))
 }
@@ -295,25 +293,6 @@ export function useConfigSlots({
         })
     }, [replaceSlot, runOperation, userId])
 
-    const setSharing = useCallback(async (
-        slot: ConfigSlot,
-        enabled: boolean,
-    ) => {
-        const requestUserId = userId
-
-        return runOperation("sharing", async () => {
-            // 共有設定後のtokenとversionを固定枠一覧へ反映する
-            const updated = await updateConfigSlotSharing(
-                slot.configId,
-                slot.version,
-                enabled,
-            )
-            replaceSlot(updated, requestUserId)
-
-            return updated
-        })
-    }, [replaceSlot, runOperation, userId])
-
     const hasCurrentUserData = enabled && Boolean(userId) &&
         loadedUserId === userId && loadedReloadKey === reloadKey
     const hasCurrentError = Boolean(errorMessage) &&
@@ -334,7 +313,6 @@ export function useConfigSlots({
         reload,
         rename,
         save,
-        setSharing,
         slots: hasCurrentUserData ? visibleSlots : createDefaultConfigSlots(),
     }
 }
