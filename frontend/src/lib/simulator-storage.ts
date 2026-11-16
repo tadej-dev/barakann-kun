@@ -4,8 +4,22 @@ import {
     type ConfigStates,
 } from "@/features/simulator/simulatorTypes"
 import {migrateLegacyPartSlotSelections} from "@/features/simulator/partSlots"
+import {
+    normalizeConfigOrder,
+    normalizeSavedBuilds,
+    type LocalConfigCollection,
+    type StoredSavedBuild,
+} from "@/features/saved-builds/configRules"
 
+export type {LocalConfigCollection, StoredSavedBuild}
+
+// 構成の選択(構成1〜4と選択中の構成)を保存するキー
 const STORAGE_KEY = "barakann-simulator-configs-v3"
+
+// 追加構成と並び順を保存するキー
+// 選択状態と同じキーへ書き込むと、複数タブで同時に保存したときに片方の項目が消えるため分ける。
+const COLLECTION_STORAGE_KEY = "barakann-config-collection-v1"
+
 const LEGACY_STORAGE_KEYS = [
     "barakann-simulator-configs-v2",
     "barakann-simulator-configs-v1",
@@ -24,29 +38,19 @@ const PART_ID_ALIASES: Record<number, number> = {
 type StoredSelections = Record<string, number>
 type StoredConfigStates = Record<ConfigId, StoredSelections>
 
-// 未ログイン時に保存する追加構成。パーツは保存時点の価格・重量も持つ。
-export type StoredSavedBuild = {
-    id: string
-    name: string
-    parts: {
-        slotKey: string
-        partId: number
-        price: number
-        weight: number
-    }[]
-}
-
 export type StoredSimulatorState = {
     activeConfigId: ConfigId
     configs: StoredConfigStates
-    // 追加構成と表示順。旧形式には無いため空を既定にする。
-    savedBuilds: StoredSavedBuild[]
-    order: string[]
 }
 
 type SimulatorStorageSource = {
     activeConfigId: ConfigId
     configs: ConfigStates
+}
+
+// 追加構成が無いときの既定値。呼び出し側で同じ値を共有しないよう毎回作る。
+function emptyCollection(): LocalConfigCollection {
+    return {savedBuilds: [], order: []}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,6 +65,15 @@ function isConfigId(value: unknown): value is ConfigId {
 function getLocalStorage(): Storage | null {
     try {
         return typeof window === "undefined" ? null : window.localStorage
+    } catch {
+        return null
+    }
+}
+
+// Storageの読み取りは失敗しても例外を画面へ伝播させない
+function readItem(storage: Storage, key: string): string | null {
+    try {
+        return storage.getItem(key)
     } catch {
         return null
     }
@@ -122,75 +135,13 @@ function parseStoredState(value: string): StoredSimulatorState | null {
             }),
         ) as StoredConfigStates
 
-        // 追加構成と表示順は、旧形式や壊れた値なら空として扱う。
-        const savedBuilds = Array.isArray(storedState.savedBuilds)
-            ? storedState.savedBuilds.flatMap((build) => {
-                const parsed = parseStoredSavedBuild(build)
-
-                return parsed ? [parsed] : []
-            })
-            : []
-        const order = Array.isArray(storedState.order)
-            ? storedState.order.filter((key): key is string =>
-                typeof key === "string")
-            : []
-
         return {
             activeConfigId: storedState.activeConfigId,
             configs,
-            savedBuilds,
-            order,
         }
     } catch {
         return null
     }
-}
-
-// 追加構成の1件を検証する。壊れた項目は読み飛ばし、他の構成の復元を続ける。
-function parseStoredSavedBuild(value: unknown): StoredSavedBuild | null {
-    if (
-        !isRecord(value) ||
-        typeof value.id !== "string" ||
-        value.id.length === 0 ||
-        typeof value.name !== "string" ||
-        value.name.length === 0 ||
-        !Array.isArray(value.parts)
-    ) {
-        return null
-    }
-
-    const parts = value.parts.flatMap((part) => {
-        if (
-            !isRecord(part) ||
-            typeof part.slotKey !== "string" ||
-            part.slotKey.length === 0
-        ) {
-            return []
-        }
-
-        const partId = getStoredPartId(part.partId)
-
-        if (
-            partId === null ||
-            typeof part.price !== "number" ||
-            !Number.isSafeInteger(part.price) ||
-            part.price < 0 ||
-            typeof part.weight !== "number" ||
-            !Number.isSafeInteger(part.weight) ||
-            part.weight < 0
-        ) {
-            return []
-        }
-
-        return [{
-            slotKey: part.slotKey,
-            partId: PART_ID_ALIASES[partId] ?? partId,
-            price: part.price,
-            weight: part.weight,
-        }]
-    })
-
-    return {id: value.id, name: value.name, parts}
 }
 
 export function loadSimulatorState(): StoredSimulatorState | null {
@@ -201,13 +152,7 @@ export function loadSimulatorState(): StoredSimulatorState | null {
     }
 
     for (const storageKey of [STORAGE_KEY, ...LEGACY_STORAGE_KEYS]) {
-        let value: string | null
-
-        try {
-            value = storage.getItem(storageKey)
-        } catch {
-            return null
-        }
+        const value = readItem(storage, storageKey)
 
         if (!value) {
             continue
@@ -224,11 +169,36 @@ export function loadSimulatorState(): StoredSimulatorState | null {
     return null
 }
 
-export function saveSimulatorState(state: SimulatorStorageSource) {
+// 保存済みの形式のまま書き込む。画面の状態から書き込む場合も移行時も同じ経路を使う
+function writeStoredState(
+    storage: Storage,
+    state: StoredSimulatorState,
+): boolean {
+    try {
+        storage.setItem(STORAGE_KEY, JSON.stringify(state))
+    } catch {
+        // Storageへ書き込めない環境では、メモリ上の選択状態だけを維持する
+        return false
+    }
+
+    // 保存自体は成功しているため、旧キーの後片付けに失敗しても成功として扱う
+    try {
+        for (const storageKey of LEGACY_STORAGE_KEYS) {
+            storage.removeItem(storageKey)
+        }
+    } catch {
+        // 後片付けに失敗しても、保存した内容は有効
+    }
+
+    return true
+}
+
+// 構成の選択を保存する。保存できたかを返し、失敗時は画面側で知らせられるようにする。
+export function saveSimulatorState(state: SimulatorStorageSource): boolean {
     const storage = getLocalStorage()
 
     if (!storage) {
-        return
+        return false
     }
 
     const configs = Object.fromEntries(
@@ -242,59 +212,198 @@ export function saveSimulatorState(state: SimulatorStorageSource) {
         ]),
     ) as StoredConfigStates
 
-    // 追加構成と並び順は別の更新経路で保存するため、現在値を引き継ぐ。
-    const current = loadSimulatorState()
+    // キー分割前の追加構成が残っていれば先に移行し、上書きで失わないようにする。
+    // 移行に失敗した場合は、旧データを消さないよう書き換えない。
+    if (migrateLegacyCollection(storage).status === "failed") {
+        return false
+    }
 
-    try {
-        storage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-                activeConfigId: state.activeConfigId,
-                configs,
-                savedBuilds: current?.savedBuilds ?? [],
-                order: current?.order ?? [],
-            } satisfies StoredSimulatorState),
-        )
-        for (const storageKey of LEGACY_STORAGE_KEYS) {
-            storage.removeItem(storageKey)
-        }
-    } catch {
-        // Storageへ書き込めない環境では、メモリ上の選択状態だけを維持する
+    return writeStoredState(storage, {
+        activeConfigId: state.activeConfigId,
+        configs,
+    })
+}
+
+// 統合で削除した旧パーツIDを、残したIDへ読み替える
+function migratePartIdAliases(
+    collection: LocalConfigCollection,
+): LocalConfigCollection {
+    return {
+        savedBuilds: collection.savedBuilds.map((build) => ({
+            ...build,
+            parts: build.parts.map((part) => ({
+                ...part,
+                partId: PART_ID_ALIASES[part.partId] ?? part.partId,
+            })),
+        })),
+        order: collection.order,
     }
 }
 
-// 未ログイン時の追加構成と並び順を保存する。構成の選択は画面側の保存に任せる。
-export function saveLocalConfigCollection(
-    savedBuilds: StoredSavedBuild[],
-    order: string[],
-) {
+// 保存された追加構成と並び順を取り出す。キー分割前の形式も同じ形で読める
+function parseCollection(value: string): LocalConfigCollection | null {
+    try {
+        const storedState: unknown = JSON.parse(value)
+
+        if (!isRecord(storedState)) {
+            return null
+        }
+
+        if (
+            !Array.isArray(storedState.savedBuilds) &&
+            !Array.isArray(storedState.order)
+        ) {
+            return null
+        }
+
+        const collection: LocalConfigCollection = {
+            savedBuilds: normalizeSavedBuilds(storedState.savedBuilds),
+            order: normalizeConfigOrder(storedState.order),
+        }
+
+        return migratePartIdAliases(collection)
+    } catch {
+        return null
+    }
+}
+
+// 追加構成と並び順を読み込む。壊れた項目は読み飛ばして、正常な項目だけを返す。
+export function loadLocalConfigCollection(): LocalConfigCollection {
     const storage = getLocalStorage()
 
     if (!storage) {
-        return
+        return emptyCollection()
     }
 
-    const current = loadSimulatorState()
-    const configs: StoredConfigStates = current?.configs ?? Object.fromEntries(
-        CONFIG_IDS.map((configId) => [configId, {}]),
-    ) as StoredConfigStates
+    const value = readItem(storage, COLLECTION_STORAGE_KEY)
+
+    // 項目の型が壊れている場合は、移行元の内容で置き換えられるよう移行へ進む
+    if (value && hasStoredCollection(value)) {
+        const collection = parseCollection(value)
+
+        if (collection) {
+            return collection
+        }
+    }
+
+    // キー分割前のデータが残っていれば、新しいキーへ引き継ぐ。
+    const migration = migrateLegacyCollection(storage)
+
+    if (migration.status === "failed") {
+        // 移行できなくても、画面には旧データを見せる（次回の読み込みで再試行する）
+        return migration.collection
+    }
+
+    if (migration.status === "none") {
+        return emptyCollection()
+    }
+
+    // 移行元からは追加構成の項目を消し、古い内容が再び読まれないようにする
+    const state = parseStoredState(migration.source)
+
+    if (state) {
+        writeStoredState(storage, state)
+    }
+
+    return migration.collection
+}
+
+type LegacyMigration =
+    | {status: "none"}
+    | {status: "migrated"; collection: LocalConfigCollection; source: string}
+    // 新しいキーへ保存できなかった場合も、読み込んだ内容は呼び出し側へ返す
+    | {status: "failed"; collection: LocalConfigCollection}
+
+// 既存データとして扱えるかは、追加構成と並び順の両方が配列であることまで確認する
+function hasStoredCollection(value: string): boolean {
+    try {
+        const parsed: unknown = JSON.parse(value)
+
+        return isRecord(parsed) &&
+            Array.isArray(parsed.savedBuilds) &&
+            Array.isArray(parsed.order)
+    } catch {
+        return false
+    }
+}
+
+// キー分割前の保存内容(1つのキーに追加構成も入っていた形式)を新しいキーへ移す。
+// 新しいキーに既にデータがあれば移行せず、古い値で上書きしない。
+function migrateLegacyCollection(storage: Storage): LegacyMigration {
+    const existingValue = readItem(storage, COLLECTION_STORAGE_KEY)
+
+    // 壊れた内容は「データがある」とみなさず、移行元の内容で置き換える
+    if (existingValue !== null && hasStoredCollection(existingValue)) {
+        return {status: "none"}
+    }
+
+    const legacyValue = readItem(storage, STORAGE_KEY)
+
+    if (!legacyValue) {
+        return {status: "none"}
+    }
+
+    const collection = parseCollection(legacyValue)
+
+    if (!collection) {
+        return {status: "none"}
+    }
+
+    if (!saveLocalConfigCollection(collection.savedBuilds, collection.order)) {
+        // 保存できなかった場合は移行元をそのまま残し、次回もう一度試す
+        return {status: "failed", collection}
+    }
+
+    return {status: "migrated", collection, source: legacyValue}
+}
+
+// 追加構成と並び順を保存する。保存できたかを返し、失敗時は画面側で知らせられるようにする。
+export function saveLocalConfigCollection(
+    savedBuilds: StoredSavedBuild[],
+    order: string[],
+): boolean {
+    const storage = getLocalStorage()
+
+    if (!storage) {
+        return false
+    }
+
+    // 画面から渡された値も、保存形式と同じルールで整えてから書き込む。
+    const collection: LocalConfigCollection = {
+        savedBuilds: normalizeSavedBuilds(savedBuilds),
+        order: normalizeConfigOrder(order),
+    }
 
     try {
-        storage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-                activeConfigId: current?.activeConfigId ?? CONFIG_IDS[0],
-                configs,
-                savedBuilds,
-                order,
-            } satisfies StoredSimulatorState),
-        )
-        for (const storageKey of LEGACY_STORAGE_KEYS) {
-            storage.removeItem(storageKey)
-        }
+        storage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collection))
+
+        return true
     } catch {
-        // Storageへ書き込めない環境では、メモリ上の状態だけを維持する
+        // 容量超過などで書き込めない場合は、メモリ上の状態だけを維持する
+        return false
     }
+}
+
+// 別タブでの保存を検知し、呼び出し側の状態を最新へ追従させる
+export function subscribeToLocalConfigChanges(
+    listener: (collection: LocalConfigCollection) => void,
+): () => void {
+    if (typeof window === "undefined") {
+        return () => {}
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+        // 追加構成の更新と、Storage全体のclearのときだけ一覧を取り直す
+        if (event.key !== null && event.key !== COLLECTION_STORAGE_KEY) {
+            return
+        }
+
+        listener(loadLocalConfigCollection())
+    }
+
+    window.addEventListener("storage", handleStorage)
+
+    return () => window.removeEventListener("storage", handleStorage)
 }
 
 export function clearSimulatorState() {
@@ -306,6 +415,7 @@ export function clearSimulatorState() {
 
     try {
         storage.removeItem(STORAGE_KEY)
+        storage.removeItem(COLLECTION_STORAGE_KEY)
         for (const storageKey of LEGACY_STORAGE_KEYS) {
             storage.removeItem(storageKey)
         }

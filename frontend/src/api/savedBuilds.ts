@@ -8,7 +8,7 @@ import {
 // サーバー側と同じ保存上限をUI表示にも利用する
 export const MAX_SAVED_BUILDS = 20
 const FIXED_CONFIG_COUNT = 4
-const MAX_PARTS_PER_BUILD = 100
+export const MAX_PARTS_PER_BUILD = 100
 const MAX_SAVED_BUILD_ID_LENGTH = 200
 const MAX_TIMESTAMP_LENGTH = 64
 
@@ -99,7 +99,7 @@ async function throwApiError(
 
 // DB由来のIDを画面へ流す前に、URLへ安全に渡せる長さと形式を確認。
 // 実DBはUUIDだが、移行処理やテスト用リポジトリの不透明なIDも扱えるようにする。
-function isSavedBuildId(value: unknown): value is string {
+export function isSavedBuildId(value: unknown): value is string {
     return typeof value === "string" &&
         value.length > 0 &&
         value.length <= MAX_SAVED_BUILD_ID_LENGTH &&
