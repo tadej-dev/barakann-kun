@@ -26,8 +26,6 @@ function createLocalStorage() {
 function createState(): StoredSimulatorState {
     return {
         activeConfigId: "1",
-        savedBuilds: [],
-        order: [],
         configs: {
             "1": {
                 frame: 10,
