@@ -44,7 +44,7 @@ describe("savedBuilds API", () => {
 
         await expect(fetchSavedBuilds()).resolves.toEqual([BUILD])
         expect(fetchMock).toHaveBeenCalledWith(
-            "/api/builds?scope=all",
+            "/api/builds",
             expect.objectContaining({credentials: "same-origin"}),
         )
     })

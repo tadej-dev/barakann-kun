@@ -236,7 +236,7 @@ export async function fetchSavedBuilds(
     signal?: AbortSignal,
 ): Promise<SavedBuild[]> {
     // 一覧取得はCookieセッションだけを使い、レスポンスは構造検証後に返す。
-    const response = await fetch("/api/builds?scope=all", {
+    const response = await fetch("/api/builds", {
         credentials: "same-origin",
         signal,
         headers: {Accept: "application/json"},
@@ -259,7 +259,7 @@ export async function createSavedBuild(
     // D1の保存APIはCookie認証に加えてCSRFトークンを要求する
     const csrfToken = await fetchCsrfToken()
     // 作成操作では、入力名と選択中スロットを同じリクエストへまとめる。
-    const response = await fetch("/api/builds?scope=all", {
+    const response = await fetch("/api/builds", {
         method: "POST",
         credentials: "same-origin",
         signal,

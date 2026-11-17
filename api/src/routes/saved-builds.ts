@@ -119,19 +119,12 @@ savedBuildsRoute.get("/", async (context) => {
         return unauthenticated(context)
     }
 
-    // scope=all は固定枠を含む全構成を返す(1〜20件のモデル用)
-    const scopeAll = context.req.query("scope") === "all"
     let builds: SavedBuild[]
 
     try {
-        if (scopeAll) {
-            // 構成が1件も無い場合は、既定の構成を用意する
-            await context.var.savedBuildRepository.ensureDefault(userId)
-        }
-
-        builds = scopeAll
-            ? await context.var.savedBuildRepository.listAll(userId)
-            : await context.var.savedBuildRepository.list(userId)
+        // 構成が1件も無い場合は、初期表示用の構成を用意する
+        await context.var.savedBuildRepository.ensureDefault(userId)
+        builds = await context.var.savedBuildRepository.listAll(userId)
     } catch (error) {
         const response = migrationResponse(context, error)
 
@@ -169,10 +162,7 @@ savedBuildsRoute.post("/", async (context) => {
 
     try {
         // 早期応答用に件数を確認し実際の上限判定はD1側でも行う
-        const scopeAll = context.req.query("scope") === "all"
-        const savedBuildCount = scopeAll
-            ? await context.var.savedBuildRepository.countAll(userId)
-            : await context.var.savedBuildRepository.count(userId)
+        const savedBuildCount = await context.var.savedBuildRepository.countAll(userId)
 
         if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
             return savedBuildLimitExceeded(context)

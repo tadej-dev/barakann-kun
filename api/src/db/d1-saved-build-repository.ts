@@ -13,7 +13,6 @@ import {
     MissingSavedBuildPartsError,
     SavedBuildLimitExceededError,
 } from "./saved-build-repository"
-import {CONFIG_SLOT_IDS} from "./config-slot-repository"
 
 type SavedBuildRow = {
     id: string
@@ -56,20 +55,6 @@ async function queryRows<T>(
 export class D1SavedBuildRepository implements SavedBuildRepository {
     // 保存構成の所有者条件と世代条件をすべての操作で統一する
     constructor(private readonly database: D1Database) {}
-
-    async count(userId: string): Promise<number> {
-        // 追加構成の件数を取得して固定スロット4件と合算する
-        const rows = await queryRows<CountRow>(
-            this.database,
-            `SELECT COUNT(*) AS count
-             FROM saved_builds
-             WHERE user_id = ? AND config_slot IS NULL`,
-            [userId],
-        )
-
-        // 構成1〜4は固定の保存枠として常に確保し、追加構成の上限を同じ枠で判定する
-        return (rows[0]?.count ?? 0) + CONFIG_SLOT_IDS.length
-    }
 
     async countAll(userId: string): Promise<number> {
         // 固定枠を含む全構成の件数を数える
@@ -123,28 +108,13 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // 1件も無い場合は、既定の構成を1件作る
         await this.database.prepare(
             `INSERT INTO saved_builds (
-                 id, user_id, name, version, is_default, created_at, updated_at,
-                 config_slot
+                 id, user_id, name, version, is_default, created_at, updated_at
              )
-             SELECT ?, ?, ?, 1, 1, ?, ?, '1'
+             SELECT ?, ?, ?, 1, 1, ?, ?
              WHERE NOT EXISTS (
                  SELECT 1 FROM saved_builds WHERE user_id = ?
              )`,
         ).bind(id, userId, "構成1", now, now, userId).run()
-    }
-
-    async list(userId: string): Promise<SavedBuild[]> {
-        // 固定スロットは別APIで扱うため追加構成だけを取得する
-        const buildRows = await queryRows<SavedBuildRow>(
-            this.database,
-            `SELECT id, name, version, created_at, updated_at, is_default
-             FROM saved_builds
-             WHERE user_id = ? AND config_slot IS NULL
-             ORDER BY updated_at DESC, id ASC`,
-            [userId],
-        )
-
-        return this.attachParts(buildRows)
     }
 
     async findById(

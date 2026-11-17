@@ -51,11 +51,9 @@ export type DeleteSavedBuildResult =
 // 保存構成APIからDB層へ渡す契約
 export interface SavedBuildRepository {
     // ルート層からSQLを隠し所有者条件を各操作で統一する
-    count(userId: string): Promise<number>
-    // 固定枠を含む全構成の件数(1〜20件のモデル用)
+    // 全構成の件数(1〜20件のモデル)
     countAll(userId: string): Promise<number>
-    list(userId: string): Promise<SavedBuild[]>
-    // 固定枠を含む全構成の一覧(1〜20件のモデル用)
+    // 全構成の一覧
     listAll(userId: string): Promise<SavedBuild[]>
     // 既定の構成が無ければ作る。既存の行がある場合は最も古い行を既定にする
     ensureDefault(userId: string): Promise<void>
@@ -136,7 +134,7 @@ export function isMissingSavedBuildSchemaError(error: unknown): boolean {
         return false
     }
 
-    if (/no such (table|column):\s*(saved_builds|saved_build_parts|config_slot)/i.test(error.message)) {
+    if (/no such (table|column):\s*(saved_builds|saved_build_parts)/i.test(error.message)) {
         return true
     }
 
