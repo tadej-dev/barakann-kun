@@ -119,11 +119,19 @@ savedBuildsRoute.get("/", async (context) => {
         return unauthenticated(context)
     }
 
+    // scope=all は固定枠を含む全構成を返す(1〜20件のモデル用)
+    const scopeAll = context.req.query("scope") === "all"
     let builds: SavedBuild[]
 
     try {
-        // 固定スロットを除いた追加構成の一覧取得はRepositoryへ任せる
-        builds = await context.var.savedBuildRepository.list(userId)
+        if (scopeAll) {
+            // 構成が1件も無い場合は、既定の構成を用意する
+            await context.var.savedBuildRepository.ensureDefault(userId)
+        }
+
+        builds = scopeAll
+            ? await context.var.savedBuildRepository.listAll(userId)
+            : await context.var.savedBuildRepository.list(userId)
     } catch (error) {
         const response = migrationResponse(context, error)
 
@@ -161,7 +169,10 @@ savedBuildsRoute.post("/", async (context) => {
 
     try {
         // 早期応答用に件数を確認し実際の上限判定はD1側でも行う
-        const savedBuildCount = await context.var.savedBuildRepository.count(userId)
+        const scopeAll = context.req.query("scope") === "all"
+        const savedBuildCount = scopeAll
+            ? await context.var.savedBuildRepository.countAll(userId)
+            : await context.var.savedBuildRepository.count(userId)
 
         if (savedBuildCount >= MAX_SAVED_BUILDS_PER_USER) {
             return savedBuildLimitExceeded(context)
@@ -463,6 +474,18 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
                 },
             },
             404,
+        )
+    }
+
+    if (result.kind === "default") {
+        return context.json(
+            {
+                error: {
+                    code: "SAVED_BUILD_DEFAULT_UNDELETABLE",
+                    message: "既定の構成は削除できません",
+                },
+            },
+            409,
         )
     }
 
