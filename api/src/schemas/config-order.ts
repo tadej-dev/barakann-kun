@@ -3,8 +3,8 @@ import {z} from "zod"
 // 固定構成と追加構成の表示順を検証
 const configOrderItemsSchema = z
     .array(z.string().trim().min(1).max(200))
-    .min(4)
-    .max(24)
+    .min(1)
+    .max(20)
     .superRefine((items, context) => {
         // 同じ構成キーが複数含まれていないか集合を使って確認する
         const seen = new Set<string>()

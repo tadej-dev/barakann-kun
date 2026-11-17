@@ -134,6 +134,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         version: 1,
         createdAt: "2026-08-05T00:00:00.000Z",
         updatedAt: "2026-08-05T00:00:00.000Z",
+        isDefault: false,
         parts: [{
             slotKey: "frame",
             partId: 1,
@@ -142,6 +143,9 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }],
     }]
     lastUserId: string | null = null
+    lastListScope: "legacy" | "all" = "legacy"
+    ensuredDefault = false
+    allCount = 1
     lastParts: SavedBuildPartInput[] = []
     buildCount = 1
 
@@ -151,10 +155,29 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         return userId === "user-1" ? this.buildCount : 0
     }
 
-    async list(userId: string): Promise<SavedBuild[]> {
+    async countAll(userId: string): Promise<number> {
         this.lastUserId = userId
 
+        return userId === "user-1" ? this.allCount : 0
+    }
+
+    async list(userId: string): Promise<SavedBuild[]> {
+        this.lastUserId = userId
+        this.lastListScope = "legacy"
+
         return userId === "user-1" ? this.builds : []
+    }
+
+    async listAll(userId: string): Promise<SavedBuild[]> {
+        this.lastUserId = userId
+        this.lastListScope = "all"
+
+        return userId === "user-1" ? this.builds : []
+    }
+
+    async ensureDefault(userId: string): Promise<void> {
+        this.lastUserId = userId
+        this.ensuredDefault = true
     }
 
     async findById(userId: string, buildId: string): Promise<SavedBuild | null> {
@@ -179,6 +202,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             version: 1,
             createdAt: "2026-08-05T00:00:00.000Z",
             updatedAt: "2026-08-05T00:00:00.000Z",
+            isDefault: false,
             parts: parts.map((part) => ({
                 ...part,
                 price: 200000,
@@ -252,6 +276,12 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         version: number,
     ): Promise<DeleteSavedBuildResult> {
         this.lastUserId = userId
+
+        const target = this.builds.find((build) => build.id === buildId)
+
+        if (target?.isDefault) {
+            return {kind: "default"}
+        }
 
         if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
             return {kind: "not_found"}
@@ -957,6 +987,30 @@ describe("config order API", () => {
         expect(configOrderRepository.order).toEqual(nextOrder)
     })
 
+    // 構成が1件でも表示順を保存できる(1〜20件のモデル)
+    it("accepts an order with a single item", async () => {
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
+        const response = await app.request(
+            "/api/config-order",
+            {
+                method: "PUT",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    items: ["config:1"],
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({items: ["config:1"]})
+    })
+
     it("rejects an order without a valid CSRF token", async () => {
         const response = await app.request(
             "/api/config-order",
@@ -1126,6 +1180,89 @@ describe("saved builds API", () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual(savedBuildRepository.builds)
         expect(savedBuildRepository.lastUserId).toBe("user-1")
+    })
+
+    // scope=all は固定枠を含む全構成を返し、構成が無ければ既定を用意する
+    it("lists all configs with scope=all", async () => {
+        savedBuildRepository.ensuredDefault = false
+
+        const response = await app.request(
+            "/api/builds?scope=all",
+            authenticatedRequest,
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual(savedBuildRepository.builds)
+        expect(savedBuildRepository.ensuredDefault).toBe(true)
+        expect(savedBuildRepository.lastListScope).toBe("all")
+    })
+
+    // scope=all の作成は、固定枠を含めた20件で上限を判定する
+    // 既定の構成は削除できない
+    it("rejects deleting the default config", async () => {
+        const defaultRepository = new TestSavedBuildRepository()
+        defaultRepository.builds[0]!.isDefault = true
+        const defaultApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: defaultRepository,
+        })
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(defaultApp, bindings)
+        const response = await defaultApp.request(
+            `/api/builds/${defaultRepository.builds[0]!.id}`,
+            {
+                method: "DELETE",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    version: 1,
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toMatchObject({
+            error: {code: "SAVED_BUILD_DEFAULT_UNDELETABLE"},
+        })
+    })
+
+    it("rejects a new config when all configs reached the limit", async () => {
+        const limitedRepository = new TestSavedBuildRepository()
+        limitedRepository.allCount = 20
+        const limitedApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: limitedRepository,
+        })
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(limitedApp, bindings)
+        const response = await limitedApp.request(
+            "/api/builds?scope=all",
+            {
+                method: "POST",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "追加",
+                    parts: [],
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(409)
+        expect(await response.json()).toMatchObject({
+            error: {code: "SAVED_BUILD_LIMIT_EXCEEDED"},
+        })
     })
 
     it("returns migration guidance when saved-build schema is unavailable", async () => {

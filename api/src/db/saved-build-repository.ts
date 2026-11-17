@@ -27,6 +27,8 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
+    // 削除できない既定の構成かどうか。ユーザーごとに1件だけ持つ
+    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
@@ -44,12 +46,20 @@ export type DeleteSavedBuildResult =
     | {kind: "deleted"}
     | {kind: "not_found"}
     | {kind: "conflict"}
+    // 既定の構成は削除できない
+    | {kind: "default"}
 
 // 保存構成APIからDB層へ渡す契約
 export interface SavedBuildRepository {
     // ルート層からSQLを隠し所有者条件を各操作で統一する
     count(userId: string): Promise<number>
+    // 固定枠を含む全構成の件数(1〜20件のモデル用)
+    countAll(userId: string): Promise<number>
     list(userId: string): Promise<SavedBuild[]>
+    // 固定枠を含む全構成の一覧(1〜20件のモデル用)
+    listAll(userId: string): Promise<SavedBuild[]>
+    // 既定の構成が無ければ作る。既存の行がある場合は最も古い行を既定にする
+    ensureDefault(userId: string): Promise<void>
     findById(userId: string, buildId: string): Promise<SavedBuild | null>
     create(
         userId: string,

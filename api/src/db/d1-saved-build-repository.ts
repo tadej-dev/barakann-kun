@@ -21,6 +21,7 @@ type SavedBuildRow = {
     version: number
     created_at: string
     updated_at: string
+    is_default: number
 }
 
 type SavedBuildPartRow = {
@@ -70,11 +71,73 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         return (rows[0]?.count ?? 0) + CONFIG_SLOT_IDS.length
     }
 
+    async countAll(userId: string): Promise<number> {
+        // 固定枠を含む全構成の件数を数える
+        const rows = await queryRows<CountRow>(
+            this.database,
+            `SELECT COUNT(*) AS count
+             FROM saved_builds
+             WHERE user_id = ?`,
+            [userId],
+        )
+
+        return rows[0]?.count ?? 0
+    }
+
+    async listAll(userId: string): Promise<SavedBuild[]> {
+        // 固定枠か追加枠かを問わず、すべての構成を返す
+        const buildRows = await queryRows<SavedBuildRow>(
+            this.database,
+            `SELECT id, name, version, created_at, updated_at, is_default
+             FROM saved_builds
+             WHERE user_id = ?
+             ORDER BY updated_at DESC, id ASC`,
+            [userId],
+        )
+
+        return this.attachParts(buildRows)
+    }
+
+    async ensureDefault(userId: string): Promise<void> {
+        const now = new Date().toISOString()
+        const id = crypto.randomUUID()
+
+        // 行はあるが既定が無い場合は、最も古い構成を既定にする
+        await this.database.prepare(
+            `UPDATE saved_builds
+             SET is_default = 1
+             WHERE id = (
+                 SELECT id
+                 FROM saved_builds
+                 WHERE user_id = ?
+                 ORDER BY created_at, id
+                 LIMIT 1
+             )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM saved_builds
+                   WHERE user_id = ? AND is_default = 1
+               )`,
+        ).bind(userId, userId).run()
+
+        // 1件も無い場合は、既定の構成を1件作る
+        await this.database.prepare(
+            `INSERT INTO saved_builds (
+                 id, user_id, name, version, is_default, created_at, updated_at,
+                 config_slot
+             )
+             SELECT ?, ?, ?, 1, 1, ?, ?, '1'
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM saved_builds WHERE user_id = ?
+             )`,
+        ).bind(id, userId, "構成1", now, now, userId).run()
+    }
+
     async list(userId: string): Promise<SavedBuild[]> {
         // 固定スロットは別APIで扱うため追加構成だけを取得する
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at
+            `SELECT id, name, version, created_at, updated_at, is_default
              FROM saved_builds
              WHERE user_id = ? AND config_slot IS NULL
              ORDER BY updated_at DESC, id ASC`,
@@ -91,9 +154,9 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // IDと所有者を同時に指定して他ユーザーの構成を取得させない
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at
+            `SELECT id, name, version, created_at, updated_at, is_default
              FROM saved_builds
-             WHERE user_id = ? AND id = ? AND config_slot IS NULL`,
+             WHERE user_id = ? AND id = ?`,
             [userId, buildId],
         )
 
@@ -120,7 +183,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                  WHERE (
                      SELECT COUNT(*)
                      FROM saved_builds
-                     WHERE user_id = ? AND config_slot IS NULL
+                     WHERE user_id = ?
                  ) < ?`,
             ).bind(
                 id,
@@ -129,7 +192,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                 now,
                 now,
                 userId,
-                MAX_SAVED_BUILDS_PER_USER - CONFIG_SLOT_IDS.length,
+                MAX_SAVED_BUILDS_PER_USER,
             ),
             ...parts.map((part) => {
                 const snapshot = snapshots.get(part.partId)
@@ -193,7 +256,6 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             FROM saved_builds
             WHERE id = ?
               AND user_id = ?
-              AND config_slot IS NULL
               AND version = ?
               AND updated_at = ?
         )`
@@ -202,8 +264,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             this.database.prepare(
                  `UPDATE saved_builds
                  SET name = ?, version = version + 1, updated_at = ?
-                 WHERE id = ? AND user_id = ? AND config_slot IS NULL
-                   AND version = ?`,
+                 WHERE id = ? AND user_id = ? AND version = ?`,
             ).bind(name, now, buildId, userId, version),
             this.database.prepare(
                 `DELETE FROM saved_build_parts
@@ -273,8 +334,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         const result = await this.database.prepare(
             `UPDATE saved_builds
              SET name = ?, version = version + 1, updated_at = ?
-             WHERE id = ? AND user_id = ? AND config_slot IS NULL
-               AND version = ?`,
+             WHERE id = ? AND user_id = ? AND version = ?`,
         ).bind(name, now, buildId, userId, version).run()
 
         if (result.meta.changes === 0) {
@@ -299,10 +359,10 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         buildId: string,
         version: number,
     ): Promise<DeleteSavedBuildResult> {
-        // 指定versionと一致する所有中の追加構成だけを削除する
+        // 既定の構成は削除できない。それ以外は指定versionと一致すれば削除する
         const result = await this.database.prepare(
             `DELETE FROM saved_builds
-             WHERE id = ? AND user_id = ? AND config_slot IS NULL
+             WHERE id = ? AND user_id = ? AND is_default = 0
                AND version = ?`,
         ).bind(buildId, userId, version).run()
 
@@ -312,9 +372,13 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
 
         const currentBuild = await this.findById(userId, buildId)
 
-        return currentBuild
-            ? {kind: "conflict"}
-            : {kind: "not_found"}
+        if (!currentBuild) {
+            return {kind: "not_found"}
+        }
+
+        return currentBuild.isDefault
+            ? {kind: "default"}
+            : {kind: "conflict"}
     }
 
     // パーツIDの存在・カテゴリー・対応位置を検証し、保存時点の価格・重量を取得
@@ -359,6 +423,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
+            isDefault: row.is_default === 1,
             parts: partsByBuildId.get(row.id) ?? [],
         }))
     }
