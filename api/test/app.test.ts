@@ -10,12 +10,6 @@ import type {
 import type {CatalogRepository} from "../src/db/catalog-repository"
 import type {ConfigOrderRepository} from "../src/db/config-order-repository"
 import type {
-    ConfigSlot,
-    ConfigSlotId,
-    ConfigSlotMutationResult,
-    ConfigSlotRepository,
-} from "../src/db/config-slot-repository"
-import type {
     DeleteSavedBuildResult,
     SavedBuild,
     SavedBuildPartInput,
@@ -147,25 +141,11 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     ensuredDefault = false
     allCount = 1
     lastParts: SavedBuildPartInput[] = []
-    buildCount = 1
-
-    async count(userId: string): Promise<number> {
-        this.lastUserId = userId
-
-        return userId === "user-1" ? this.buildCount : 0
-    }
 
     async countAll(userId: string): Promise<number> {
         this.lastUserId = userId
 
         return userId === "user-1" ? this.allCount : 0
-    }
-
-    async list(userId: string): Promise<SavedBuild[]> {
-        this.lastUserId = userId
-        this.lastListScope = "legacy"
-
-        return userId === "user-1" ? this.builds : []
     }
 
     async listAll(userId: string): Promise<SavedBuild[]> {
@@ -312,112 +292,6 @@ class TestAccountRepository implements AccountRepository {
 }
 
 // 構成スロットAPIのルート検証用リポジトリ
-class TestConfigSlotRepository implements ConfigSlotRepository {
-    readonly slots: ConfigSlot[] = ["1", "2", "3", "4"].map((configId) => ({
-        configId: configId as ConfigSlotId,
-        name: `構成${configId}`,
-        version: 0,
-        updatedAt: null,
-        parts: [],
-    }))
-
-    async list(userId: string): Promise<ConfigSlot[]> {
-        return userId === "user-1" ? this.slots : []
-    }
-
-    async rename(
-        userId: string,
-        configId: ConfigSlotId,
-        version: number,
-        name: string,
-    ): Promise<ConfigSlotMutationResult> {
-        if (userId !== "user-1") {
-            return {kind: "not_found"}
-        }
-
-        const slot = this.slots.find((candidate) => candidate.configId === configId)
-
-        if (!slot) {
-            return {kind: "not_found"}
-        }
-
-        if (slot.version !== version) {
-            return {kind: "conflict"}
-        }
-
-        Object.assign(slot, {
-            name,
-            version: version + 1,
-            updatedAt: "2026-08-16T00:00:00.000Z",
-        })
-
-        return {kind: "updated", slot}
-    }
-
-    async save(
-        userId: string,
-        configId: ConfigSlotId,
-        version: number,
-        name: string,
-        parts: SavedBuildPartInput[],
-    ): Promise<ConfigSlotMutationResult> {
-        if (userId !== "user-1") {
-            return {kind: "not_found"}
-        }
-
-        const slot = this.slots.find((candidate) => candidate.configId === configId)
-
-        if (!slot) {
-            return {kind: "not_found"}
-        }
-
-        if (slot.version !== version) {
-            return {kind: "conflict"}
-        }
-
-        Object.assign(slot, {
-            name,
-            version: version + 1,
-            updatedAt: "2026-08-16T00:00:00.000Z",
-            parts: parts.map((part) => ({
-                ...part,
-                price: 100,
-                weight: 100,
-            })),
-        })
-
-        return {kind: "updated", slot}
-    }
-
-    async clear(
-        userId: string,
-        configId: ConfigSlotId,
-        version: number,
-    ): Promise<ConfigSlotMutationResult> {
-        if (userId !== "user-1") {
-            return {kind: "not_found"}
-        }
-
-        const slot = this.slots.find((candidate) => candidate.configId === configId)
-
-        if (!slot) {
-            return {kind: "not_found"}
-        }
-
-        if (slot.version !== version) {
-            return {kind: "conflict"}
-        }
-
-        Object.assign(slot, {
-            version: version + 1,
-            updatedAt: "2026-08-16T00:00:00.000Z",
-            parts: [],
-        })
-
-        return {kind: "updated", slot}
-    }
-}
-
 // 構成表示順APIのルート検証用リポジトリ
 class TestConfigOrderRepository implements ConfigOrderRepository {
     order = ["config:1", "config:2", "config:3", "config:4"]
@@ -770,159 +644,6 @@ describe("authentication API", () => {
     })
 })
 
-// 構成1〜4の名前・選択パーツ同期API検証
-describe("config slot API", () => {
-    const configSlotRepository = new TestConfigSlotRepository()
-    const app = createApp({
-        catalogRepository: createRepository(),
-        authAdapter: createAuthAdapter(),
-        configSlotRepository,
-    })
-
-    it("returns four default config slots for the authenticated user", async () => {
-        const response = await app.request(
-            "/api/config-slots",
-            {
-                headers: {
-                    cookie: "authjs.session-token=test-session-token",
-                },
-            },
-            createAuthBindings(),
-        )
-
-        expect(response.status).toBe(200)
-        expect(await response.json()).toEqual(configSlotRepository.slots)
-    })
-
-    it("renames, saves, and clears a config slot with CSRF protection", async () => {
-        const bindings = createAuthBindings()
-        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
-        const renameResponse = await app.request(
-            "/api/config-slots/1",
-            {
-                method: "PATCH",
-                headers: {
-                    cookie: csrf.cookie,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    name: "遠征用",
-                    version: 0,
-                    csrfToken: csrf.csrfToken,
-                }),
-            },
-            bindings,
-        )
-
-        expect(renameResponse.status).toBe(200)
-        expect(await renameResponse.json()).toMatchObject({
-            configId: "1",
-            name: "遠征用",
-            version: 1,
-        })
-
-        const saveResponse = await app.request(
-            "/api/config-slots/1",
-            {
-                method: "PUT",
-                headers: {
-                    cookie: csrf.cookie,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    name: "遠征用",
-                    version: 1,
-                    parts: [{slotKey: "frame", partId: 1}],
-                    csrfToken: csrf.csrfToken,
-                }),
-            },
-            bindings,
-        )
-
-        expect(saveResponse.status).toBe(200)
-        expect(await saveResponse.json()).toMatchObject({
-            configId: "1",
-            name: "遠征用",
-            version: 2,
-            parts: [{slotKey: "frame", partId: 1}],
-        })
-
-        const clearResponse = await app.request(
-            "/api/config-slots/1",
-            {
-                method: "DELETE",
-                headers: {
-                    cookie: csrf.cookie,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    version: 2,
-                    csrfToken: csrf.csrfToken,
-                }),
-            },
-            bindings,
-        )
-
-        expect(clearResponse.status).toBe(200)
-        expect(await clearResponse.json()).toMatchObject({
-            configId: "1",
-            name: "遠征用",
-            version: 3,
-            parts: [],
-        })
-    })
-
-    it("rejects config slot changes without a valid CSRF token", async () => {
-        const response = await app.request(
-            "/api/config-slots/1",
-            {
-                method: "PUT",
-                headers: {
-                    cookie: "authjs.session-token=test-session-token",
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    name: "不正な変更",
-                    version: 3,
-                    parts: [],
-                }),
-            },
-            createAuthBindings(),
-        )
-
-        expect(response.status).toBe(403)
-        expect(await response.json()).toMatchObject({
-            error: {code: "INVALID_CSRF_TOKEN"},
-        })
-    })
-
-    it("returns migration guidance instead of a generic 500 when config slots are unavailable", async () => {
-        const migrationApp = createApp({
-            catalogRepository: createRepository(),
-            authAdapter: createAuthAdapter(),
-            configSlotRepository: {
-                list: async () => {
-                    throw new Error("D1_ERROR: no such column: config_slot")
-                },
-            } as unknown as ConfigSlotRepository,
-        })
-        const response = await migrationApp.request(
-            "/api/config-slots",
-            {
-                headers: {
-                    cookie: "authjs.session-token=test-session-token",
-                },
-            },
-            createAuthBindings(),
-        )
-
-        expect(response.status).toBe(503)
-        expect(await response.json()).toMatchObject({
-            error: {code: "CONFIG_SLOT_MIGRATION_REQUIRED"},
-        })
-    })
-})
-
 // 固定構成と追加構成の表示順同期API検証
 describe("config order API", () => {
     const configOrderRepository = new TestConfigOrderRepository()
@@ -1231,8 +952,9 @@ describe("saved builds API", () => {
             catalogRepository: createRepository(),
             authAdapter: createAuthAdapter(),
             savedBuildRepository: {
-                list: async () => {
-                    throw new Error("D1_ERROR: no such column: config_slot")
+                ensureDefault: async () => {},
+                listAll: async () => {
+                    throw new Error("D1_ERROR: no such table: saved_builds")
                 },
             } as unknown as SavedBuildRepository,
         })
@@ -1310,7 +1032,7 @@ describe("saved builds API", () => {
 
     it("rejects a new build when the user reached the storage limit", async () => {
         const limitedRepository = new TestSavedBuildRepository()
-        limitedRepository.buildCount = 20
+        limitedRepository.allCount = 20
         const limitedApp = createApp({
             catalogRepository: createRepository(),
             authAdapter: createAuthAdapter(),

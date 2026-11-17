@@ -17,16 +17,13 @@ import {DEFAULT_DISPLAY_NAME} from "./auth/display-name"
 import type {AccountRepository} from "./db/account-repository"
 import type {CatalogRepository} from "./db/catalog-repository"
 import type {ConfigOrderRepository} from "./db/config-order-repository"
-import type {ConfigSlotRepository} from "./db/config-slot-repository"
 import {D1AccountRepository} from "./db/d1-account-repository"
 import {D1CatalogRepository} from "./db/d1-catalog-repository"
 import {D1ConfigOrderRepository} from "./db/config-order-repository"
-import {D1ConfigSlotRepository} from "./db/config-slot-repository"
 import {D1SavedBuildRepository} from "./db/d1-saved-build-repository"
 import type {SavedBuildRepository} from "./db/saved-build-repository"
 import {categoriesRoute} from "./routes/categories"
 import {configOrderRoute} from "./routes/config-order"
-import {configSlotsRoute} from "./routes/config-slots"
 import {accountRoute} from "./routes/account"
 import {partsRoute} from "./routes/parts"
 import {savedBuildsRoute} from "./routes/saved-builds"
@@ -36,7 +33,6 @@ type AppDependencies = {
     accountRepository?: AccountRepository
     catalogRepository?: CatalogRepository
     configOrderRepository?: ConfigOrderRepository
-    configSlotRepository?: ConfigSlotRepository
     authAdapter?: Adapter
     savedBuildRepository?: SavedBuildRepository
 }
@@ -331,17 +327,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/builds", registerSavedBuildRepository)
     app.use("/api/builds/*", registerSavedBuildRepository)
 
-    // 構成1〜4の同期APIへD1リポジトリを登録
-    const registerConfigSlotRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
-        const repository = dependencies.configSlotRepository
-            ?? new D1ConfigSlotRepository(context.env.DB)
-
-        context.set("configSlotRepository", repository)
-        await next()
-    }
-    app.use("/api/config-slots", registerConfigSlotRepository)
-    app.use("/api/config-slots/*", registerConfigSlotRepository)
-
     // 構成表示順APIへD1リポジトリを登録
     const registerConfigOrderRepository = async (context: Context<AppEnv>, next: () => Promise<void>) => {
         const repository = dependencies.configOrderRepository
@@ -369,7 +354,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.route("/api/account", accountRoute)
     app.route("/api/categories", categoriesRoute)
     app.route("/api/config-order", configOrderRoute)
-    app.route("/api/config-slots", configSlotsRoute)
     app.route("/api/parts", partsRoute)
     app.route("/api/builds", savedBuildsRoute)
 

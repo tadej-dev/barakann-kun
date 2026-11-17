@@ -174,11 +174,11 @@ describe("security-sensitive D1 queries", () => {
         expect(statements[5]?.sql).toContain("users")
     })
 
-    it("保存構成の一覧検索にもユーザーID条件を付ける", async () => {
+    it("保存構成の一覧取得にもユーザーID条件を付ける", async () => {
         const {database, statements} = createDatabaseStub()
         const repository = new D1SavedBuildRepository(database)
 
-        await expect(repository.list("user-2")).resolves.toEqual([])
+        await expect(repository.listAll("user-2")).resolves.toEqual([])
 
         expect(statements[0]?.sql).toContain("WHERE user_id = ?")
         expect(statements[0]?.parameters).toEqual(["user-2"])
@@ -188,10 +188,9 @@ describe("security-sensitive D1 queries", () => {
         const {database, statements} = createDatabaseStub()
         const repository = new D1SavedBuildRepository(database)
 
-        await expect(repository.count("user-3")).resolves.toBe(4)
+        await expect(repository.countAll("user-3")).resolves.toBe(0)
 
         expect(statements[0]?.sql).toContain("WHERE user_id = ?")
-        expect(statements[0]?.sql).toContain("config_slot IS NULL")
         expect(statements[0]?.parameters).toEqual(["user-3"])
     })
 
