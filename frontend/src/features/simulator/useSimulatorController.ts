@@ -370,11 +370,10 @@ export function useSimulatorController({
         })
     }, [activeConfigId, configs, hasRestoredStoredParts])
 
-    // 現在構成の選択済みパーツ
-    const selectedParts = activeSavedBuildId && authUserId
+    // 現在構成の選択済みパーツ。追加構成を選んでいればその内容を使う
+    const selectedParts = activeSavedBuildId
         ? simulatorState.savedBuildParts
         : configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
-    // 未認証時は追加構成IDを無効とし、固定枠の選択だけを表示対象にする。
 
     // 選択済みパーツが占有しているカテゴリー
     const blockedCategoryKeys = useMemo(() => {
@@ -673,7 +672,7 @@ export function useSimulatorController({
     return {
         activeCategory,
         activeConfigId,
-        activeSavedBuildId: authUserId ? activeSavedBuildId : null,
+        activeSavedBuildId,
         activeSlot,
         activeParts,
         autoSaveEnabled: autoSaveEnabled && hasRestoredStoredParts,

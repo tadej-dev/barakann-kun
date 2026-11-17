@@ -5,7 +5,6 @@ import {cleanup, fireEvent, render, screen} from "@testing-library/react"
 import type {ConfigSlot} from "@/api/configSlots"
 import {SidebarProvider} from "@/components/ui/sidebar"
 import {ConfigList} from "@/components/simulator/ConfigList"
-import {orderSlotsByIds} from "@/features/simulator/configSlotOrder"
 import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
 import type {ConfigId} from "@/features/simulator/simulatorTypes"
 
@@ -37,11 +36,36 @@ const guestSlots: ConfigSlot[] = (["1", "2", "3", "4"] as ConfigId[]).map(
     }),
 )
 
+// 未ログイン時の一覧項目（固定枠4件）
+const guestItems = guestSlots.map((slot) => ({
+    key: `config:${slot.configId}`,
+    kind: "slot" as const,
+    slot,
+}))
+
 // 未ログイン時の構成データ。保存系は呼ばれないため空の実装で足りる。
 function createGuestCollection(
-    options: {isAuthLoading?: boolean} = {},
+    options: {isAuthLoading?: boolean; buildName?: string} = {},
 ): ConfigCollection {
     const noop = () => Promise.resolve()
+    const builds = options.buildName
+        ? [{
+            id: "build-1",
+            name: options.buildName,
+            version: 1,
+            createdAt: "",
+            updatedAt: "",
+            parts: [],
+        }]
+        : []
+    const items = [
+        ...guestItems,
+        ...builds.map((build) => ({
+            key: `build:${build.id}`,
+            kind: "build" as const,
+            build,
+        })),
+    ]
 
     return {
         isAuthenticated: false,
@@ -56,7 +80,7 @@ function createGuestCollection(
         clearSlot: noop,
         renameSlot: noop,
         reloadConfigSlots: noop,
-        savedBuilds: [],
+        savedBuilds: builds,
         savedBuildsOperation: null,
         savedBuildsErrorMessage: "",
         isSavedBuildsLoading: false,
@@ -71,10 +95,10 @@ function createGuestCollection(
         hasLoadedConfigOrder: false,
         saveConfigOrder: noop,
         reloadConfigOrder: noop,
-        orderedItems: [],
-        orderedItemKeys: [],
-        totalSavedCount: guestSlots.length,
-        isConfigListReady: false,
+        orderedItems: items,
+        orderedItemKeys: items.map((item) => item.key),
+        totalSavedCount: guestSlots.length + builds.length,
+        isConfigListReady: (options.isAuthLoading ?? false) === false,
         activeConfigName: "構成1",
     } as unknown as ConfigCollection
 }
@@ -84,6 +108,8 @@ function renderConfigList(
         onConfigChange?: (id: ConfigId) => void
         onClearConfig?: (id: ConfigId) => Promise<void>
         isAuthLoading?: boolean
+        buildName?: string
+        onSavedBuildSelect?: (build: {id: string; name: string}) => void
     } = {},
 ) {
     return render(
@@ -92,37 +118,21 @@ function renderConfigList(
                 categories={[]}
                 collection={createGuestCollection({
                     isAuthLoading: options.isAuthLoading,
+                    buildName: options.buildName,
                 })}
                 activeConfigId="1"
                 activeSavedBuildId={null}
-                configStates={{"1": {}, "2": {}, "3": {}, "4": {}}}
                 selectedParts={{}}
                 isSavedBuildLoading={false}
                 savedBuildErrorMessage=""
                 onConfigChange={options.onConfigChange ?? (() => {})}
-                onSavedBuildSelect={() => {}}
+                onSavedBuildSelect={options.onSavedBuildSelect ?? (() => {})}
                 onSavedBuildPrefetch={() => {}}
                 onClearConfig={options.onClearConfig ?? (async () => {})}
             />
         </SidebarProvider>,
     )
 }
-
-describe("orderSlotsByIds", () => {
-    // 並び順のIDに従って構成を並べ替える。
-    it("指定した順に構成を並べ替える", () => {
-        const ordered = orderSlotsByIds(guestSlots, ["4", "2", "3", "1"])
-
-        expect(ordered.map((slot) => slot.configId)).toEqual(["4", "2", "3", "1"])
-    })
-
-    // 未知のIDは無視する（該当しない構成は並びに含まれない）。
-    it("未知のIDは無視する", () => {
-        const ordered = orderSlotsByIds(guestSlots, ["2", "9" as ConfigId])
-
-        expect(ordered.map((slot) => slot.configId)).toEqual(["2"])
-    })
-})
 
 describe("ConfigList（未ログイン時）", () => {
     // ログイン時と同じカード形式で構成1〜4を並べる。
@@ -149,8 +159,8 @@ describe("ConfigList（未ログイン時）", () => {
         expect(screen.getByLabelText("保存枠使用数").textContent).toBe("4 / 20")
     })
 
-    // 追加と一括削除は、ログイン時と同じ位置に無効な状態で表示する。
-    it("追加と一括削除を無効な状態で表示する", () => {
+    // 追加は未ログインでも使え、一括削除は対象を選ぶまで押せない。
+    it("追加を押せて、一括削除は選択まで押せない", () => {
         renderConfigList()
 
         expect(screen.getByText("追加")).toBeTruthy()
@@ -158,13 +168,13 @@ describe("ConfigList（未ログイン時）", () => {
         expect(
             screen.getByRole("button", {name: "新しい構成を追加"})
                 .hasAttribute("disabled"),
-        ).toBe(true)
+        ).toBe(false)
         expect(
             screen.getByRole("button", {name: /一括削除/}).hasAttribute("disabled"),
         ).toBe(true)
     })
 
-    // 認証の確認中も、保存が要る操作はできない。
+    // 認証の確認中は、保存先が決まらないため操作できない。
     it("認証の確認中は追加と一括削除を操作できない", () => {
         renderConfigList({isAuthLoading: true})
 
@@ -239,6 +249,64 @@ describe("ConfigList（未ログイン時）", () => {
         expect(
             screen.queryByRole("button", {name: /構成\d+をクリア/}),
         ).toBeNull()
+    })
+
+    // 追加構成のカードは、未ログインでも名前変更・削除を操作できる。
+    it("追加構成のカードは操作メニューを使える", async () => {
+        renderConfigList({buildName: "通勤用"})
+
+        expect(screen.getByText("通勤用")).toBeTruthy()
+
+        fireEvent.click(
+            screen.getAllByRole("button", {name: "通勤用の操作メニュー"})[0],
+        )
+
+        expect(
+            (await screen.findByText("名前変更")).closest("[role='menuitem']")
+                ?.getAttribute("aria-disabled"),
+        ).not.toBe("true")
+        expect(
+            screen.getByText("削除").closest("[role='menuitem']")
+                ?.getAttribute("aria-disabled"),
+        ).not.toBe("true")
+    })
+
+    // 追加構成のカードを押すと、その構成の読み込みを親へ依頼する。
+    it("追加構成のカードを選ぶと親へ通知する", () => {
+        const onSavedBuildSelect = vi.fn()
+        renderConfigList({buildName: "通勤用", onSavedBuildSelect})
+
+        fireEvent.click(screen.getByText("通勤用"))
+
+        expect(onSavedBuildSelect).toHaveBeenCalledTimes(1)
+        expect(onSavedBuildSelect.mock.calls[0]?.[0]).toMatchObject({
+            id: "build-1",
+            name: "通勤用",
+        })
+    })
+
+    // 追加構成のカードから、名前変更ダイアログを開ける。
+    it("追加構成の名前変更ダイアログを開く", async () => {
+        renderConfigList({buildName: "通勤用"})
+
+        fireEvent.click(
+            screen.getAllByRole("button", {name: "通勤用の操作メニュー"})[0],
+        )
+        fireEvent.click(await screen.findByText("名前変更"))
+
+        expect(await screen.findByText("保存構成の名前を変更")).toBeTruthy()
+    })
+
+    // 追加構成のカードから、削除の確認ダイアログを開ける。
+    it("追加構成の削除ダイアログを開く", async () => {
+        renderConfigList({buildName: "通勤用"})
+
+        fireEvent.click(
+            screen.getAllByRole("button", {name: "通勤用の操作メニュー"})[0],
+        )
+        fireEvent.click(await screen.findByText("削除"))
+
+        expect(await screen.findByText("保存構成を削除")).toBeTruthy()
     })
 
     // カードの選択で、その構成へ切り替える。

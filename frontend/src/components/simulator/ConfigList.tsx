@@ -3,7 +3,6 @@ import type {ReactNode} from "react"
 
 import {AlertDialog} from "@base-ui/react/alert-dialog"
 
-import type {ConfigSlot} from "@/api/configSlots"
 import {MAX_SAVED_BUILDS, type SavedBuild} from "@/api/savedBuilds"
 import type {ComparisonBuild} from "@/components/simulator/BuildComparisonDialog"
 import {ConfigListActions} from "@/components/simulator/config-list/ConfigListActions"
@@ -24,14 +23,9 @@ import {
 import {
     CONFIG_IDS,
     type ConfigId,
-    type ConfigStates,
     type SelectedParts,
 } from "@/features/simulator/simulatorTypes"
-import {orderSlotsByIds} from "@/features/simulator/configSlotOrder"
-import {
-    configSlotItemKey,
-    type ConfigCollection,
-} from "@/features/simulator/useConfigCollection"
+import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
 import {useConfigListController} from "@/features/simulator/useConfigListController"
 import type {Category} from "@/types/category"
 
@@ -41,7 +35,6 @@ type ConfigListProps = {
     collection: ConfigCollection // 構成データ(固定枠・追加構成・表示順)と保存処理
     activeConfigId: ConfigId // 選択中の構成ID
     activeSavedBuildId: string | null // 選択中の追加構成ID
-    configStates: ConfigStates // 構成1〜4の選択パーツ(ログイン前の比較に使う)
     selectedParts: SelectedParts // 現在選択中の構成のパーツ(追加・保存に使う)
     isSavedBuildLoading: boolean // 追加構成の読み込み状態
     savedBuildErrorMessage: string // 追加構成の読み込みエラー
@@ -59,7 +52,6 @@ export function ConfigList({
     collection,
     activeConfigId,
     activeSavedBuildId,
-    configStates,
     selectedParts,
     isSavedBuildLoading,
     savedBuildErrorMessage,
@@ -89,28 +81,12 @@ export function ConfigList({
         onClearConfig,
     })
 
-    // 未ログイン時も、ログイン時と同じカードで構成1〜4を表示する。
-    // 保存先がまだ無いため、名前変更は行わず、並び順は画面内だけで保持する。
-    const guestSlots: ConfigSlot[] = CONFIG_IDS.map((configId) => ({
-        configId,
-        name: `構成${configId}`,
-        version: 0,
-        updatedAt: null,
-        parts: Object.entries(configStates[configId]).map(([slotKey, part]) => ({
-            slotKey,
-            partId: part.id,
-            price: part.price,
-            weight: part.weight,
-        })),
-    }))
-    const [guestOrder, setGuestOrder] = useState<ConfigId[]>(() => [...CONFIG_IDS])
     // 未ログイン時のクリアは、カードの操作メニューから確認して実行する
     const [clearConfirmId, setClearConfirmId] = useState<ConfigId | null>(null)
-    const orderedGuestSlots = orderSlotsByIds(guestSlots, guestOrder)
 
-    // 比較ダイアログに渡す構成。ログイン後は保存済みの構成、ログイン前は手元の構成1〜4。
-    const comparisonBuilds: ComparisonBuild[] = isAuthenticated
-        ? orderedItems.map((item) => item.kind === "slot"
+    // 比較ダイアログに渡す構成。一覧と同じ並び順で渡す
+    const comparisonBuilds: ComparisonBuild[] = orderedItems.map((item) =>
+        item.kind === "slot"
             ? {
                 key: item.key,
                 name: item.slot.name,
@@ -121,12 +97,6 @@ export function ConfigList({
                 name: item.build.name,
                 parts: item.build.parts,
             })
-        // 未ログイン時も、一覧の並び順と同じ順で比較できるようにする
-        : orderedGuestSlots.map((slot) => ({
-            key: configSlotItemKey(slot.configId),
-            name: slot.name,
-            parts: slot.parts,
-        }))
     // 認証確認が終わり、ログインしていない状態か
     const isGuest = !isAuthenticated && !isAuthLoading
     // 一覧表示後の再取得中か(初回は枠の表示で代用する)
@@ -169,7 +139,7 @@ export function ConfigList({
                 <ConfigListActions
                     categories={categories}
                     comparisonBuilds={comparisonBuilds}
-                    isAuthenticated={isAuthenticated}
+                    isAuthLoading={isAuthLoading}
                     canCreate={controller.canCreateSavedBuild}
                     isOperating={controller.isOperating}
                     selectedCount={controller.selectedSavedBuilds.length}
@@ -179,36 +149,92 @@ export function ConfigList({
             </SidebarHeader>
 
             <SidebarContent className="gap-3 px-2 pb-2">
-                {/* ログイン前も同じカードで構成1〜4を並べる */}
-                {isGuest && (
+                {/* 初回の読み込み中(並び順が確定するまで一覧を出さない) */}
+                {(isAuthLoading || !isConfigListReady) && (
+                    <ul
+                        className="grid grid-cols-1 gap-2 p-0"
+                        role="status"
+                        aria-label="構成を読み込んでいます"
+                    >
+                        {CONFIG_IDS.map((configId) => (
+                            <li
+                                key={configId}
+                                className="h-16 animate-pulse rounded-lg border bg-slate-100 group-data-[collapsible=icon]:h-8"
+                            />
+                        ))}
+                    </ul>
+                )}
+
+                {isReloading && (
+                    <p className="text-sm text-muted-foreground group-data-[collapsible=icon]:hidden" role="status">
+                        構成を読み込んでいます…
+                    </p>
+                )}
+
+                {/* 固定枠と追加構成を同じ並び替え対象にする */}
+                {isConfigListReady && (
                     <div className="w-full overflow-hidden rounded-lg">
                         <Sortable
-                            value={orderedGuestSlots}
-                            onValueChange={(next) => setGuestOrder(
-                                next.map((slot) => slot.configId),
-                            )}
-                            getItemValue={(slot) => configSlotItemKey(slot.configId)}
+                            value={orderedItems}
+                            onValueChange={controller.changeConfigOrder}
+                            getItemValue={(item) => item.key}
                             strategy="grid"
                             render={<ul className="grid grid-cols-1 gap-2 p-0" />}
                         >
-                            {orderedGuestSlots.map((slot, index) => (
-                                <ConfigSlotListItem
-                                    key={slot.configId}
-                                    itemKey={configSlotItemKey(slot.configId)}
-                                    slot={slot}
-                                    index={index}
-                                    isActive={slot.configId === activeConfigId}
-                                    isOperating={false}
-                                    // 保存先ができるまでは、名前変更だけを無効にする
-                                    isRenameDisabled
-                                    onSelect={() => onConfigChange(slot.configId)}
-                                    onRename={() => {}}
-                                    onClear={() => setClearConfirmId(slot.configId)}
-                                />
-                            ))}
+                            {orderedItems.map((item, index) => item.kind === "slot"
+                                ? (
+                                    <ConfigSlotListItem
+                                        key={item.key}
+                                        itemKey={item.key}
+                                        slot={item.slot}
+                                        index={index}
+                                        isActive={
+                                            activeSavedBuildId === null &&
+                                            item.slot.configId === activeConfigId
+                                        }
+                                        isOperating={controller.isOperating}
+                                        // 固定枠の名前は保存先が無いため、未ログイン時は変更しない
+                                        isRenameDisabled={isGuest}
+                                        onSelect={() => onConfigChange(item.slot.configId)}
+                                        onRename={() => controller.openNameDialog(item.slot)}
+                                        // 未ログイン時はローカルの選択だけを確認付きで消す
+                                        onClear={() => isGuest
+                                            ? setClearConfirmId(item.slot.configId)
+                                            : controller.openClearConfirmation(item.slot)}
+                                    />
+                                )
+                                : (
+                                    <SavedBuildListItem
+                                        key={item.key}
+                                        itemKey={item.key}
+                                        build={item.build}
+                                        index={index}
+                                        isActive={item.build.id === activeSavedBuildId}
+                                        isOperating={controller.isOperating}
+                                        isChecked={controller.selectedSavedBuildIds.includes(item.build.id)}
+                                        onSelect={() => void onSavedBuildSelect(item.build)}
+                                        onPrefetch={() => onSavedBuildPrefetch(item.build)}
+                                        onSave={() => void controller.saveToSavedBuild(item.build)}
+                                        onRename={() => controller.openRenameSavedBuildDialog(item.build)}
+                                        onDelete={() => controller.openDeleteSavedBuildDialog(item.build)}
+                                        onCheckedChange={(checked) =>
+                                            controller.toggleSavedBuildSelection(item.build.id, checked)}
+                                    />
+                                ))}
                         </Sortable>
                     </div>
                 )}
+
+                <ConfigListNotices
+                    slotsErrorMessage={collection.slotsErrorMessage}
+                    savedBuildsErrorMessage={collection.savedBuildsErrorMessage}
+                    savedBuildErrorMessage={savedBuildErrorMessage}
+                    configOrderErrorMessage={collection.configOrderErrorMessage}
+                    onReloadSavedBuilds={() => void collection.reloadSavedBuilds()}
+                    onReloadConfigOrder={() => void collection.reloadConfigOrder()}
+                />
+
+                {children}
 
                 {/* 未ログイン時のクリアも、確認してから実行する */}
                 {isGuest && clearConfirmId && (
@@ -257,91 +283,6 @@ export function ConfigList({
                     </AlertDialog.Root>
                 )}
 
-                {/* 初回の読み込み中(並び順が確定するまで一覧を出さない) */}
-                {(isAuthLoading || (isAuthenticated && !isConfigListReady)) && (
-                    <ul
-                        className="grid grid-cols-1 gap-2 p-0"
-                        role="status"
-                        aria-label="構成を読み込んでいます"
-                    >
-                        {CONFIG_IDS.map((configId) => (
-                            <li
-                                key={configId}
-                                className="h-16 animate-pulse rounded-lg border bg-slate-100 group-data-[collapsible=icon]:h-8"
-                            />
-                        ))}
-                    </ul>
-                )}
-
-                {isAuthenticated && (
-                    <>
-                        {isReloading && (
-                            <p className="text-sm text-muted-foreground group-data-[collapsible=icon]:hidden" role="status">
-                                構成を読み込んでいます…
-                            </p>
-                        )}
-
-                        {/* 固定枠と追加構成を同じ並び替え対象にする */}
-                        {isConfigListReady && (
-                            <div className="w-full overflow-hidden rounded-lg">
-                                <Sortable
-                                    value={orderedItems}
-                                    onValueChange={controller.changeConfigOrder}
-                                    getItemValue={(item) => item.key}
-                                    strategy="grid"
-                                    render={<ul className="grid grid-cols-1 gap-2 p-0" />}
-                                >
-                                    {orderedItems.map((item, index) => item.kind === "slot"
-                                        ? (
-                                            <ConfigSlotListItem
-                                                key={item.key}
-                                                itemKey={item.key}
-                                                slot={item.slot}
-                                                index={index}
-                                                isActive={
-                                                    activeSavedBuildId === null &&
-                                                    item.slot.configId === activeConfigId
-                                                }
-                                                isOperating={controller.isOperating}
-                                                onSelect={() => onConfigChange(item.slot.configId)}
-                                                onRename={() => controller.openNameDialog(item.slot)}
-                                                onClear={() => controller.openClearConfirmation(item.slot)}
-                                            />
-                                        )
-                                        : (
-                                            <SavedBuildListItem
-                                                key={item.key}
-                                                itemKey={item.key}
-                                                build={item.build}
-                                                index={index}
-                                                isActive={item.build.id === activeSavedBuildId}
-                                                isOperating={controller.isOperating}
-                                                isChecked={controller.selectedSavedBuildIds.includes(item.build.id)}
-                                                onSelect={() => void onSavedBuildSelect(item.build)}
-                                                onPrefetch={() => onSavedBuildPrefetch(item.build)}
-                                                onSave={() => void controller.saveToSavedBuild(item.build)}
-                                                onRename={() => controller.openRenameSavedBuildDialog(item.build)}
-                                                onDelete={() => controller.openDeleteSavedBuildDialog(item.build)}
-                                                onCheckedChange={(checked) =>
-                                                    controller.toggleSavedBuildSelection(item.build.id, checked)}
-                                            />
-                                        ))}
-                                </Sortable>
-                            </div>
-                        )}
-
-                        <ConfigListNotices
-                            slotsErrorMessage={collection.slotsErrorMessage}
-                            savedBuildsErrorMessage={collection.savedBuildsErrorMessage}
-                            savedBuildErrorMessage={savedBuildErrorMessage}
-                            configOrderErrorMessage={collection.configOrderErrorMessage}
-                            onReloadSavedBuilds={() => void collection.reloadSavedBuilds()}
-                            onReloadConfigOrder={() => void collection.reloadConfigOrder()}
-                        />
-
-                        {children}
-                    </>
-                )}
             </SidebarContent>
 
             <ConfigListDialogs controller={controller} />

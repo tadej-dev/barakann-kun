@@ -9,7 +9,10 @@ import {
     type SavedBuild,
     type SavedBuildPartInput,
 } from "@/api/savedBuilds"
-import {toSavedBuildPartInputs} from "@/features/saved-builds/savedBuildMapper"
+import {
+    toSavedBuildPartInputs,
+    toSavedBuildParts,
+} from "@/features/saved-builds/savedBuildMapper"
 import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
 import type {
     ConfigId,
@@ -259,11 +262,11 @@ export function useConfigAutoSave({
         slots,
     ])
 
-    // 追加構成の選択内容も固定構成と同じく、変更が落ち着いた後に非同期保存
+    // 追加構成の選択内容も固定構成と同じく、変更が落ち着いた後に保存
+    // 未ログイン時はローカル保存、ログイン時はAPIへ保存する
     useEffect(() => {
         // 追加構成を選択していない間は、固定構成の自動保存だけを対象にする。
         if (
-            !isAuthenticated ||
             !autoSaveEnabled ||
             !activeSavedBuildId ||
             isSavedBuildLoading ||
@@ -299,7 +302,7 @@ export function useConfigAutoSave({
             savedBuildAutoSaveFingerprintRef.current = ""
         }
 
-        const localParts = toSavedBuildPartInputs(selectedParts)
+        const localParts = toSavedBuildParts(selectedParts)
         const localFingerprint = createPartsFingerprint(localParts)
         const savedFingerprint = createPartsFingerprint(
             build.parts.map(({slotKey, partId}) => ({slotKey, partId})),
@@ -380,7 +383,6 @@ export function useConfigAutoSave({
         activeSavedBuildId,
         authUserId,
         autoSaveEnabled,
-        isAuthenticated,
         isSavedBuildLoading,
         savedBuildAutoSaveRevision,
         savedBuilds,
