@@ -217,12 +217,8 @@ describe("security-sensitive D1 queries", () => {
         } as unknown as D1Database
         const repository = new D1ConfigOrderRepository(database)
 
-        await expect(repository.list("user-4")).resolves.toEqual([
-            "config:1",
-            "config:2",
-            "config:3",
-            "config:4",
-        ])
+        // 構成がまだ無い場合は、空の並び順を返す
+        await expect(repository.list("user-4")).resolves.toEqual([])
     })
 
     it("保存時にスロットのカテゴリーと前後位置を検証する", async () => {

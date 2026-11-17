@@ -1,30 +1,27 @@
 import {Button} from "@/components/ui/button"
 
 type ConfigListNoticesProps = {
-    slotsErrorMessage: string // 固定枠の取得・保存エラー
-    savedBuildsErrorMessage: string // 追加構成一覧の取得・保存エラー
-    savedBuildErrorMessage: string // 追加構成の読み込みエラー
+    configsErrorMessage: string // 構成一覧の取得・保存エラー
+    configErrorMessage: string // 構成の読み込みエラー
     configOrderErrorMessage: string // 表示順の取得・保存エラー
-    onReloadSavedBuilds: () => void
+    onReloadConfigs: () => void
     onReloadConfigOrder: () => void
 }
 
 // 構成一覧の下に出す通知(エラー)
 export function ConfigListNotices({
-    slotsErrorMessage,
-    savedBuildsErrorMessage,
-    savedBuildErrorMessage,
+    configsErrorMessage,
+    configErrorMessage,
     configOrderErrorMessage,
-    onReloadSavedBuilds,
+    onReloadConfigs,
     onReloadConfigOrder,
 }: ConfigListNoticesProps) {
     // 複数のエラーがあっても、先に起きた順の1件だけを表示する。
-    const errorMessage = slotsErrorMessage ||
-        savedBuildsErrorMessage ||
-        savedBuildErrorMessage ||
+    const errorMessage = configsErrorMessage ||
+        configErrorMessage ||
         configOrderErrorMessage
     // 再読み込みで回復できるのは、一覧と表示順の取得エラーだけ
-    const canReload = Boolean(savedBuildsErrorMessage || configOrderErrorMessage)
+    const canReload = Boolean(configsErrorMessage || configOrderErrorMessage)
 
     return (
         <>
@@ -43,8 +40,8 @@ export function ConfigListNotices({
                             size="xs"
                             variant="outline"
                             onClick={() => {
-                                if (savedBuildsErrorMessage) {
-                                    onReloadSavedBuilds()
+                                if (configsErrorMessage) {
+                                    onReloadConfigs()
                                 }
 
                                 if (configOrderErrorMessage) {

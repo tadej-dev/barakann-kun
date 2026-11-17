@@ -1,8 +1,8 @@
 import {
     Ellipsis,
+    Eraser,
     GripVertical,
     Pencil,
-    Save,
     Trash2,
 } from "lucide-react"
 
@@ -11,7 +11,6 @@ import {
     SortableItem,
     SortableItemHandle,
 } from "@/components/reui/sortable"
-import {Badge} from "@/components/ui/badge"
 import {Button} from "@/components/ui/button"
 import {Checkbox} from "@/components/ui/checkbox"
 import {
@@ -35,10 +34,11 @@ type SavedBuildListItemProps = {
     isActive: boolean // 選択中か
     isOperating: boolean // 通信中は選択・保存を止める
     isChecked: boolean // 一括削除の対象として選ばれているか
+    canDelete: boolean // 削除できるか(構成が2件以上あるか)
     onSelect: () => void // 行の選択
     onPrefetch: () => void // ホバー・フォーカス時の先読み
-    onSave: () => void // 現在の選択を保存
     onRename: () => void // 名前変更ダイアログを開く
+    onClear: () => void // クリア確認を開く
     onDelete: () => void // 削除確認を開く
     onCheckedChange: (checked: boolean | "indeterminate") => void // 一括削除の選択
 }
@@ -52,10 +52,11 @@ export function SavedBuildListItem({
     isActive,
     isOperating,
     isChecked,
+    canDelete,
     onSelect,
     onPrefetch,
-    onSave,
     onRename,
+    onClear,
     onDelete,
     onCheckedChange,
 }: SavedBuildListItemProps) {
@@ -141,12 +142,6 @@ export function SavedBuildListItem({
                     className="flex shrink-0 items-center gap-2 group-data-[collapsible=icon]:hidden"
                     onClick={(event) => event.stopPropagation()}
                 >
-                    <Badge
-                        variant="outline"
-                        className="border-violet-200 bg-violet-50 text-violet-700"
-                    >
-                        追加
-                    </Badge>
                     <DropdownMenu>
                         <DropdownMenuTrigger
                             render={
@@ -168,42 +163,42 @@ export function SavedBuildListItem({
                             className="w-40"
                         >
                             <DropdownMenuGroup>
-                                <DropdownMenuItem
-                                    disabled={isOperating}
-                                    onClick={onSave}
-                                >
-                                    <Save />
-                                    現在の選択を保存
-                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={onRename}>
                                     <Pencil />
                                     名前変更
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                    variant="destructive"
-                                    onClick={onDelete}
+                                    disabled={isOperating}
+                                    onClick={onClear}
                                 >
-                                    <Trash2 />
-                                    削除
-                                    <Badge
-                                        variant="outline"
-                                        className="ml-auto border-red-200 bg-red-50 text-red-700"
-                                    >
-                                        追加
-                                    </Badge>
+                                    <Eraser />
+                                    クリア
                                 </DropdownMenuItem>
+                                {canDelete && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            variant="destructive"
+                                            onClick={onDelete}
+                                        >
+                                            <Trash2 />
+                                            削除
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                             </DropdownMenuGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Checkbox
-                        checked={isChecked}
-                        disabled={isOperating}
-                        className="ms-1 me-1"
-                        aria-label={`${build.name}を削除対象に選択`}
-                        onClick={(event) => event.stopPropagation()}
-                        onCheckedChange={onCheckedChange}
-                    />
+                    {canDelete && (
+                        <Checkbox
+                            checked={isChecked}
+                            disabled={isOperating}
+                            className="ms-1 me-1"
+                            aria-label={`${build.name}を削除対象に選択`}
+                            onClick={(event) => event.stopPropagation()}
+                            onCheckedChange={onCheckedChange}
+                        />
+                    )}
                 </div>
             </div>
         </SortableItem>

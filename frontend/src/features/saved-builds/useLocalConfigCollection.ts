@@ -2,9 +2,10 @@ import {useCallback, useEffect, useRef, useState} from "react"
 
 import type {SavedBuild, SavedBuildPart} from "@/api/savedBuilds"
 import {
-    MAX_ADDED_SAVED_BUILDS,
+    MAX_CONFIGS,
+    configItemKey,
     type LocalConfigCollection,
-    type StoredSavedBuild,
+    type StoredConfig,
 } from "@/features/saved-builds/configRules"
 import {
     loadLocalConfigCollection,
@@ -22,39 +23,64 @@ type UseLocalConfigCollectionOptions = {
 const SAVE_ERROR_MESSAGE =
     "構成を保存できませんでした。ブラウザの保存領域を確認してください。"
 
-// 保存済みの形式を、画面が扱う構成一覧の形へ変換する
-function toSavedBuild(build: StoredSavedBuild): SavedBuild {
+// 保存済みの構成を、画面が扱う形へ変換する
+function toSavedBuild(config: StoredConfig): SavedBuild {
     return {
-        id: build.id,
-        name: build.name,
+        id: config.id,
+        name: config.name,
         version: 1,
         // ローカル保存では作成日時を持たないため、未設定として扱う
         createdAt: "",
         updatedAt: "",
-        parts: build.parts,
+        isDefault: config.isDefault,
+        parts: config.parts,
     }
 }
 
 // 表示順から削除済みの構成を除き、未登録の構成を末尾へ補う
-function normalizeItemKeys(order: string[], builds: StoredSavedBuild[]) {
-    const buildKeys = builds.map((build) => `build:${build.id}`)
-    const existingKeys = new Set(buildKeys)
+function normalizeItemKeys(order: string[], configs: StoredConfig[]) {
+    const configKeys = configs.map((config) => configItemKey(config.id))
+    const existingKeys = new Set(configKeys)
     const knownKeys = order.filter((key) =>
-        !key.startsWith("build:") || existingKeys.has(key))
+        !key.startsWith("config:") || existingKeys.has(key))
 
     return [
         ...knownKeys,
-        ...buildKeys.filter((key) => !knownKeys.includes(key)),
+        ...configKeys.filter((key) => !knownKeys.includes(key)),
     ]
 }
 
-// 未ログイン時の追加構成と並び順を、localStorageを使って管理する
+// 構成一覧を読み込み、1件も無ければ既定の構成を用意する
+function loadCollection(): LocalConfigCollection {
+    const loaded = loadLocalConfigCollection()
+
+    if (loaded.configs.length > 0) {
+        return loaded
+    }
+
+    // 構成は必ず1件以上にする。既定の構成は削除できない
+    const config: StoredConfig = {
+        id: crypto.randomUUID(),
+        name: "構成1",
+        isDefault: true,
+        parts: [],
+    }
+
+    saveLocalConfigCollection([config], [configItemKey(config.id)])
+
+    return {
+        configs: [config],
+        order: [configItemKey(config.id)],
+    }
+}
+
+// 未ログイン時の構成と並び順を、localStorageを使って管理する
 export function useLocalConfigCollection({
     enabled,
 }: UseLocalConfigCollectionOptions) {
     // localStorageは同期的に読めるため、初回描画時に読み込んでおく
     const [collection, setCollection] = useState<LocalConfigCollection>(
-        loadLocalConfigCollection,
+        loadCollection,
     )
     const [operation, setOperation] = useState<LocalBuildOperation | null>(null)
     const [isSavingOrder, setIsSavingOrder] = useState(false)
@@ -80,7 +106,7 @@ export function useLocalConfigCollection({
 
     // 保存に失敗したときは、画面が気づけるようエラーを残して呼び出し側へ伝える
     const persist = useCallback((next: LocalConfigCollection) => {
-        if (!saveLocalConfigCollection(next.savedBuilds, next.order)) {
+        if (!saveLocalConfigCollection(next.configs, next.order)) {
             setErrorMessage(SAVE_ERROR_MESSAGE)
             throw new Error(SAVE_ERROR_MESSAGE)
         }
@@ -93,45 +119,45 @@ export function useLocalConfigCollection({
     }, [])
 
     const reload = useCallback(async () => {
-        const loaded = loadLocalConfigCollection()
+        const loaded = loadCollection()
 
         setCollection(loaded)
         collectionRef.current = loaded
         setErrorMessage("")
 
-        return loaded.savedBuilds.map(toSavedBuild)
+        return loaded.configs.map(toSavedBuild)
     }, [])
 
     const create = useCallback(async (name: string, parts: SavedBuildPart[]) => {
         const current = collectionRef.current
 
-        if (current.savedBuilds.length >= MAX_ADDED_SAVED_BUILDS) {
-            const message = `追加できる構成は${MAX_ADDED_SAVED_BUILDS}件までです`
+        if (current.configs.length >= MAX_CONFIGS) {
+            const message = `構成は${MAX_CONFIGS}件までです`
 
             setErrorMessage(message)
             throw new Error(message)
         }
 
-        // 保存構成のIDは、サーバーと同じUUID形式で発行する
-        const build: StoredSavedBuild = {
+        // 構成のIDは、サーバーと同じUUID形式で発行する
+        const config: StoredConfig = {
             id: crypto.randomUUID(),
             name,
+            isDefault: false,
             parts,
         }
 
         setOperation("create")
 
         try {
-            const nextBuilds = [build, ...current.savedBuilds]
+            const nextConfigs = [...current.configs, config]
             const next = persist({
-                savedBuilds: nextBuilds,
-                // 既存の構成が並び順から落ちないよう、作成後の全件で整える
-                order: normalizeItemKeys(current.order, nextBuilds),
+                configs: nextConfigs,
+                order: normalizeItemKeys(current.order, nextConfigs),
             })
 
             return toSavedBuild(
-                next.savedBuilds.find((candidate) => candidate.id === build.id) ??
-                build,
+                next.configs.find((candidate) => candidate.id === config.id) ??
+                config,
             )
         } finally {
             setOperation(null)
@@ -140,22 +166,22 @@ export function useLocalConfigCollection({
 
     const update = useCallback(async (build: SavedBuild, parts: SavedBuildPart[]) => {
         const current = collectionRef.current
-        const nextBuilds = current.savedBuilds.map((candidate) =>
+        const nextConfigs = current.configs.map((candidate) =>
             candidate.id === build.id
-                ? {id: candidate.id, name: candidate.name, parts}
+                ? {...candidate, parts}
                 : candidate)
 
         setOperation("update")
 
         try {
             persist({
-                savedBuilds: nextBuilds,
-                order: normalizeItemKeys(current.order, nextBuilds),
+                configs: nextConfigs,
+                order: current.order,
             })
 
             return toSavedBuild(
-                nextBuilds.find((candidate) => candidate.id === build.id) ??
-                {id: build.id, name: build.name, parts},
+                nextConfigs.find((candidate) => candidate.id === build.id) ??
+                {...build, parts},
             )
         } finally {
             setOperation(null)
@@ -164,22 +190,22 @@ export function useLocalConfigCollection({
 
     const rename = useCallback(async (build: SavedBuild, name: string) => {
         const current = collectionRef.current
-        const nextBuilds = current.savedBuilds.map((candidate) =>
+        const nextConfigs = current.configs.map((candidate) =>
             candidate.id === build.id
-                ? {id: candidate.id, name, parts: candidate.parts}
+                ? {...candidate, name}
                 : candidate)
 
         setOperation("rename")
 
         try {
             persist({
-                savedBuilds: nextBuilds,
+                configs: nextConfigs,
                 order: current.order,
             })
 
             return toSavedBuild(
-                nextBuilds.find((candidate) => candidate.id === build.id) ??
-                {id: build.id, name, parts: build.parts},
+                nextConfigs.find((candidate) => candidate.id === build.id) ??
+                {...build, name},
             )
         } finally {
             setOperation(null)
@@ -188,15 +214,15 @@ export function useLocalConfigCollection({
 
     const remove = useCallback(async (build: SavedBuild) => {
         const current = collectionRef.current
-        const nextBuilds = current.savedBuilds.filter((candidate) =>
+        const nextConfigs = current.configs.filter((candidate) =>
             candidate.id !== build.id)
 
         setOperation("delete")
 
         try {
             persist({
-                savedBuilds: nextBuilds,
-                order: normalizeItemKeys(current.order, nextBuilds),
+                configs: nextConfigs,
+                order: normalizeItemKeys(current.order, nextConfigs),
             })
         } finally {
             setOperation(null)
@@ -205,12 +231,12 @@ export function useLocalConfigCollection({
 
     const saveOrder = useCallback(async (order: string[]) => {
         const current = collectionRef.current
-        const nextOrder = normalizeItemKeys(order, current.savedBuilds)
+        const nextOrder = normalizeItemKeys(order, current.configs)
 
         setIsSavingOrder(true)
 
         try {
-            persist({savedBuilds: current.savedBuilds, order: nextOrder})
+            persist({configs: current.configs, order: nextOrder})
 
             return nextOrder
         } finally {
@@ -222,9 +248,7 @@ export function useLocalConfigCollection({
 
     return {
         builds: {
-            builds: enabled
-                ? collection.savedBuilds.map(toSavedBuild)
-                : [],
+            builds: enabled ? collection.configs.map(toSavedBuild) : [],
             create,
             errorMessage: enabled ? errorMessage : "",
             isLoading: false,

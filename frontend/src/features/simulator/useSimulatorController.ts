@@ -8,7 +8,6 @@ import {
 } from "react"
 
 import {fetchParts, fetchPartsByIds} from "@/api/parts"
-import type {ConfigSlot} from "@/api/configSlots"
 import type {SavedBuild} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
 import {blocksCategory} from "../../../../shared/part-compatibility-core"
@@ -24,7 +23,6 @@ import {
     type PartSlot,
 } from "@/features/simulator/partSlots"
 import {
-    CONFIG_IDS,
     type ConfigId,
     type ConfigStates,
     type SelectedParts,
@@ -50,7 +48,6 @@ export type UseSimulatorControllerProps = {
 export type SimulatorController = {
     activeCategory: string
     activeConfigId: ConfigId
-    activeSavedBuildId: string | null
     activeSlot: PartSlot
     activeParts: Part[]
     autoSaveEnabled: boolean
@@ -60,7 +57,9 @@ export type SimulatorController = {
     blockingPartNames: string[]
     configs: ConfigStates
     isLoadingParts: boolean
-    isSavedBuildLoading: boolean
+    isConfigLoading: boolean
+    // 保存内容を読み込んで編集中の状態にある構成ID
+    loadedConfigIds: string[]
     partsError: string
     restoreError: string
     savedBuildError: string
@@ -71,7 +70,7 @@ export type SimulatorController = {
     totalWeight: number
     changeCategory: (category: string) => void
     changeConfig: (configId: ConfigId) => void
-    restoreConfigSlot: (slot: ConfigSlot) => Promise<void>
+    restoreConfig: (config: SavedBuild) => Promise<void>
     changeSlot: (slot: PartSlot) => void
     clearConfig: (configId: ConfigId) => Promise<void>
     onRemoveBlockingParts: () => void
@@ -80,8 +79,9 @@ export type SimulatorController = {
         slotKeys?: string[],
         removeSlotKeys?: string[],
     ) => void
-    prefetchSavedBuild: (build: SavedBuild) => void
-    selectSavedBuild: (build: SavedBuild) => Promise<void>
+    prefetchConfig: (config: SavedBuild) => void
+    selectConfig: (config: SavedBuild) => Promise<void>
+    isConfigLoaded: (configId: string) => boolean
 }
 
 // 空の選択済みパーツ
@@ -170,7 +170,9 @@ export function useSimulatorController({
     )
     // localStorageのパーツ取得が終わるまで、ログイン後自動保存を開始しない。
     const [restoreError, setRestoreError] = useState("")
-    const [isSavedBuildLoading, setIsSavedBuildLoading] = useState(false)
+    const [isConfigLoading, setIsConfigLoading] = useState(false)
+    // 保存内容を読み込んだ構成。未読込の構成を空で上書きしないために使う
+    const [loadedConfigIds, setLoadedConfigIds] = useState<string[]>([])
     const [savedBuildError, setSavedBuildError] = useState("")
     const savedBuildSelectionRequestRef = useRef(0)
     const previousAuthUserIdRef = useRef(authUserId)
@@ -253,7 +255,7 @@ export function useSimulatorController({
     )
     // Reducerを介してだけ状態を変更し、固定枠と追加構成の排他ルールを一か所で適用する。
 
-    const {activeConfigId, activeSavedBuildId, activeSlot, configs} = simulatorState
+    const {activeConfigId, activeSlot, configs} = simulatorState
     const {categoryKey: activeCategory} = activeSlot
 
     // ユーザー変更時に前ユーザーの追加構成選択と読み込み途中の状態を破棄
@@ -265,7 +267,7 @@ export function useSimulatorController({
 
         previousAuthUserIdRef.current = authUserId
         savedBuildSelectionRequestRef.current += 1
-        setIsSavedBuildLoading(false)
+        setIsConfigLoading(false)
         setSavedBuildError("")
         dispatch({
             type: "changeConfig",
@@ -293,27 +295,30 @@ export function useSimulatorController({
                 const partsById = new Map(
                     parts.map((part) => [part.id, part]),
                 )
+                // 保存されているすべての構成を復元する
                 const restoredConfigs = Object.fromEntries(
-                    CONFIG_IDS.map((configId) => [
-                        configId,
-                        Object.fromEntries(
-                            Object.entries(stateToRestore.configs[configId]).flatMap(
-                                ([slotKey, partId]) => {
-                                    const part = partsById.get(partId)
+                    Object.entries(stateToRestore.configs).map(
+                        ([configId, selections]) => [
+                            configId,
+                            Object.fromEntries(
+                                Object.entries(selections).flatMap(
+                                    ([slotKey, partId]) => {
+                                        const part = partsById.get(partId)
 
-                                    return part?.categoryKey ===
-                                        getPartSlotCategoryKey(slotKey)
-                                        ? [[slotKey, part]]
-                                        : []
-                                },
+                                        return part?.categoryKey ===
+                                            getPartSlotCategoryKey(slotKey)
+                                            ? [[slotKey, part]]
+                                            : []
+                                    },
+                                ),
                             ),
-                        ),
-                    ]),
+                        ],
+                    ),
                 ) as ConfigStates
 
                 let hadIncompatibleState = false
 
-                for (const configId of CONFIG_IDS) {
+                for (const configId of Object.keys(restoredConfigs)) {
                     // 古いlocalStorageからの復元でも、既知の不一致を現行状態へ持ち込まない
                     try {
                         assertRestoredPartsAreCompatible(
@@ -370,10 +375,8 @@ export function useSimulatorController({
         })
     }, [activeConfigId, configs, hasRestoredStoredParts])
 
-    // 現在構成の選択済みパーツ。追加構成を選んでいればその内容を使う
-    const selectedParts = activeSavedBuildId
-        ? simulatorState.savedBuildParts
-        : configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
+    // 現在構成の選択済みパーツ
+    const selectedParts = configs[activeConfigId] ?? EMPTY_SELECTED_PARTS
 
     // 選択済みパーツが占有しているカテゴリー
     const blockedCategoryKeys = useMemo(() => {
@@ -519,7 +522,7 @@ export function useSimulatorController({
     const changeConfig = useCallback((configId: ConfigId) => {
         // 構成切り替えで進行中の追加構成復元を無効化し、古い応答を受け付けない。
         savedBuildSelectionRequestRef.current += 1
-        setIsSavedBuildLoading(false)
+        setIsConfigLoading(false)
         setSavedBuildError("")
         dispatch({
             type: "changeConfig",
@@ -527,15 +530,15 @@ export function useSimulatorController({
         })
     }, [dispatch])
 
-    // 保存済み追加構成のパーツを取得し、編集対象として読み込む
-    const selectSavedBuild = useCallback(async (build: SavedBuild) => {
+    // 保存済み構成のパーツを取得し、編集対象として読み込む
+    const selectConfig = useCallback(async (config: SavedBuild) => {
         const requestId = ++savedBuildSelectionRequestRef.current
 
-        setIsSavedBuildLoading(true)
+        setIsConfigLoading(true)
         setSavedBuildError("")
 
         try {
-            await loadSavedBuildParts(build)
+            await loadSavedBuildParts(config)
 
             // 取得中に別の構成が選ばれた場合、古い構成で選択状態を上書きしない。
             if (requestId !== savedBuildSelectionRequestRef.current) {
@@ -543,15 +546,22 @@ export function useSimulatorController({
             }
 
             const restoredParts = restoreSavedBuildParts(
-                build,
+                config,
                 partCacheRef.current,
             )
-            assertRestoredPartsAreCompatible(restoredParts, build.name)
+            assertRestoredPartsAreCompatible(restoredParts, config.name)
             dispatch({
-                type: "selectSavedBuild",
-                buildId: build.id,
+                type: "restoreConfigSlot",
+                configId: config.id,
                 parts: restoredParts,
             })
+            dispatch({
+                type: "changeConfig",
+                configId: config.id,
+            })
+            setLoadedConfigIds((current) => current.includes(config.id)
+                ? current
+                : [...current, config.id])
         } catch (error) {
             if (
                 requestId === savedBuildSelectionRequestRef.current &&
@@ -559,60 +569,11 @@ export function useSimulatorController({
             ) {
                 setSavedBuildError(error.message)
             } else if (requestId === savedBuildSelectionRequestRef.current) {
-                setSavedBuildError("保存構成の読み込みに失敗しました")
+                setSavedBuildError("構成の読み込みに失敗しました")
             }
         } finally {
             if (requestId === savedBuildSelectionRequestRef.current) {
-                setIsSavedBuildLoading(false)
-            }
-        }
-    }, [loadSavedBuildParts])
-
-    // 競合解決時にD1から取得した固定構成をローカル選択状態へ復元
-    const restoreConfigSlot = useCallback(async (slot: ConfigSlot) => {
-        // 固定枠もSavedBuildと同じ復元経路へ変換し、パーツ取得・欠落検証を共有する。
-        const requestId = ++savedBuildSelectionRequestRef.current
-        const buildSnapshot: SavedBuild = {
-            id: `config-${slot.configId}`,
-            name: slot.name,
-            version: slot.version,
-            createdAt: slot.updatedAt ?? new Date(0).toISOString(),
-            updatedAt: slot.updatedAt ?? new Date(0).toISOString(),
-            parts: slot.parts,
-        }
-
-        setIsSavedBuildLoading(true)
-        setSavedBuildError("")
-
-        try {
-            await loadSavedBuildParts(buildSnapshot)
-
-            // 最新の競合解決対象でなくなった復元結果は、現在の編集状態へ反映しない。
-            if (requestId !== savedBuildSelectionRequestRef.current) {
-                return
-            }
-
-            const restoredParts = restoreSavedBuildParts(
-                buildSnapshot,
-                partCacheRef.current,
-            )
-            assertRestoredPartsAreCompatible(restoredParts, slot.name)
-            dispatch({
-                type: "restoreConfigSlot",
-                configId: slot.configId,
-                parts: restoredParts,
-            })
-        } catch (error) {
-            if (requestId === savedBuildSelectionRequestRef.current) {
-                setSavedBuildError(
-                    error instanceof Error
-                        ? error.message
-                        : "固定構成の復元に失敗しました",
-                )
-            }
-        } finally {
-            if (requestId === savedBuildSelectionRequestRef.current) {
-                setIsSavedBuildLoading(false)
+                setIsConfigLoading(false)
             }
         }
     }, [loadSavedBuildParts])
@@ -672,7 +633,6 @@ export function useSimulatorController({
     return {
         activeCategory,
         activeConfigId,
-        activeSavedBuildId,
         activeSlot,
         activeParts,
         autoSaveEnabled: autoSaveEnabled && hasRestoredStoredParts,
@@ -684,7 +644,10 @@ export function useSimulatorController({
         ),
         configs,
         isLoadingParts,
-        isSavedBuildLoading,
+        isConfigLoading,
+        loadedConfigIds,
+        isConfigLoaded: (configId: string) =>
+            loadedConfigIds.includes(configId),
         partsError,
         restoreError,
         savedBuildError,
@@ -695,12 +658,12 @@ export function useSimulatorController({
         totalWeight,
         changeCategory,
         changeConfig,
-        restoreConfigSlot,
+        restoreConfig: selectConfig,
         changeSlot,
         clearConfig,
         onRemoveBlockingParts,
         onSelectPart,
-        prefetchSavedBuild,
-        selectSavedBuild,
+        prefetchConfig: prefetchSavedBuild,
+        selectConfig,
     }
 }

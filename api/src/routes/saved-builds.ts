@@ -477,18 +477,6 @@ savedBuildsRoute.delete("/:buildId", async (context) => {
         )
     }
 
-    if (result.kind === "default") {
-        return context.json(
-            {
-                error: {
-                    code: "SAVED_BUILD_DEFAULT_UNDELETABLE",
-                    message: "既定の構成は削除できません",
-                },
-            },
-            409,
-        )
-    }
-
     if (result.kind === "conflict") {
         // 古い画面から最新の構成を削除しないよう競合を明示する
         return context.json(

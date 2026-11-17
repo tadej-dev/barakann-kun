@@ -1,8 +1,8 @@
 import {CandidatePartsTable} from "@/components/simulator/candidate-parts/CandidatePartsTable"
+import {useEffect} from "react"
 import type {CSSProperties} from "react"
 
 import {ConfigList} from "@/components/simulator/ConfigList"
-import {AutoSaveConflictAlert} from "@/components/simulator/config-list/AutoSaveConflictAlert"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
@@ -42,22 +42,31 @@ export function Simulator({
     const collection = useConfigCollection({
         savedBuildsReloadKey,
         activeConfigId: controller.activeConfigId,
-        activeSavedBuildId: controller.activeSavedBuildId,
         onConfigChange: controller.changeConfig,
-        configStates: controller.configs,
     })
-    // 選択中のパーツとサーバーの保存内容を同期する。構成一覧の表示とは独立した処理。
-    const autoSave = useConfigAutoSave({
+    // 選択中の構成がまだ読み込まれていなければ、保存内容を取得する
+    const activeConfig = collection.orderedConfigs.find((config) =>
+        config.id === controller.activeConfigId)
+    const isActiveConfigLoaded = controller.isConfigLoaded(
+        controller.activeConfigId,
+    )
+
+    useEffect(() => {
+        if (!collection.isConfigListReady || !activeConfig || isActiveConfigLoaded) {
+            return
+        }
+
+        void controller.selectConfig(activeConfig)
+    }, [activeConfig, collection.isConfigListReady, controller, isActiveConfigLoaded])
+
+    // 選択中のパーツと保存内容を同期する。構成一覧の表示とは独立した処理。
+    useConfigAutoSave({
         collection,
-        configStates: controller.configs,
         selectedParts: controller.selectedParts,
         activeConfigId: controller.activeConfigId,
-        activeSavedBuildId: controller.activeSavedBuildId,
-        isSavedBuildLoading: controller.isSavedBuildLoading,
+        isConfigLoading: controller.isConfigLoading,
+        isActiveConfigLoaded,
         autoSaveEnabled: controller.autoSaveEnabled,
-        onConfigChange: controller.changeConfig,
-        onRestoreConfigSlot: controller.restoreConfigSlot,
-        onRestoreSavedBuild: controller.selectSavedBuild,
     })
 
     // 画面レイアウトは表示だけを担当し、選択・保存・復元の状態遷移はcontrollerへ集約する。
@@ -71,21 +80,14 @@ export function Simulator({
                 categories={categories}
                 collection={collection}
                 activeConfigId={controller.activeConfigId}
-                activeSavedBuildId={controller.activeSavedBuildId}
                 selectedParts={controller.selectedParts}
-                isSavedBuildLoading={controller.isSavedBuildLoading}
-                savedBuildErrorMessage={controller.savedBuildError}
+                isConfigLoading={controller.isConfigLoading}
+                configErrorMessage={controller.savedBuildError}
                 onConfigChange={controller.changeConfig}
-                onSavedBuildSelect={controller.selectSavedBuild}
-                onSavedBuildPrefetch={controller.prefetchSavedBuild}
+                onConfigSelect={controller.selectConfig}
+                onConfigPrefetch={controller.prefetchConfig}
                 onClearConfig={controller.clearConfig}
-            >
-                {/* 自動保存の競合通知 */}
-                <AutoSaveConflictAlert
-                    conflict={autoSave.autoSaveConflict}
-                    onResolve={(resolution) => void autoSave.resolveAutoSaveConflict(resolution)}
-                />
-            </ConfigList>
+            />
 
             <SidebarInset className="min-w-0 bg-slate-100 p-4">
                 <section className="min-w-0 flex-1 overflow-hidden rounded-lg border border-slate-300 bg-white p-4">

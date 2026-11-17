@@ -1,24 +1,18 @@
 import type {Part} from "@/types/part"
 import type {PartSlot} from "@/features/simulator/partSlots"
 
-// 構成ID一覧
-export const CONFIG_IDS = ["1", "2", "3", "4"] as const
-
-// 構成IDの型
-export type ConfigId = (typeof CONFIG_IDS)[number]
+// 構成IDの型。1〜20件の構成を識別する
+export type ConfigId = string
 
 // 選択枠別の選択済みパーツ
 export type SelectedParts = Record<string, Part>
 
-// 固定構成と追加構成で共有する、スロット単位の選択状態。
 // 構成別の選択済みパーツ
 export type ConfigStates = Record<ConfigId, SelectedParts>
 
 // シミュレーター全体の状態
 export type SimulatorState = {
     activeConfigId: ConfigId // 選択中の構成ID
-    activeSavedBuildId: string | null // 選択中の追加構成ID
     activeSlot: PartSlot // 選択中のパーツ選択枠
     configs: ConfigStates // 構成別の選択状態
-    savedBuildParts: SelectedParts // 選択中の追加構成のパーツ
 }

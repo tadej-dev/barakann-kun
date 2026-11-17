@@ -1,86 +1,39 @@
 import {useEffect, useState} from "react"
 
-import type {ConfigSlot} from "@/api/configSlots"
-import type {SavedBuild} from "@/api/savedBuilds"
+import {MAX_SAVED_BUILDS} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
+import {MAX_CONFIGS, configItemKey} from "@/features/saved-builds/configRules"
 import {useLocalConfigCollection} from "@/features/saved-builds/useLocalConfigCollection"
 import {useSavedBuilds} from "@/features/saved-builds/useSavedBuilds"
 import {useConfigOrder} from "@/features/simulator/useConfigOrder"
-import {useConfigSlots} from "@/features/simulator/useConfigSlots"
-import {
-    CONFIG_IDS,
-    type ConfigId,
-    type ConfigStates,
-} from "@/features/simulator/simulatorTypes"
-
-// 固定枠と追加構成を、同じ並び替え対象として扱うための1件分
-export type ConfigListItem =
-    | {key: string; kind: "slot"; slot: ConfigSlot}
-    | {key: string; kind: "build"; build: SavedBuild}
+import type {ConfigId} from "@/features/simulator/simulatorTypes"
 
 type UseConfigCollectionProps = {
-    savedBuildsReloadKey: number // 保存済み構成を再取得するためのキー
-    activeConfigId: ConfigId // 選択中の固定枠
-    activeSavedBuildId: string | null // 選択中の追加構成
-    onConfigChange: (configId: ConfigId) => void // 固定枠への切り替え
-    configStates: ConfigStates // 未ログイン時の固定枠の内容
+    savedBuildsReloadKey: number // 構成一覧を再取得するためのキー
+    activeConfigId: ConfigId // 選択中の構成
+    onConfigChange: (configId: ConfigId) => void // 構成への切り替え
 }
 
-// 固定構成・追加構成を同じドラッグ対象として扱うキーを作成
-export function configSlotItemKey(configId: ConfigId): string {
-    // 固定枠と追加構成のID空間を分け、Sortableのキー衝突を防ぐ。
-    return `config:${configId}`
-}
-
-// 追加構成をドラッグ対象として扱うキーを作成
-export function savedBuildItemKey(buildId: string): string {
-    // DBのIDを表示順APIで扱える文字列キーへ変換する。
-    return `build:${buildId}`
-}
-
-// 未ログイン時の固定枠を、画面の選択状態から組み立てる
-function buildGuestSlots(configStates: ConfigStates): ConfigSlot[] {
-    return CONFIG_IDS.map((configId) => ({
-        configId,
-        name: `構成${configId}`,
-        version: 0,
-        updatedAt: null,
-        parts: Object.entries(configStates[configId]).map(([slotKey, part]) => ({
-            slotKey,
-            partId: part.id,
-            price: part.price,
-            weight: part.weight,
-        })),
-    }))
-}
-
-// 構成(固定枠・追加構成・表示順)のデータを取得し、画面で使う形にまとめる
+// 構成(構成一覧・表示順)のデータを取得し、画面で使う形にまとめる
 // 一覧の表示・自動保存・上部カードの構成名など、複数の場所から同じデータを使うため、
 // 画面の上位(Simulator)で1回だけ呼び、結果を各部品へ渡す。
 export function useConfigCollection({
     savedBuildsReloadKey,
     activeConfigId,
-    activeSavedBuildId,
     onConfigChange,
-    configStates,
 }: UseConfigCollectionProps) {
-    // 3つの同期フックを組み合わせ、固定枠・追加構成・表示順を一つの状態へまとめる。
     const {status: authStatus, user} = useAuth()
     const isAuthenticated = authStatus === "authenticated"
     const authUserId = isAuthenticated ? user?.id ?? null : null
-    // 認証確認中は、ログイン前用のボタンを一瞬表示しないように区別する。
+    // 認証確認中は、ログイン前用の一覧を一瞬表示しないように区別する。
     const isAuthLoading = authStatus === "loading"
 
-    const serverSlots = useConfigSlots({
-        enabled: isAuthenticated,
-        userId: authUserId,
-    })
-    const serverOrder = useConfigOrder({
+    const serverBuilds = useSavedBuilds({
         enabled: isAuthenticated,
         userId: authUserId,
         reloadKey: savedBuildsReloadKey,
     })
-    const serverSavedBuilds = useSavedBuilds({
+    const serverOrder = useConfigOrder({
         enabled: isAuthenticated,
         userId: authUserId,
         reloadKey: savedBuildsReloadKey,
@@ -90,77 +43,44 @@ export function useConfigCollection({
         enabled: !isAuthenticated && !isAuthLoading,
     })
 
-    const configSlots = isAuthenticated
-        ? serverSlots
-        : {
-            slots: buildGuestSlots(configStates),
-            operation: null,
-            errorMessage: "",
-            isLoading: false,
-            hasLoadedSuccessfully: true,
-            save: serverSlots.save,
-            clear: serverSlots.clear,
-            rename: serverSlots.rename,
-            reload: serverSlots.reload,
-        }
+    const configsState = isAuthenticated ? serverBuilds : local.builds
     const configOrder = isAuthenticated ? serverOrder : local.order
-    const savedBuildsState = isAuthenticated ? serverSavedBuilds : local.builds
-    const savedBuilds = savedBuildsState.builds
-    const isSavedBuildsLoading = savedBuildsState.isLoading
+    const configs = configsState.builds
 
-    // 構成一覧を初めて表示できる状態になった認証ユーザー。
+    // 一覧を初めて表示できる状態になった認証ユーザー。
     // 一度そろった後は再取得中も一覧を出し続け、操作のたびに一覧が消えないようにする。
     const [configListReadyUserId, setConfigListReadyUserId] = useState<string | null>(null)
 
-    // 構成1〜4は固定の保存枠として常に件数へ含める
-    const totalSavedCount = CONFIG_IDS.length + savedBuilds.length
+    // 構成の件数は、この中に既定の構成も含む
+    const totalConfigCount = configs.length
 
-    // 固定枠と追加構成を同じ配列にし、Sortable・保存順の処理を共通化する。
-    const availableItems: ConfigListItem[] = [
-        ...configSlots.slots.map((slot) => ({
-            key: configSlotItemKey(slot.configId),
-            kind: "slot" as const,
-            slot,
-        })),
-        ...savedBuilds.map((build) => ({
-            key: savedBuildItemKey(build.id),
-            kind: "build" as const,
-            build,
-        })),
+    // 保存済みの順に並べ、順序に無い構成は末尾へ補う
+    const availableKeys = configs.map((config) => configItemKey(config.id))
+    const orderedConfigKeys = [
+        ...configOrder.order.filter((itemKey) => availableKeys.includes(itemKey)),
+        ...availableKeys.filter((itemKey) => !configOrder.order.includes(itemKey)),
     ]
-    const availableItemMap = new Map(
-        availableItems.map((item) => [item.key, item]),
-    )
-    const availableItemKeys = availableItems.map((item) => item.key)
-    // 保存済み順に存在しない新規項目は末尾へ補完し、一覧から突然消えないようにする。
-    const orderedItemKeys = [
-        ...configOrder.order.filter((itemKey) => availableItemMap.has(itemKey)),
-        ...availableItemKeys.filter((itemKey) => !configOrder.order.includes(itemKey)),
-    ]
-    const orderedItems = orderedItemKeys.flatMap((itemKey) => {
-        const item = availableItemMap.get(itemKey)
+    const configMap = new Map(configs.map((config) => [
+        configItemKey(config.id),
+        config,
+    ]))
+    const orderedConfigs = orderedConfigKeys.flatMap((itemKey) => {
+        const config = configMap.get(itemKey)
 
-        // 不正な順序キーは静かに除外し、実在する構成だけを描画する。
-        return item ? [item] : []
+        return config ? [config] : []
     })
 
-    // 固定枠・並び順・追加構成の取得がすべて「完了」または「エラー」になったか。
-    // どれか1つでも未取得のまま表示すると、既定順で描画した後に並び替わってちらつく。
-    const isConfigSlotsSettled = configSlots.hasLoadedSuccessfully ||
-        configSlots.errorMessage !== ""
+    // 構成一覧の取得が「完了」または「エラー」になったか
+    const isConfigsSettled = !configsState.isLoading
     const isConfigOrderSettled = configOrder.hasLoaded ||
         configOrder.errorMessage !== ""
-    const isSavedBuildsSettled = !isSavedBuildsLoading
     const isConfigListSettled = isAuthLoading
         ? false
         : isAuthenticated
-            ? isConfigSlotsSettled &&
-                isConfigOrderSettled &&
-                isSavedBuildsSettled
+            ? isConfigsSettled && isConfigOrderSettled
             : local.isReady
 
-    // 初回の取得がそろった時点のユーザーを記録する。
-    // Effectを挟まず描画中に反映し、一覧が出るまでの余計な1フレームを作らない。
+    // 初回の取得がそろった時点のユーザーを記録する
     if (isConfigListSettled && configListReadyUserId !== authUserId) {
         setConfigListReadyUserId(authUserId)
     }
@@ -171,68 +91,39 @@ export function useConfigCollection({
             : local.isReady
     )
 
-    // 選択中の構成名を求める。上部カードに表示する。
-    // 構成名はログイン時だけD1から取得するため、見つからない場合は固定枠の既定名へ戻す。
-    const fallbackConfigName = `構成${activeConfigId}`
-    const activeItem = orderedItems.find((item) => {
-            // 追加構成を選択中なら追加構成、そうでなければ固定枠を探す。
-            if (activeSavedBuildId !== null) {
-                return item.kind === "build" && item.build.id === activeSavedBuildId
-            }
-
-            return item.kind === "slot" && item.slot.configId === activeConfigId
-        })
-    const activeConfigName = activeItem
-        ? activeItem.kind === "slot"
-            ? activeItem.slot.name
-            : activeItem.build.name
-        : fallbackConfigName
-
-    // 別端末でアクティブな追加構成が削除された場合は固定構成へ戻す
+    // 削除などで選択中の構成が消えた場合は、先頭の構成へ戻す
     useEffect(() => {
-        // 一覧の再取得が終わるまでは一時的に構成が空に見えるため、復帰判定を遅らせる。
-        if (
-            !activeSavedBuildId ||
-            isSavedBuildsLoading ||
-            savedBuilds.some((build) => build.id === activeSavedBuildId)
-        ) {
+        if (!isConfigListReady || orderedConfigs.length === 0) {
             return
         }
 
-        onConfigChange(activeConfigId)
-    }, [
-        activeConfigId,
-        activeSavedBuildId,
-        isSavedBuildsLoading,
-        onConfigChange,
-        savedBuilds,
-    ])
+        if (orderedConfigs.some((config) => config.id === activeConfigId)) {
+            return
+        }
+
+        onConfigChange(orderedConfigs[0]!.id)
+    }, [activeConfigId, isConfigListReady, onConfigChange, orderedConfigs])
+
+    // 選択中の構成名。見つからない場合は既定名へ戻す
+    const activeConfig = orderedConfigs.find((config) =>
+        config.id === activeConfigId)
+    const activeConfigName = activeConfig?.name ?? "構成"
 
     return {
         // 認証
         isAuthenticated,
         isAuthLoading,
         authUserId,
-        // 固定枠(構成1〜4)
-        slots: configSlots.slots,
-        slotOperation: configSlots.operation,
-        slotsErrorMessage: configSlots.errorMessage,
-        isSlotsLoading: configSlots.isLoading,
-        hasLoadedConfigSlots: configSlots.hasLoadedSuccessfully,
-        saveSlot: configSlots.save,
-        clearSlot: configSlots.clear,
-        renameSlot: configSlots.rename,
-        reloadConfigSlots: configSlots.reload,
-        // 追加構成
-        savedBuilds,
-        savedBuildsOperation: savedBuildsState.operation,
-        savedBuildsErrorMessage: savedBuildsState.errorMessage,
-        isSavedBuildsLoading,
-        createSavedBuild: savedBuildsState.create,
-        updateSavedBuild: savedBuildsState.update,
-        renameSavedBuild: savedBuildsState.rename,
-        removeSavedBuild: savedBuildsState.remove,
-        reloadSavedBuilds: savedBuildsState.reload,
+        // 構成一覧
+        configs,
+        configsOperation: configsState.operation,
+        configsErrorMessage: configsState.errorMessage,
+        isConfigsLoading: configsState.isLoading,
+        createConfig: configsState.create,
+        updateConfig: configsState.update,
+        renameConfig: configsState.rename,
+        removeConfig: configsState.remove,
+        reloadConfigs: configsState.reload,
         // 表示順
         configOrderErrorMessage: configOrder.errorMessage,
         isLoadingConfigOrder: configOrder.isLoading,
@@ -241,9 +132,10 @@ export function useConfigCollection({
         saveConfigOrder: configOrder.save,
         reloadConfigOrder: configOrder.reload,
         // 画面向けにまとめた値
-        orderedItems,
-        orderedItemKeys,
-        totalSavedCount,
+        orderedConfigs,
+        orderedConfigKeys,
+        totalSavedCount: totalConfigCount,
+        maxConfigs: MAX_CONFIGS,
         isConfigListReady,
         activeConfigName,
     }
@@ -251,3 +143,6 @@ export function useConfigCollection({
 
 // 構成データのまとまり。一覧や自動保存の部品へ、このまとまりのまま渡す。
 export type ConfigCollection = ReturnType<typeof useConfigCollection>
+
+// 従来の上限値との互換のため、API側の上限も公開しておく
+export {MAX_SAVED_BUILDS}

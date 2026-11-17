@@ -23,8 +23,8 @@ type ConfigOrderPayload = {
     items?: unknown
 }
 
-const MIN_CONFIG_ORDER_ITEMS = 4
-export const MAX_CONFIG_ORDER_ITEMS = 24
+const MIN_CONFIG_ORDER_ITEMS = 1
+export const MAX_CONFIG_ORDER_ITEMS = 20
 export const MAX_CONFIG_ORDER_ITEM_LENGTH = 200
 
 // 構成キーは空文字や巨大な値を受け付けず、画面で扱える文字列に限定する。

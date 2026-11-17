@@ -1,29 +1,31 @@
 import {
-    CONFIG_IDS,
     type ConfigId,
     type ConfigStates,
 } from "@/features/simulator/simulatorTypes"
 import {migrateLegacyPartSlotSelections} from "@/features/simulator/partSlots"
 import {
+    configItemKey,
     normalizeConfigOrder,
-    normalizeSavedBuilds,
+    normalizeConfigs,
     type LocalConfigCollection,
-    type StoredSavedBuild,
+    type StoredConfig,
 } from "@/features/saved-builds/configRules"
 
-export type {LocalConfigCollection, StoredSavedBuild}
+export type {LocalConfigCollection, StoredConfig}
 
-// 構成の選択(構成1〜4と選択中の構成)を保存するキー
-const STORAGE_KEY = "barakann-simulator-configs-v3"
+// 構成の選択(選択中の構成と、構成ごとのパーツ)を保存するキー
+const STORAGE_KEY = "barakann-simulator-configs-v4"
 
-// 追加構成と並び順を保存するキー
-// 選択状態と同じキーへ書き込むと、複数タブで同時に保存したときに片方の項目が消えるため分ける。
-const COLLECTION_STORAGE_KEY = "barakann-config-collection-v1"
+// 構成の一覧(名前・既定・パーツ)と並び順を保存するキー
+const COLLECTION_STORAGE_KEY = "barakann-config-collection-v2"
 
+// 以前の保存形式。読み込みのときだけ使う
 const LEGACY_STORAGE_KEYS = [
+    "barakann-simulator-configs-v3",
     "barakann-simulator-configs-v2",
     "barakann-simulator-configs-v1",
 ] as const
+const LEGACY_COLLECTION_KEY = "barakann-config-collection-v1"
 
 // フリーボディ統合で削除した旧パーツIDと、残したIDの対応。
 const PART_ID_ALIASES: Record<number, number> = {
@@ -48,9 +50,9 @@ type SimulatorStorageSource = {
     configs: ConfigStates
 }
 
-// 追加構成が無いときの既定値。呼び出し側で同じ値を共有しないよう毎回作る。
+// 追加構成が無いときの既定値
 function emptyCollection(): LocalConfigCollection {
-    return {savedBuilds: [], order: []}
+    return {configs: [], order: []}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -58,7 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isConfigId(value: unknown): value is ConfigId {
-    return typeof value === "string" && CONFIG_IDS.includes(value as ConfigId)
+    return typeof value === "string" && value.length > 0
 }
 
 // プライベートブラウズや容量超過でStorageが使えない場合も画面を壊さない
@@ -109,12 +111,12 @@ function parseStoredState(value: string): StoredSimulatorState | null {
         }
 
         const configs = Object.fromEntries(
-            CONFIG_IDS.map((configId) => {
+            Object.entries(storedState.configs).flatMap(([configId, rawSelections]) => {
+                if (!isConfigId(configId) || !isRecord(rawSelections)) {
+                    return []
+                }
+
                 // 旧形式・欠損した構成は空として扱い、他の構成の復元を継続する。
-                const rawSelections = isRecord(storedState.configs)
-                    && isRecord(storedState.configs[configId])
-                    ? storedState.configs[configId]
-                    : {}
                 const migratedSelections = migrateLegacyPartSlotSelections(
                     rawSelections,
                 )
@@ -131,7 +133,7 @@ function parseStoredState(value: string): StoredSimulatorState | null {
                     ),
                 ) as StoredSelections
 
-                return [configId, selections]
+                return [[configId, selections]]
             }),
         ) as StoredConfigStates
 
@@ -169,30 +171,6 @@ export function loadSimulatorState(): StoredSimulatorState | null {
     return null
 }
 
-// 保存済みの形式のまま書き込む。画面の状態から書き込む場合も移行時も同じ経路を使う
-function writeStoredState(
-    storage: Storage,
-    state: StoredSimulatorState,
-): boolean {
-    try {
-        storage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch {
-        // Storageへ書き込めない環境では、メモリ上の選択状態だけを維持する
-        return false
-    }
-
-    // 保存自体は成功しているため、旧キーの後片付けに失敗しても成功として扱う
-    try {
-        for (const storageKey of LEGACY_STORAGE_KEYS) {
-            storage.removeItem(storageKey)
-        }
-    } catch {
-        // 後片付けに失敗しても、保存した内容は有効
-    }
-
-    return true
-}
-
 // 構成の選択を保存する。保存できたかを返し、失敗時は画面側で知らせられるようにする。
 export function saveSimulatorState(state: SimulatorStorageSource): boolean {
     const storage = getLocalStorage()
@@ -202,45 +180,33 @@ export function saveSimulatorState(state: SimulatorStorageSource): boolean {
     }
 
     const configs = Object.fromEntries(
-        CONFIG_IDS.map((configId) => [
+        Object.entries(state.configs).map(([configId, selectedParts]) => [
             configId,
             Object.fromEntries(
-                Object.entries(state.configs[configId]).map(
+                Object.entries(selectedParts).map(
                     ([slotKey, part]) => [slotKey, part.id],
                 ),
             ),
         ]),
     ) as StoredConfigStates
 
-    // キー分割前の追加構成が残っていれば先に移行し、上書きで失わないようにする。
-    // 移行に失敗した場合は、旧データを消さないよう書き換えない。
-    if (migrateLegacyCollection(storage).status === "failed") {
+    try {
+        storage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                activeConfigId: state.activeConfigId,
+                configs,
+            } satisfies StoredSimulatorState),
+        )
+
+        return true
+    } catch {
+        // Storageへ書き込めない環境では、メモリ上の状態だけを維持する
         return false
     }
-
-    return writeStoredState(storage, {
-        activeConfigId: state.activeConfigId,
-        configs,
-    })
 }
 
-// 統合で削除した旧パーツIDを、残したIDへ読み替える
-function migratePartIdAliases(
-    collection: LocalConfigCollection,
-): LocalConfigCollection {
-    return {
-        savedBuilds: collection.savedBuilds.map((build) => ({
-            ...build,
-            parts: build.parts.map((part) => ({
-                ...part,
-                partId: PART_ID_ALIASES[part.partId] ?? part.partId,
-            })),
-        })),
-        order: collection.order,
-    }
-}
-
-// 保存された追加構成と並び順を取り出す。キー分割前の形式も同じ形で読める
+// 保存された構成一覧と並び順を取り出す
 function parseCollection(value: string): LocalConfigCollection | null {
     try {
         const storedState: unknown = JSON.parse(value)
@@ -249,25 +215,131 @@ function parseCollection(value: string): LocalConfigCollection | null {
             return null
         }
 
-        if (
-            !Array.isArray(storedState.savedBuilds) &&
-            !Array.isArray(storedState.order)
-        ) {
+        if (!Array.isArray(storedState.configs) && !Array.isArray(storedState.order)) {
             return null
         }
 
-        const collection: LocalConfigCollection = {
-            savedBuilds: normalizeSavedBuilds(storedState.savedBuilds),
+        return {
+            configs: normalizeConfigs(storedState.configs),
             order: normalizeConfigOrder(storedState.order),
         }
-
-        return migratePartIdAliases(collection)
     } catch {
         return null
     }
 }
 
-// 追加構成と並び順を読み込む。壊れた項目は読み飛ばして、正常な項目だけを返す。
+// 旧形式(固定枠の選択状態と追加構成が別々)から、1系統の構成一覧を組み立てる
+function migrateLegacyConfigs(storage: Storage): LocalConfigCollection | null {
+    const legacySelection = LEGACY_STORAGE_KEYS
+        .map((key) => readItem(storage, key))
+        .find((value): value is string => Boolean(value))
+    const legacyCollection = readItem(storage, LEGACY_COLLECTION_KEY)
+
+    const configs: StoredConfig[] = []
+
+    // 旧形式の固定枠は、キーをそのまま構成IDとして引き継ぐ
+    if (legacySelection) {
+        const state = parseStoredState(legacySelection)
+
+        for (const [configId, selections] of Object.entries(state?.configs ?? {})) {
+            configs.push({
+                id: configId,
+                name: `構成${configId}`,
+                isDefault: false,
+                // 選択状態にはパーツIDしか無いため、パーツの内訳は空から始める
+                parts: Object.entries(selections).map(([slotKey, partId]) => ({
+                    slotKey,
+                    partId,
+                    price: 0,
+                    weight: 0,
+                })),
+            })
+        }
+    }
+
+    let order: string[] = []
+
+    // キー分割前は選択状態と同じキーに追加構成が入っていたため、それも引き継ぐ
+    const embeddedCollection = legacySelection
+        ? (() => {
+            try {
+                const parsed: unknown = JSON.parse(legacySelection)
+
+                return isRecord(parsed) &&
+                    (Array.isArray(parsed.savedBuilds) || Array.isArray(parsed.order))
+                    ? JSON.stringify(parsed)
+                    : null
+            } catch {
+                return null
+            }
+        })()
+        : null
+
+    // 旧形式の追加構成は、そのまま構成として引き継ぐ
+    if (legacyCollection || embeddedCollection) {
+        try {
+            const parsed: unknown = JSON.parse(
+                legacyCollection ?? embeddedCollection ?? "{}",
+            )
+
+            if (isRecord(parsed) && Array.isArray(parsed.savedBuilds)) {
+                // 既定は最後にまとめて決めるため、ここでは false のまま追加する
+                configs.push(...parsed.savedBuilds.map((build) => {
+                    const parts = isRecord(build) && Array.isArray(build.parts)
+                        ? build.parts.map((part) =>
+                            isRecord(part) && typeof part.partId === "number"
+                                ? {
+                                    ...part,
+                                    partId: PART_ID_ALIASES[part.partId] ??
+                                        part.partId,
+                                }
+                                : part)
+                        : []
+
+                    return {
+                        id: isRecord(build) && typeof build.id === "string"
+                            ? build.id
+                            : "",
+                        name: isRecord(build) && typeof build.name === "string"
+                            ? build.name
+                            : "",
+                        isDefault: false,
+                        parts,
+                    }
+                }))
+            }
+
+            if (isRecord(parsed) && Array.isArray(parsed.order)) {
+                order = parsed.order.flatMap((key): string[] => {
+                    if (typeof key !== "string") {
+                        return []
+                    }
+
+                    // build:<id> は config:<id> と同じ扱いにする
+                    if (key.startsWith("build:")) {
+                        return [configItemKey(key.slice("build:".length))]
+                    }
+
+                    return [key]
+                })
+            }
+        } catch {
+            // 壊れた旧データは無視する
+        }
+    }
+
+    if (configs.length === 0) {
+        return null
+    }
+
+    // 既定は先頭の1件だけにする
+    return {
+        configs: normalizeConfigs(configs),
+        order: normalizeConfigOrder(order),
+    }
+}
+
+// 構成一覧と並び順を読み込む。壊れた項目は読み飛ばす
 export function loadLocalConfigCollection(): LocalConfigCollection {
     const storage = getLocalStorage()
 
@@ -277,8 +349,7 @@ export function loadLocalConfigCollection(): LocalConfigCollection {
 
     const value = readItem(storage, COLLECTION_STORAGE_KEY)
 
-    // 項目の型が壊れている場合は、移行元の内容で置き換えられるよう移行へ進む
-    if (value && hasStoredCollection(value)) {
+    if (value) {
         const collection = parseCollection(value)
 
         if (collection) {
@@ -286,80 +357,21 @@ export function loadLocalConfigCollection(): LocalConfigCollection {
         }
     }
 
-    // キー分割前のデータが残っていれば、新しいキーへ引き継ぐ。
-    const migration = migrateLegacyCollection(storage)
+    // 旧形式が残っていれば新しいキーへ引き継ぐ
+    const migrated = migrateLegacyConfigs(storage)
 
-    if (migration.status === "failed") {
-        // 移行できなくても、画面には旧データを見せる（次回の読み込みで再試行する）
-        return migration.collection
+    if (migrated) {
+        saveLocalConfigCollection(migrated.configs, migrated.order)
+
+        return migrated
     }
 
-    if (migration.status === "none") {
-        return emptyCollection()
-    }
-
-    // 移行元からは追加構成の項目を消し、古い内容が再び読まれないようにする
-    const state = parseStoredState(migration.source)
-
-    if (state) {
-        writeStoredState(storage, state)
-    }
-
-    return migration.collection
+    return emptyCollection()
 }
 
-type LegacyMigration =
-    | {status: "none"}
-    | {status: "migrated"; collection: LocalConfigCollection; source: string}
-    // 新しいキーへ保存できなかった場合も、読み込んだ内容は呼び出し側へ返す
-    | {status: "failed"; collection: LocalConfigCollection}
-
-// 既存データとして扱えるかは、追加構成と並び順の両方が配列であることまで確認する
-function hasStoredCollection(value: string): boolean {
-    try {
-        const parsed: unknown = JSON.parse(value)
-
-        return isRecord(parsed) &&
-            Array.isArray(parsed.savedBuilds) &&
-            Array.isArray(parsed.order)
-    } catch {
-        return false
-    }
-}
-
-// キー分割前の保存内容(1つのキーに追加構成も入っていた形式)を新しいキーへ移す。
-// 新しいキーに既にデータがあれば移行せず、古い値で上書きしない。
-function migrateLegacyCollection(storage: Storage): LegacyMigration {
-    const existingValue = readItem(storage, COLLECTION_STORAGE_KEY)
-
-    // 壊れた内容は「データがある」とみなさず、移行元の内容で置き換える
-    if (existingValue !== null && hasStoredCollection(existingValue)) {
-        return {status: "none"}
-    }
-
-    const legacyValue = readItem(storage, STORAGE_KEY)
-
-    if (!legacyValue) {
-        return {status: "none"}
-    }
-
-    const collection = parseCollection(legacyValue)
-
-    if (!collection) {
-        return {status: "none"}
-    }
-
-    if (!saveLocalConfigCollection(collection.savedBuilds, collection.order)) {
-        // 保存できなかった場合は移行元をそのまま残し、次回もう一度試す
-        return {status: "failed", collection}
-    }
-
-    return {status: "migrated", collection, source: legacyValue}
-}
-
-// 追加構成と並び順を保存する。保存できたかを返し、失敗時は画面側で知らせられるようにする。
+// 構成一覧と並び順を保存する。保存できたかを返す
 export function saveLocalConfigCollection(
-    savedBuilds: StoredSavedBuild[],
+    configs: StoredConfig[],
     order: string[],
 ): boolean {
     const storage = getLocalStorage()
@@ -368,9 +380,8 @@ export function saveLocalConfigCollection(
         return false
     }
 
-    // 画面から渡された値も、保存形式と同じルールで整えてから書き込む。
     const collection: LocalConfigCollection = {
-        savedBuilds: normalizeSavedBuilds(savedBuilds),
+        configs: normalizeConfigs(configs),
         order: normalizeConfigOrder(order),
     }
 
@@ -393,7 +404,7 @@ export function subscribeToLocalConfigChanges(
     }
 
     const handleStorage = (event: StorageEvent) => {
-        // 追加構成の更新と、Storage全体のclearのときだけ一覧を取り直す
+        // 構成一覧の更新と、Storage全体のclearのときだけ取り直す
         if (event.key !== null && event.key !== COLLECTION_STORAGE_KEY) {
             return
         }
@@ -416,6 +427,7 @@ export function clearSimulatorState() {
     try {
         storage.removeItem(STORAGE_KEY)
         storage.removeItem(COLLECTION_STORAGE_KEY)
+        storage.removeItem(LEGACY_COLLECTION_KEY)
         for (const storageKey of LEGACY_STORAGE_KEYS) {
             storage.removeItem(storageKey)
         }

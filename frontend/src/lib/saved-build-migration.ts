@@ -3,9 +3,8 @@ import {
     type SavedBuild,
     type SavedBuildPartInput,
 } from "@/api/savedBuilds"
-import {
-    CONFIG_IDS,
-    type ConfigId,
+import type {
+    ConfigId,
 } from "@/features/simulator/simulatorTypes"
 import type {StoredSimulatorState} from "@/lib/simulator-storage"
 
@@ -24,6 +23,9 @@ type StoredMigrationState = {
     dismissed?: Partial<Record<ConfigId, string>>
     completedAt?: string
 }
+
+// 旧形式(固定枠1〜4)の移行対象。段階5で1〜20件のモデルへ作り直す
+const CONFIG_IDS = ["1", "2", "3", "4"] as const
 
 export type SavedBuildMigrationResult = {
     created: Array<{configId: ConfigId; build: SavedBuild}>

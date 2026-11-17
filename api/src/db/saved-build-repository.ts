@@ -46,8 +46,7 @@ export type DeleteSavedBuildResult =
     | {kind: "deleted"}
     | {kind: "not_found"}
     | {kind: "conflict"}
-    // 既定の構成は削除できない
-    | {kind: "default"}
+
 
 // 保存構成APIからDB層へ渡す契約
 export interface SavedBuildRepository {

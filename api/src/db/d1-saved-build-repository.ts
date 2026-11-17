@@ -359,11 +359,11 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         buildId: string,
         version: number,
     ): Promise<DeleteSavedBuildResult> {
-        // 既定の構成は削除できない。それ以外は指定versionと一致すれば削除する
+        // 指定versionと一致する所有中の構成を削除する
+        // すべて削除した場合は、画面側が「構成1」を作り直す
         const result = await this.database.prepare(
             `DELETE FROM saved_builds
-             WHERE id = ? AND user_id = ? AND is_default = 0
-               AND version = ?`,
+             WHERE id = ? AND user_id = ? AND version = ?`,
         ).bind(buildId, userId, version).run()
 
         if (result.meta.changes > 0) {
@@ -372,13 +372,9 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
 
         const currentBuild = await this.findById(userId, buildId)
 
-        if (!currentBuild) {
-            return {kind: "not_found"}
-        }
-
-        return currentBuild.isDefault
-            ? {kind: "default"}
-            : {kind: "conflict"}
+        return currentBuild
+            ? {kind: "conflict"}
+            : {kind: "not_found"}
     }
 
     // パーツIDの存在・カテゴリー・対応位置を検証し、保存時点の価格・重量を取得

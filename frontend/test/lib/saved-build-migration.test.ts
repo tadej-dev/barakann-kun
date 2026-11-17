@@ -101,7 +101,7 @@ describe("saved-build-migration", () => {
         expect(result.failed).toEqual([])
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            "/api/builds",
+            "/api/builds?scope=all",
             expect.objectContaining({
                 body: JSON.stringify({
                     name: "構成1",
@@ -179,14 +179,14 @@ describe("saved-build-migration", () => {
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            "/api/builds",
+            "/api/builds?scope=all",
             expect.objectContaining({
                 body: expect.stringContaining('"name":"通勤用"'),
             }),
         )
         expect(fetchMock).toHaveBeenNthCalledWith(
             4,
-            "/api/builds",
+            "/api/builds?scope=all",
             expect.objectContaining({
                 body: expect.stringContaining('"name":"ヒルクライム用"'),
             }),
