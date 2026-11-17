@@ -36,7 +36,8 @@ export function ConfigListActions({
 }: ConfigListActionsProps) {
     return (
         <>
-            <div className="grid grid-cols-1 gap-2 px-2 group-data-[collapsible=icon]:px-0">
+            {/* 余白はSidebarHeaderのp-2に任せ、一覧のカードと横幅を揃える */}
+            <div className="grid w-full min-w-0 grid-cols-1 gap-2 group-data-[collapsible=icon]:justify-items-center">
                 <BuildComparisonDialog
                     builds={comparisonBuilds}
                     categories={categories}

@@ -15,11 +15,8 @@ import {
     isRecord,
 } from "@/api/responseValidation"
 
-// 固定枠(構成1〜4)の数
-export const FIXED_CONFIG_COUNT = 4
-
-// 追加構成の上限。全構成の上限から固定枠を引いた件数まで追加できる
-export const MAX_ADDED_SAVED_BUILDS = MAX_SAVED_BUILDS - FIXED_CONFIG_COUNT
+// 構成の上限(1〜20件)。既定の構成もこの中に含む
+export const MAX_CONFIGS = MAX_SAVED_BUILDS
 
 // 構成名の長さ(サーバーのsavedBuildNameSchemaと揃える)
 export const MAX_BUILD_NAME_LENGTH = 50
@@ -28,17 +25,23 @@ export const MAX_BUILD_NAME_LENGTH = 50
 export const MAX_ORDER_ITEMS = MAX_CONFIG_ORDER_ITEMS
 export const MAX_ORDER_KEY_LENGTH = MAX_CONFIG_ORDER_ITEM_LENGTH
 
-// 未ログイン時に保存する追加構成。パーツは保存時点の価格・重量も持つ。
-export type StoredSavedBuild = {
+// 未ログイン時に保存する構成。パーツは保存時点の価格・重量も持つ
+export type StoredConfig = {
     id: string
     name: string
+    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
-// 未ログイン時に保存する追加構成と表示順
+// 未ログイン時に保存する構成一覧と表示順
 export type LocalConfigCollection = {
-    savedBuilds: StoredSavedBuild[]
+    configs: StoredConfig[]
     order: string[]
+}
+
+// 構成を表示順で扱うためのキー。APIの表示順と同じ形式に揃える
+export function configItemKey(configId: string): string {
+    return `config:${configId}`
 }
 
 // 構成名を前後の空白を除いて整える。空・長すぎる名前は受け付けない
@@ -95,40 +98,60 @@ export function normalizeBuildParts(value: unknown): SavedBuildPart[] {
     return parts
 }
 
-// 追加構成一覧を検証する。壊れた項目は読み飛ばし、IDの重複を除いて上限までに整える
-export function normalizeSavedBuilds(value: unknown): StoredSavedBuild[] {
+// 構成一覧を検証する。壊れた項目は読み飛ばし、IDの重複を除いて上限までに整える
+export function normalizeConfigs(value: unknown): StoredConfig[] {
     if (!Array.isArray(value)) {
         return []
     }
 
     const seenIds = new Set<string>()
-    const builds: StoredSavedBuild[] = []
+    const configs: StoredConfig[] = []
 
-    for (const build of value) {
-        if (builds.length >= MAX_ADDED_SAVED_BUILDS) {
+    for (const config of value) {
+        if (configs.length >= MAX_CONFIGS) {
             break
         }
 
         if (
-            !isRecord(build) ||
-            !isSavedBuildId(build.id) ||
-            seenIds.has(build.id) ||
-            typeof build.name !== "string"
+            !isRecord(config) ||
+            !isSavedBuildId(config.id) ||
+            seenIds.has(config.id) ||
+            typeof config.name !== "string"
         ) {
             continue
         }
 
-        const name = normalizeBuildName(build.name)
+        const name = normalizeBuildName(config.name)
 
         if (!name) {
             continue
         }
 
-        seenIds.add(build.id)
-        builds.push({id: build.id, name, parts: normalizeBuildParts(build.parts)})
+        seenIds.add(config.id)
+        configs.push({
+            id: config.id,
+            name,
+            isDefault: config.isDefault === true,
+            parts: normalizeBuildParts(config.parts),
+        })
     }
 
-    return builds
+    return normalizeDefaultConfig(configs)
+}
+
+// 既定の構成は1件だけにする。無い場合は先頭を既定にする
+function normalizeDefaultConfig(configs: StoredConfig[]): StoredConfig[] {
+    if (configs.length === 0) {
+        return configs
+    }
+
+    const defaultIndex = configs.findIndex((config) => config.isDefault)
+
+    return configs.map((config, index) => ({
+        ...config,
+        // 複数ある場合は最初の1件だけを残し、無い場合は先頭を既定にする
+        isDefault: index === (defaultIndex === -1 ? 0 : defaultIndex),
+    }))
 }
 
 // 表示順を検証する。空文字・長すぎるキー・重複を除いて上限までに整える

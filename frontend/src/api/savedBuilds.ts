@@ -7,7 +7,6 @@ import {
 
 // サーバー側と同じ保存上限をUI表示にも利用する
 export const MAX_SAVED_BUILDS = 20
-const FIXED_CONFIG_COUNT = 4
 export const MAX_PARTS_PER_BUILD = 100
 const MAX_SAVED_BUILD_ID_LENGTH = 200
 const MAX_TIMESTAMP_LENGTH = 64
@@ -33,6 +32,8 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
+    // 削除できない既定の構成かどうか
+    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
@@ -179,6 +180,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
 
     const record = value as Record<string, unknown>
     const parts = record.parts
+    const isDefault = record.isDefault === true
 
     if (
         !isSavedBuildId(record.id) ||
@@ -200,6 +202,7 @@ function parseSavedBuild(value: unknown): SavedBuild {
         version: record.version,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
+        isDefault,
         parts: parsedParts,
     }
 }
@@ -209,7 +212,7 @@ function parseSavedBuildList(value: unknown): SavedBuild[] {
     // API側の上限を超える一覧を受け取った場合は、表示だけでなくレスポンス自体を拒否する。
     if (
         !Array.isArray(value) ||
-        value.length > MAX_SAVED_BUILDS - FIXED_CONFIG_COUNT
+        value.length > MAX_SAVED_BUILDS
     ) {
         throw new SavedBuildApiError(
             "保存構成一覧のレスポンスを解釈できませんでした",
@@ -233,7 +236,7 @@ export async function fetchSavedBuilds(
     signal?: AbortSignal,
 ): Promise<SavedBuild[]> {
     // 一覧取得はCookieセッションだけを使い、レスポンスは構造検証後に返す。
-    const response = await fetch("/api/builds", {
+    const response = await fetch("/api/builds?scope=all", {
         credentials: "same-origin",
         signal,
         headers: {Accept: "application/json"},
@@ -256,7 +259,7 @@ export async function createSavedBuild(
     // D1の保存APIはCookie認証に加えてCSRFトークンを要求する
     const csrfToken = await fetchCsrfToken()
     // 作成操作では、入力名と選択中スロットを同じリクエストへまとめる。
-    const response = await fetch("/api/builds", {
+    const response = await fetch("/api/builds?scope=all", {
         method: "POST",
         credentials: "same-origin",
         signal,

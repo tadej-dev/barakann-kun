@@ -9,7 +9,7 @@ import {
 
 // 操作ボタンの共通クラス（閉じたレールではアイコンだけの正方形にする）
 export const actionButtonClassName =
-    "h-8 w-full gap-1 px-2 text-xs group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+    "h-8 w-full min-w-0 gap-1 px-2 text-xs group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:!w-8 group-data-[collapsible=icon]:shrink-0 group-data-[collapsible=icon]:p-0"
 // 操作ボタンのラベル（閉じたレールでは隠してツールチップで補う）
 export const actionButtonLabelClassName = "group-data-[collapsible=icon]:hidden"
 

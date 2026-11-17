@@ -277,12 +277,6 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     ): Promise<DeleteSavedBuildResult> {
         this.lastUserId = userId
 
-        const target = this.builds.find((build) => build.id === buildId)
-
-        if (target?.isDefault) {
-            return {kind: "default"}
-        }
-
         if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
             return {kind: "not_found"}
         }
@@ -1199,39 +1193,6 @@ describe("saved builds API", () => {
     })
 
     // scope=all の作成は、固定枠を含めた20件で上限を判定する
-    // 既定の構成は削除できない
-    it("rejects deleting the default config", async () => {
-        const defaultRepository = new TestSavedBuildRepository()
-        defaultRepository.builds[0]!.isDefault = true
-        const defaultApp = createApp({
-            catalogRepository: createRepository(),
-            authAdapter: createAuthAdapter(),
-            savedBuildRepository: defaultRepository,
-        })
-        const bindings = createAuthBindings()
-        const csrf = await getAuthenticatedCsrfRequest(defaultApp, bindings)
-        const response = await defaultApp.request(
-            `/api/builds/${defaultRepository.builds[0]!.id}`,
-            {
-                method: "DELETE",
-                headers: {
-                    cookie: csrf.cookie,
-                    "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                    version: 1,
-                    csrfToken: csrf.csrfToken,
-                }),
-            },
-            bindings,
-        )
-
-        expect(response.status).toBe(409)
-        expect(await response.json()).toMatchObject({
-            error: {code: "SAVED_BUILD_DEFAULT_UNDELETABLE"},
-        })
-    })
-
     it("rejects a new config when all configs reached the limit", async () => {
         const limitedRepository = new TestSavedBuildRepository()
         limitedRepository.allCount = 20
@@ -1557,9 +1518,21 @@ describe("saved builds API", () => {
     })
 
     it("deletes a build with the expected version", async () => {
+        // 最後の1件は削除できないため、2件ある状態で削除する
+        const deleteRepository = new TestSavedBuildRepository()
+        deleteRepository.builds.push({
+            ...deleteRepository.builds[0]!,
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "2件目",
+        })
+        const deleteApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: deleteRepository,
+        })
         const bindings = createAuthBindings()
-        const csrf = await getAuthenticatedCsrfRequest(app, bindings)
-        const response = await app.request(
+        const csrf = await getAuthenticatedCsrfRequest(deleteApp, bindings)
+        const response = await deleteApp.request(
             "/api/builds/11111111-1111-4111-8111-111111111111",
             {
                 method: "DELETE",

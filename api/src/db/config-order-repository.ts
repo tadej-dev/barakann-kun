@@ -1,4 +1,3 @@
-import {CONFIG_SLOT_IDS} from "./config-slot-repository"
 
 // 固定構成と追加構成を同じ並び順で扱うためのキー接頭辞
 export const CONFIG_ORDER_CONFIG_PREFIX = "config:"
@@ -66,29 +65,22 @@ function configItemKey(configId: string): string {
     return `${CONFIG_ORDER_CONFIG_PREFIX}${configId}`
 }
 
-// D1に保存された追加構成のキーを作成
-function buildItemKey(buildId: string): string {
-    return `${CONFIG_ORDER_BUILD_PREFIX}${buildId}`
-}
-
 // ユーザーが現在利用できる固定・追加構成のキーを取得
 async function listCurrentItemKeys(
     database: D1Database,
     userId: string,
 ): Promise<string[]> {
-    const buildRows = await queryRows<BuildRow>(
+    // 固定枠も追加枠も同じ「構成」として扱い、すべて config:<id> で返す
+    const configRows = await queryRows<BuildRow>(
         database,
         `SELECT id
          FROM saved_builds
-         WHERE user_id = ? AND config_slot IS NULL
-         ORDER BY updated_at DESC, id ASC`,
+         WHERE user_id = ?
+         ORDER BY created_at, id ASC`,
         [userId],
     )
 
-    return [
-        ...CONFIG_SLOT_IDS.map(configItemKey),
-        ...buildRows.map((row) => buildItemKey(row.id)),
-    ]
+    return configRows.map((row) => configItemKey(row.id))
 }
 
 // ユーザーごとの構成表示順をD1へ保存するリポジトリ

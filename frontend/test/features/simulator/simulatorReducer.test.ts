@@ -39,18 +39,10 @@ describe("simulatorReducer", () => {
     // 引き継がず、規格の基準となるフレーム選択へ戻す。
     it.each([
         [
-            "固定構成",
+            "構成",
             (state: SimulatorState) => simulatorReducer(state, {
                 type: "changeConfig",
                 configId: "2",
-            }),
-        ],
-        [
-            "追加構成",
-            (state: SimulatorState) => simulatorReducer(state, {
-                type: "selectSavedBuild",
-                buildId: "build-1",
-                parts: {},
             }),
         ],
     ])("%sを切り替えるとフレーム選択へ戻る", (_label, transition) => {
@@ -65,16 +57,20 @@ describe("simulatorReducer", () => {
         expect(transition(state).activeSlot).toEqual(createPartSlot("frame"))
     })
 
-    // 追加構成をアクティブにした後の選択は、固定枠ではなくその構成へ保存する。
-    it("追加構成を選択すると、その構成へパーツ選択を反映する", () => {
+    // 構成を切り替えた後の選択は、その構成へ保存する。
+    it("選択中の構成へパーツ選択を反映する", () => {
         const frame = createPart(1, "Frame")
         const groupset = createPart(2, "Groupset")
         let state = createInitialSimulatorState("frame")
 
         state = simulatorReducer(state, {
-            type: "selectSavedBuild",
-            buildId: "build-1",
+            type: "restoreConfigSlot",
+            configId: "build-1",
             parts: {frame},
+        })
+        state = simulatorReducer(state, {
+            type: "changeConfig",
+            configId: "build-1",
         })
         state = simulatorReducer(state, {
             type: "changeSlot",
@@ -85,9 +81,8 @@ describe("simulatorReducer", () => {
             part: groupset,
         })
 
-        expect(state.activeSavedBuildId).toBe("build-1")
-        expect(state.savedBuildParts).toEqual({frame, groupset})
-        expect(state.configs["1"]).toEqual({})
+        expect(state.activeConfigId).toBe("build-1")
+        expect(state.configs["build-1"]).toEqual({frame, groupset})
     })
 
     // 前後スロットを分けることで、同じカテゴリーでも別商品を保持できる。

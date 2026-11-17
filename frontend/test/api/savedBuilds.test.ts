@@ -13,6 +13,7 @@ const BUILD = {
     version: 1,
     createdAt: "2026-08-10T00:00:00.000Z",
     updatedAt: "2026-08-10T00:00:00.000Z",
+    isDefault: false,
     parts: [{
         slotKey: "frame",
         partId: 1,
@@ -43,7 +44,7 @@ describe("savedBuilds API", () => {
 
         await expect(fetchSavedBuilds()).resolves.toEqual([BUILD])
         expect(fetchMock).toHaveBeenCalledWith(
-            "/api/builds",
+            "/api/builds?scope=all",
             expect.objectContaining({credentials: "same-origin"}),
         )
     })
@@ -70,6 +71,17 @@ describe("savedBuilds API", () => {
                 }),
             }),
         )
+    })
+
+    // 1〜20件の構成一覧を受け付ける。
+    it("20件の構成一覧を受け付ける", async () => {
+        const builds = Array.from({length: 20}, (_, index) => ({
+            ...BUILD,
+            id: `1111111${index}-1111-4111-8111-11111111111${index % 10}`,
+        }))
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(builds)))
+
+        await expect(fetchSavedBuilds()).resolves.toHaveLength(20)
     })
 
     // 上書き・削除も同じversion検証を通し、古い画面からの更新を防ぐ。
