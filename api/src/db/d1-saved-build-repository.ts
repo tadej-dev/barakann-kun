@@ -108,10 +108,9 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // 1件も無い場合は、既定の構成を1件作る
         await this.database.prepare(
             `INSERT INTO saved_builds (
-                 id, user_id, name, version, is_default, created_at, updated_at,
-                 config_slot
+                 id, user_id, name, version, is_default, created_at, updated_at
              )
-             SELECT ?, ?, ?, 1, 1, ?, ?, '1'
+             SELECT ?, ?, ?, 1, 1, ?, ?
              WHERE NOT EXISTS (
                  SELECT 1 FROM saved_builds WHERE user_id = ?
              )`,

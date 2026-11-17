@@ -30,7 +30,7 @@ export function isMissingConfigOrderTableError(error: unknown): boolean {
         return false
     }
 
-    if (/no such (table|column):\s*(saved_build_orders|saved_builds|config_slot)/i.test(error.message)) {
+    if (/no such (table|column):\s*(saved_build_orders|saved_builds)/i.test(error.message)) {
         return true
     }
 

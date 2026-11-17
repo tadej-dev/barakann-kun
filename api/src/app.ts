@@ -238,8 +238,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.use("/api/account", initializeAuthConfig)
     app.use("/api/builds", initializeAuthConfig)
     app.use("/api/builds/*", initializeAuthConfig)
-    app.use("/api/config-slots", initializeAuthConfig)
-    app.use("/api/config-slots/*", initializeAuthConfig)
     app.use("/api/config-order", initializeAuthConfig)
 
     // 旧クライアントのコールバックURLをAuth.js標準URLへ中継する
