@@ -5,7 +5,7 @@ import {
     MAX_SAVED_BUILDS,
     type SavedBuild,
 } from "@/api/savedBuilds"
-import {toSavedBuildPartInputs} from "@/features/saved-builds/savedBuildMapper"
+import {toSavedBuildParts} from "@/features/saved-builds/savedBuildMapper"
 import {
     savedBuildItemKey,
     type ConfigCollection,
@@ -100,8 +100,8 @@ export function useConfigListController({
         savedBuildsOperation !== null ||
         isSavingConfigOrder ||
         isSavedBuildLoading
-    // 現在編集中のパーツだけをAPI入力へ変換し、UIのPartオブジェクトを送信しない。
-    const selectedPartInputs = toSavedBuildPartInputs(selectedParts)
+    // 現在編集中のパーツを、保存に必要な価格・重量込みで取り出す。
+    const selectedPartInputs = toSavedBuildParts(selectedParts)
     const isNameValid = Boolean(
         nameDialog &&
         nameDialog.name.trim().length > 0 &&

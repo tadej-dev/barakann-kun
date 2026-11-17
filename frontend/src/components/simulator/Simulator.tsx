@@ -44,6 +44,7 @@ export function Simulator({
         activeConfigId: controller.activeConfigId,
         activeSavedBuildId: controller.activeSavedBuildId,
         onConfigChange: controller.changeConfig,
+        configStates: controller.configs,
     })
     // 選択中のパーツとサーバーの保存内容を同期する。構成一覧の表示とは独立した処理。
     const autoSave = useConfigAutoSave({
@@ -71,7 +72,6 @@ export function Simulator({
                 collection={collection}
                 activeConfigId={controller.activeConfigId}
                 activeSavedBuildId={controller.activeSavedBuildId}
-                configStates={controller.configs}
                 selectedParts={controller.selectedParts}
                 isSavedBuildLoading={controller.isSavedBuildLoading}
                 savedBuildErrorMessage={controller.savedBuildError}

@@ -7,10 +7,15 @@ import {
     renameSavedBuild,
     updateSavedBuild,
     type SavedBuild,
-    type SavedBuildPartInput,
+    type SavedBuildPart,
 } from "@/api/savedBuilds"
 
 type SavedBuildOperation = "create" | "rename" | "update" | "delete"
+
+// APIへはスロット名とパーツIDだけを送り、価格・重量はサーバーが確定する
+function toPartInputs(parts: SavedBuildPart[]) {
+    return parts.map(({slotKey, partId}) => ({slotKey, partId}))
+}
 
 type UseSavedBuildsOptions = {
     enabled: boolean
@@ -205,13 +210,13 @@ export function useSavedBuilds({
 
     const create = useCallback(async (
         name: string,
-        parts: SavedBuildPartInput[],
+        parts: SavedBuildPart[],
     ) => {
         const requestUserId = userId
 
         return runOperation("create", async () => {
             // 新規作成は一覧の先頭へ追加し、同じIDが既にあれば重複を除く。
-            const build = await createSavedBuild(name, parts)
+            const build = await createSavedBuild(name, toPartInputs(parts))
 
             // 認証ユーザーが同じ場合だけ、一覧へ作成結果を即時反映する。
             if (currentUserIdRef.current === requestUserId) {
@@ -249,7 +254,7 @@ export function useSavedBuilds({
 
     const update = useCallback(async (
         build: SavedBuild,
-        parts: SavedBuildPartInput[],
+        parts: SavedBuildPart[],
     ) => {
         const requestUserId = userId
 
@@ -259,7 +264,7 @@ export function useSavedBuilds({
                 build.id,
                 build.version,
                 build.name,
-                parts,
+                toPartInputs(parts),
             )
             // PUT応答を一覧へ反映し、次回の自動保存が最新versionを参照できるようにする。
             if (currentUserIdRef.current === requestUserId) {
