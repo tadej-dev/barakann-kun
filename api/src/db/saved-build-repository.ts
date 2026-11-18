@@ -27,8 +27,6 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
-    // 削除できない既定の構成かどうか。ユーザーごとに1件だけ持つ
-    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
@@ -55,8 +53,8 @@ export interface SavedBuildRepository {
     countAll(userId: string): Promise<number>
     // 全構成の一覧
     listAll(userId: string): Promise<SavedBuild[]>
-    // 既定の構成が無ければ作る。既存の行がある場合は最も古い行を既定にする
-    ensureDefault(userId: string): Promise<void>
+    // 構成が1件も無ければ、初期表示用の構成を作る
+    ensureInitialConfig(userId: string): Promise<void>
     findById(userId: string, buildId: string): Promise<SavedBuild | null>
     create(
         userId: string,

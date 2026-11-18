@@ -15,7 +15,7 @@ import {
     isRecord,
 } from "@/api/responseValidation"
 
-// 構成の上限(1〜20件)。既定の構成もこの中に含む
+// 構成の上限(1〜20件)
 export const MAX_CONFIGS = MAX_SAVED_BUILDS
 
 // 構成名の長さ(サーバーのsavedBuildNameSchemaと揃える)
@@ -29,7 +29,6 @@ export const MAX_ORDER_KEY_LENGTH = MAX_CONFIG_ORDER_ITEM_LENGTH
 export type StoredConfig = {
     id: string
     name: string
-    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
@@ -131,27 +130,11 @@ export function normalizeConfigs(value: unknown): StoredConfig[] {
         configs.push({
             id: config.id,
             name,
-            isDefault: config.isDefault === true,
             parts: normalizeBuildParts(config.parts),
         })
     }
 
-    return normalizeDefaultConfig(configs)
-}
-
-// 既定の構成は1件だけにする。無い場合は先頭を既定にする
-function normalizeDefaultConfig(configs: StoredConfig[]): StoredConfig[] {
-    if (configs.length === 0) {
-        return configs
-    }
-
-    const defaultIndex = configs.findIndex((config) => config.isDefault)
-
-    return configs.map((config, index) => ({
-        ...config,
-        // 複数ある場合は最初の1件だけを残し、無い場合は先頭を既定にする
-        isDefault: index === (defaultIndex === -1 ? 0 : defaultIndex),
-    }))
+    return configs
 }
 
 // 表示順を検証する。空文字・長すぎるキー・重複を除いて上限までに整える

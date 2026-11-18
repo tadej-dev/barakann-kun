@@ -13,7 +13,6 @@ const BUILD = {
     version: 1,
     createdAt: "2026-08-10T00:00:00.000Z",
     updatedAt: "2026-08-10T00:00:00.000Z",
-    isDefault: false,
     parts: [{
         slotKey: "frame",
         partId: 1,

@@ -245,7 +245,6 @@ function migrateLegacyConfigs(storage: Storage): LocalConfigCollection | null {
             configs.push({
                 id: configId,
                 name: `構成${configId}`,
-                isDefault: false,
                 // 選択状態にはパーツIDしか無いため、パーツの内訳は空から始める
                 parts: Object.entries(selections).map(([slotKey, partId]) => ({
                     slotKey,
@@ -303,7 +302,6 @@ function migrateLegacyConfigs(storage: Storage): LocalConfigCollection | null {
                         name: isRecord(build) && typeof build.name === "string"
                             ? build.name
                             : "",
-                        isDefault: false,
                         parts,
                     }
                 }))
