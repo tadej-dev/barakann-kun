@@ -1,3 +1,5 @@
+import {readFileSync} from "node:fs"
+
 import {describe, expect, it} from "vitest"
 import type {Adapter} from "@auth/core/adapters"
 
@@ -881,6 +883,31 @@ describe("saved builds API", () => {
                 message: "ログインが必要です",
             },
         })
+    })
+
+    // 共有フィクスチャとAPIの応答が一致する(契約テスト)
+    it("returns the shared saved-build fixture", async () => {
+        const fixture = JSON.parse(readFileSync(
+            new URL("../../frontend/test/fixtures/saved-build-list.json", import.meta.url),
+            "utf8",
+        )) as unknown
+
+        // 偽リポジトリはフィクスチャとは独立した固定データを持つ
+        const contractRepository = new TestSavedBuildRepository()
+        const contractApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: contractRepository,
+        })
+
+        const response = await contractApp.request(
+            "/api/builds",
+            authenticatedRequest,
+            createAuthBindings(),
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual(fixture)
     })
 
     it("lists builds for the authenticated user", async () => {
