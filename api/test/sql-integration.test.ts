@@ -1,3 +1,5 @@
+import {readFileSync} from "node:fs"
+
 import {afterEach, beforeEach, describe, expect, it} from "vitest"
 
 import {D1ConfigOrderRepository} from "../src/db/config-order-repository"
@@ -6,6 +8,12 @@ import {SavedBuildLimitExceededError} from "../src/db/saved-build-repository"
 import {applyMigrations, createSqliteD1} from "./support/sqlite-d1"
 
 const USER_ID = "user-integration"
+
+// フロントとAPIで共有する契約フィクスチャ
+const fixture = JSON.parse(readFileSync(
+    new URL("../../frontend/test/fixtures/saved-build-list.json", import.meta.url),
+    "utf8",
+)) as {parts: Record<string, unknown>[]}[]
 
 // マイグレーション適用済みのSQLiteと、その接続を用意する
 function createDatabase() {
@@ -182,6 +190,11 @@ describe("SQL結合テスト", () => {
             {slotKey: "frame", partId},
         ])
 
+        // 実リポジトリの出力キーが、共有フィクスチャの契約と一致する
+        expect(Object.keys(created).sort())
+            .toEqual(Object.keys(fixture[0]!).sort())
+        expect(Object.keys(created.parts[0]!).sort())
+            .toEqual(Object.keys(fixture[0]!.parts[0]!).sort())
         expect(created.parts).toEqual([{
             slotKey: "frame",
             partId,
