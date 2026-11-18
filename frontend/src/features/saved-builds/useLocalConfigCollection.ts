@@ -32,7 +32,6 @@ function toSavedBuild(config: StoredConfig): SavedBuild {
         // ローカル保存では作成日時を持たないため、未設定として扱う
         createdAt: "",
         updatedAt: "",
-        isDefault: config.isDefault,
         parts: config.parts,
     }
 }
@@ -50,7 +49,7 @@ function normalizeItemKeys(order: string[], configs: StoredConfig[]) {
     ]
 }
 
-// 構成一覧を読み込み、1件も無ければ既定の構成を用意する
+// 構成一覧を読み込み、1件も無ければ初期構成を用意する
 function loadCollection(): LocalConfigCollection {
     const loaded = loadLocalConfigCollection()
 
@@ -58,11 +57,10 @@ function loadCollection(): LocalConfigCollection {
         return loaded
     }
 
-    // 構成は必ず1件以上にする。既定の構成は削除できない
+    // 構成が1件も無いときのために、初期表示用の構成を用意する
     const config: StoredConfig = {
         id: crypto.randomUUID(),
         name: "構成1",
-        isDefault: true,
         parts: [],
     }
 
@@ -142,7 +140,6 @@ export function useLocalConfigCollection({
         const config: StoredConfig = {
             id: crypto.randomUUID(),
             name,
-            isDefault: false,
             parts,
         }
 

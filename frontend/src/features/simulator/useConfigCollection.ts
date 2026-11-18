@@ -51,7 +51,7 @@ export function useConfigCollection({
     // 一度そろった後は再取得中も一覧を出し続け、操作のたびに一覧が消えないようにする。
     const [configListReadyUserId, setConfigListReadyUserId] = useState<string | null>(null)
 
-    // 構成の件数は、この中に既定の構成も含む
+    // 構成の件数
     const totalConfigCount = configs.length
 
     // 保存済みの順に並べ、順序に無い構成は末尾へ補う

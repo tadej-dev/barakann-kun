@@ -30,7 +30,6 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds).toHaveLength(1)
         expect(result.current.builds.builds[0]).toMatchObject({
             name: "構成1",
-            isDefault: true,
         })
         expect(loadLocalConfigCollection().configs).toHaveLength(1)
     })
@@ -41,7 +40,6 @@ describe("useLocalConfigCollection", () => {
             [{
                 id: "config-a",
                 name: "通勤用",
-                isDefault: true,
                 parts: [createPart()],
             }],
             ["config:config-a"],
@@ -53,7 +51,6 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds[0]).toMatchObject({
             id: "config-a",
             name: "通勤用",
-            isDefault: true,
         })
         expect(result.current.builds.builds[0]?.parts).toEqual([createPart()])
     })
@@ -77,7 +74,6 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds[1]).toMatchObject({
             id: createdId,
             name: "通勤用",
-            isDefault: false,
         })
         expect(loadLocalConfigCollection().configs).toHaveLength(2)
     })
@@ -147,7 +143,7 @@ describe("useLocalConfigCollection", () => {
         })
 
         const target = result.current.builds.builds.find((config) =>
-            !config.isDefault)!
+            config.name === "削除対象")!
 
         await act(async () => {
             await result.current.builds.remove(target)
@@ -245,7 +241,6 @@ describe("useLocalConfigCollection", () => {
                     configs: [{
                         id: "config-b",
                         name: "別タブ",
-                        isDefault: true,
                         parts: [],
                     }],
                     order: ["config:config-b"],

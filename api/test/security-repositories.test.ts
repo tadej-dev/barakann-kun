@@ -33,6 +33,7 @@ function createDatabaseStub(
                     return {
                         first: async () => null,
                         all: async () => ({results: []}),
+                        run: async () => ({meta: {changes: 1}}),
                     }
                 },
             }
@@ -192,6 +193,25 @@ describe("security-sensitive D1 queries", () => {
 
         expect(statements[0]?.sql).toContain("WHERE user_id = ?")
         expect(statements[0]?.parameters).toEqual(["user-3"])
+    })
+
+    it("初期構成は0件のときだけ作成するSQLを実行する", async () => {
+        const {database, statements} = createDatabaseStub()
+        const repository = new D1SavedBuildRepository(database)
+
+        await repository.ensureInitialConfig("user-5")
+
+        expect(statements[0]?.sql).toContain("WHERE NOT EXISTS")
+        expect(statements[0]?.sql).toContain("FROM saved_builds")
+        // 構成が無い場合だけ作成する条件に、ユーザーIDを渡している
+        expect(statements[0]?.parameters).toEqual([
+            expect.any(String),
+            "user-5",
+            "構成1",
+            expect.any(String),
+            expect.any(String),
+            "user-5",
+        ])
     })
 
     it("表示順テーブル未適用時は既定順へフォールバックする", async () => {

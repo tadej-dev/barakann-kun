@@ -25,14 +25,13 @@ if (!window.matchMedia) {
 }
 
 // 構成1件分のデータ。既定の構成は削除できない
-function createConfig(id: string, name: string, isDefault = false): SavedBuild {
+function createConfig(id: string, name: string): SavedBuild {
     return {
         id,
         name,
         version: 1,
         createdAt: "",
         updatedAt: "",
-        isDefault,
         parts: [],
     }
 }
@@ -47,7 +46,7 @@ function createGuestCollection(
     } = {},
 ): ConfigCollection {
     const noop = () => Promise.resolve()
-    const configs = options.configs ?? [createConfig("config-1", "構成1", true)]
+    const configs = options.configs ?? [createConfig("config-1", "構成1")]
 
     return {
         isAuthenticated: false,
@@ -113,7 +112,7 @@ describe("ConfigList（未ログイン時）", () => {
     it("構成と使用数を表示する", () => {
         renderConfigList({
             configs: [
-                createConfig("config-1", "構成1", true),
+                createConfig("config-1", "構成1"),
                 createConfig("config-2", "通勤用"),
             ],
         })
@@ -155,7 +154,7 @@ describe("ConfigList（未ログイン時）", () => {
     it("構成が2件以上あるときは削除を出す", async () => {
         renderConfigList({
             configs: [
-                createConfig("config-1", "構成1", true),
+                createConfig("config-1", "構成1"),
                 createConfig("config-2", "通勤用"),
             ],
         })
@@ -171,7 +170,7 @@ describe("ConfigList（未ログイン時）", () => {
     it("構成のカードを選ぶと親へ通知する", () => {
         const onConfigSelect = vi.fn()
         renderConfigList({
-            configs: [createConfig("config-1", "構成1", true)],
+            configs: [createConfig("config-1", "構成1")],
             onConfigSelect,
         })
 
@@ -184,7 +183,7 @@ describe("ConfigList（未ログイン時）", () => {
     it("一括削除の確認に選択した構成名をすべて出す", async () => {
         renderConfigList({
             configs: [
-                createConfig("config-1", "構成1", true),
+                createConfig("config-1", "構成1"),
                 createConfig("config-2", "通勤用"),
                 createConfig("config-3", "レース用"),
             ],
@@ -204,12 +203,12 @@ describe("ConfigList（未ログイン時）", () => {
 
     // すべて削除すると「構成1」を作り直して初期表示する。
     it("すべて削除すると構成1を作り直す", async () => {
-        const created = createConfig("new-config", "構成1", true)
+        const created = createConfig("new-config", "構成1")
         const createSpy = vi.fn(async () => created)
         const onConfigChange = vi.fn()
 
         renderConfigList({
-            configs: [createConfig("config-1", "構成1", true)],
+            configs: [createConfig("config-1", "構成1")],
             createConfig: createSpy,
             onConfigChange,
             removeConfig: async () => {},

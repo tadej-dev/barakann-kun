@@ -20,7 +20,6 @@ type SavedBuildRow = {
     version: number
     created_at: string
     updated_at: string
-    is_default: number
 }
 
 type SavedBuildPartRow = {
@@ -73,7 +72,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // 固定枠か追加枠かを問わず、すべての構成を返す
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at, is_default
+            `SELECT id, name, version, created_at, updated_at
              FROM saved_builds
              WHERE user_id = ?
              ORDER BY updated_at DESC, id ASC`,
@@ -83,34 +82,16 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         return this.attachParts(buildRows)
     }
 
-    async ensureDefault(userId: string): Promise<void> {
+    async ensureInitialConfig(userId: string): Promise<void> {
         const now = new Date().toISOString()
         const id = crypto.randomUUID()
 
-        // 行はあるが既定が無い場合は、最も古い構成を既定にする
-        await this.database.prepare(
-            `UPDATE saved_builds
-             SET is_default = 1
-             WHERE id = (
-                 SELECT id
-                 FROM saved_builds
-                 WHERE user_id = ?
-                 ORDER BY created_at, id
-                 LIMIT 1
-             )
-               AND NOT EXISTS (
-                   SELECT 1
-                   FROM saved_builds
-                   WHERE user_id = ? AND is_default = 1
-               )`,
-        ).bind(userId, userId).run()
-
-        // 1件も無い場合は、既定の構成を1件作る
+        // 構成が1件も無い場合だけ、初期表示用の構成を作る
         await this.database.prepare(
             `INSERT INTO saved_builds (
-                 id, user_id, name, version, is_default, created_at, updated_at
+                 id, user_id, name, version, created_at, updated_at
              )
-             SELECT ?, ?, ?, 1, 1, ?, ?
+             SELECT ?, ?, ?, 1, ?, ?
              WHERE NOT EXISTS (
                  SELECT 1 FROM saved_builds WHERE user_id = ?
              )`,
@@ -124,7 +105,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
         // IDと所有者を同時に指定して他ユーザーの構成を取得させない
         const buildRows = await queryRows<SavedBuildRow>(
             this.database,
-            `SELECT id, name, version, created_at, updated_at, is_default
+            `SELECT id, name, version, created_at, updated_at
              FROM saved_builds
              WHERE user_id = ? AND id = ?`,
             [userId, buildId],
@@ -389,7 +370,6 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             version: row.version,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
-            isDefault: row.is_default === 1,
             parts: partsByBuildId.get(row.id) ?? [],
         }))
     }

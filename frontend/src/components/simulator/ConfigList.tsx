@@ -104,7 +104,7 @@ export function ConfigList({
                         variant="secondary"
                         className="group-data-[collapsible=icon]:hidden"
                         aria-label="構成数"
-                        title="構成の使用数(既定の構成を含む)"
+                        title="構成の使用数"
                     >
                         {isAuthLoading || isConfigsLoading
                             ? `… / ${collection.maxConfigs}`
@@ -144,7 +144,7 @@ export function ConfigList({
                     </p>
                 )}
 
-                {/* 構成一覧。既定の構成も同じカードで並べ、削除だけを制限する */}
+                {/* すべての構成を同じカードで並べる */}
                 {isConfigListReady && (
                     <div className="w-full overflow-hidden rounded-lg">
                         <Sortable

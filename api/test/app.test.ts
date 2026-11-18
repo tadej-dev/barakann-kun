@@ -128,7 +128,6 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         version: 1,
         createdAt: "2026-08-05T00:00:00.000Z",
         updatedAt: "2026-08-05T00:00:00.000Z",
-        isDefault: false,
         parts: [{
             slotKey: "frame",
             partId: 1,
@@ -138,7 +137,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     }]
     lastUserId: string | null = null
     lastListScope: "legacy" | "all" = "legacy"
-    ensuredDefault = false
+    ensuredInitialConfig = false
     allCount = 1
     lastParts: SavedBuildPartInput[] = []
 
@@ -155,9 +154,9 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         return userId === "user-1" ? this.builds : []
     }
 
-    async ensureDefault(userId: string): Promise<void> {
+    async ensureInitialConfig(userId: string): Promise<void> {
         this.lastUserId = userId
-        this.ensuredDefault = true
+        this.ensuredInitialConfig = true
     }
 
     async findById(userId: string, buildId: string): Promise<SavedBuild | null> {
@@ -182,7 +181,6 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             version: 1,
             createdAt: "2026-08-05T00:00:00.000Z",
             updatedAt: "2026-08-05T00:00:00.000Z",
-            isDefault: false,
             parts: parts.map((part) => ({
                 ...part,
                 price: 200000,
@@ -899,7 +897,7 @@ describe("saved builds API", () => {
 
     // scope=all は固定枠を含む全構成を返し、構成が無ければ既定を用意する
     it("lists all configs with scope=all", async () => {
-        savedBuildRepository.ensuredDefault = false
+        savedBuildRepository.ensuredInitialConfig = false
 
         const response = await app.request(
             "/api/builds?scope=all",
@@ -909,7 +907,7 @@ describe("saved builds API", () => {
 
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual(savedBuildRepository.builds)
-        expect(savedBuildRepository.ensuredDefault).toBe(true)
+        expect(savedBuildRepository.ensuredInitialConfig).toBe(true)
         expect(savedBuildRepository.lastListScope).toBe("all")
     })
 
@@ -952,7 +950,7 @@ describe("saved builds API", () => {
             catalogRepository: createRepository(),
             authAdapter: createAuthAdapter(),
             savedBuildRepository: {
-                ensureDefault: async () => {},
+                ensureInitialConfig: async () => {},
                 listAll: async () => {
                     throw new Error("D1_ERROR: no such table: saved_builds")
                 },

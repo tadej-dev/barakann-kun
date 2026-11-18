@@ -32,8 +32,6 @@ export type SavedBuild = {
     version: number
     createdAt: string
     updatedAt: string
-    // 削除できない既定の構成かどうか
-    isDefault: boolean
     parts: SavedBuildPart[]
 }
 
@@ -180,7 +178,6 @@ function parseSavedBuild(value: unknown): SavedBuild {
 
     const record = value as Record<string, unknown>
     const parts = record.parts
-    const isDefault = record.isDefault === true
 
     if (
         !isSavedBuildId(record.id) ||
@@ -202,7 +199,6 @@ function parseSavedBuild(value: unknown): SavedBuild {
         version: record.version,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
-        isDefault,
         parts: parsedParts,
     }
 }

@@ -66,7 +66,6 @@ function createConfig(id: string, name = `構成${id}`): StoredConfig {
     return {
         id,
         name,
-        isDefault: false,
         parts: [{slotKey: "frame", partId: 10, price: 1000, weight: 100}],
     }
 }
@@ -118,20 +117,6 @@ describe("simulator-storage", () => {
         })
     })
 
-    // 既定の構成は1件だけにする。
-    it("既定の構成を1件に整える", () => {
-        saveLocalConfigCollection(
-            [
-                {...createConfig("a"), isDefault: true},
-                {...createConfig("b"), isDefault: true},
-            ],
-            ["config:a", "config:b"],
-        )
-
-        expect(loadLocalConfigCollection().configs.map((config) => config.isDefault))
-            .toEqual([true, false])
-    })
-
     // 壊れた構成は読み飛ばす。
     it("壊れた構成は読み飛ばす", () => {
         window.localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify({
@@ -170,8 +155,6 @@ describe("simulator-storage", () => {
             "old-build",
         ])
         expect(collection.order).toEqual(["config:1", "config:old-build"])
-        // 既定は先頭の1件だけ
-        expect(collection.configs[0]?.isDefault).toBe(true)
     })
 
     // キー分割前のv3に埋め込まれた追加構成も引き継ぎ、旧パーツIDを読み替える。

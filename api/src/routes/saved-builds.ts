@@ -123,7 +123,7 @@ savedBuildsRoute.get("/", async (context) => {
 
     try {
         // 構成が1件も無い場合は、初期表示用の構成を用意する
-        await context.var.savedBuildRepository.ensureDefault(userId)
+        await context.var.savedBuildRepository.ensureInitialConfig(userId)
         builds = await context.var.savedBuildRepository.listAll(userId)
     } catch (error) {
         const response = migrationResponse(context, error)
