@@ -19,6 +19,14 @@ export type MigrationPlan = {
     candidates: MigrationCandidate[] // 移行ダイアログに表示する候補(ローカル構成と判定結果)
     defaultSelectedIds: string[] // 既定で選択する構成(重複と上限超過は除く)
     remainingSlots: number // 保存できる残り件数
+    // ログイン時に自動作成された空の「構成1」。選択した構成で置き換える
+    replaceInitialConfig: {id: string; version: number} | null
+    // ダイアログの上部に出す判定結果の件数
+    counts: {
+        duplicate: number // 完全一致
+        new: number // 新規
+        overLimit: number // 上限超過
+    }
 }
 
 // ログアウト時にローカルへ保存する構成のまとまり
@@ -87,17 +95,31 @@ export function buildMigrationPlan(
     serverConfigs: SavedBuild[], // アカウントに保存済みの構成
     maxConfigs: number, // 構成の上限(20件)
 ): MigrationPlan {
+    // ログイン直後は空の「構成1」が1件だけ自動作成されている。
+    // これを残したまま移行すると件数が増えてしまうため、置き換え対象として扱う。
+    const replaceInitialConfig = serverConfigs.length === 1 &&
+        serverConfigs[0]?.name === "構成1" &&
+        serverConfigs[0].parts.length === 0
+        ? {id: serverConfigs[0].id, version: serverConfigs[0].version}
+        : null
+
+    // 置き換える場合は、アカウント側に構成が無いものとして残り枠と重複を判定する
+    const effectiveServerConfigs = replaceInitialConfig ? [] : serverConfigs
+
     // アカウント側の構成を「一致判定用キー」に変え、名前＋パーツの比較に使う
     const serverMatchKeys = new Set(
         // キーの作成に必要な項目(名前・パーツ)だけを取り出す
-        serverConfigs.map((config) => createConfigMatchKey({
+        effectiveServerConfigs.map((config) => createConfigMatchKey({
             id: config.id,
             name: config.name,
             parts: config.parts,
         })),
     )
     // 上限からアカウントの件数を引き、移行できる残り枠を出す(負にはしない)
-    const remainingSlots = Math.max(0, maxConfigs - serverConfigs.length)
+    const remainingSlots = Math.max(
+        0,
+        maxConfigs - effectiveServerConfigs.length,
+    )
 
     // 残り枠をいくつ使ったかを数えるカウンター
     let newCount = 0
@@ -127,7 +149,23 @@ export function buildMigrationPlan(
         .filter((candidate) => candidate.status === "new")
         .map((candidate) => candidate.config.id)
 
-    return {candidates, defaultSelectedIds, remainingSlots}
+    // 画面の上部に「一致・新規・上限超過」の件数を出す
+    const counts = {
+        duplicate: candidates.filter((candidate) =>
+            candidate.status === "duplicate").length,
+        new: candidates.filter((candidate) =>
+            candidate.status === "new").length,
+        overLimit: candidates.filter((candidate) =>
+            candidate.status === "over-limit").length,
+    }
+
+    return {
+        candidates,
+        defaultSelectedIds,
+        remainingSlots,
+        replaceInitialConfig,
+        counts,
+    }
 }
 
 // アカウントの構成をローカルへ保存する(ログアウト時)

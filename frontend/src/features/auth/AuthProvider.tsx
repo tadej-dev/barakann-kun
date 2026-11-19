@@ -15,6 +15,7 @@ import {
     startGoogleLogin,
     updateDisplayName as updateAuthDisplayName,
 } from "@/features/auth/authApi"
+import {AUTH_LOGGED_OUT_EVENT} from "@/features/auth/authEvents"
 import {
     AuthContext,
     type AuthContextValue,
@@ -127,6 +128,8 @@ export function AuthProvider({children}: AuthProviderProps) {
 
         try {
             await logoutAuthSession()
+            // ログアウト後の再ログインで移行判定をやり直せるよう、画面へ通知する
+            window.dispatchEvent(new Event(AUTH_LOGGED_OUT_EVENT))
             // Cookie削除後のサーバー状態を再取得し、全画面の表示を同じ状態へ揃える。
             await refreshSession()
         } catch (error) {

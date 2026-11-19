@@ -1,59 +1,52 @@
 import {CloudUpload, X} from "lucide-react"
+import {useState} from "react"
 
 import {Button} from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
-import {Input} from "@/components/ui/input"
-import type {ConfigId} from "@/features/simulator/simulatorTypes"
-import type {SavedBuildMigrationResult} from "@/lib/saved-build-migration"
-
-const MAX_CONFIG_NAME_LENGTH = 50
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
+import {Checkbox} from "@/components/ui/checkbox"
+import type {MigrationCandidate} from "@/lib/local-config-sync"
 
 type SavedBuildMigrationDialogProps = {
-    open: boolean
-    configCount: number
-    configIds: ConfigId[]
-    names: Partial<Record<ConfigId, string>>
-    isSubmitting: boolean
-    result: SavedBuildMigrationResult | null
-    onConfirm: () => void
-    onDismiss: () => void
-    onNameChange: (configId: ConfigId, name: string) => void
+    open: boolean // ダイアログを表示するか
+    candidates: MigrationCandidate[] // 移行候補(重複・上限超過を含む)
+    remainingSlots: number // アカウント側に残っている保存枠
+    replacesInitialConfig: boolean // ログイン直後の空の構成1を置き換えるか
+    counts: {duplicate: number; new: number; overLimit: number} // 判定結果の件数
+    serverConfigs: {id: string; name: string; parts: number}[] // アカウントの構成
+    onDeleteServerConfig: (configId: string) => void // アカウントの構成を削除して枠を空ける
+    selectedIds: string[] // 保存する構成として選ばれているID
+    isSubmitting: boolean // 保存中か
+    onToggle: (configId: string, checked: boolean) => void // 構成の選択切り替え
+    onConfirm: () => void // 選択した構成を保存
+    onDismiss: () => void // 保存せずに閉じる
 }
 
-// localStorage移行の確認と結果を表示するダイアログ
+// ブラウザの構成をアカウントへ引き継ぐ確認ダイアログ
 export function SavedBuildMigrationDialog({
     open,
-    configCount,
-    configIds,
-    names,
+    candidates,
+    remainingSlots,
+    replacesInitialConfig,
+    counts,
+    serverConfigs,
+    onDeleteServerConfig,
+    selectedIds,
     isSubmitting,
-    result,
+    onToggle,
     onConfirm,
     onDismiss,
-    onNameChange,
 }: SavedBuildMigrationDialogProps) {
-    // 移行条件は親画面で判定し、閉じている間は入力欄やダイアログを描画しない。
+    // 削除ボタンを押した構成。確認のため2段階にする
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
+    // 閉じている間は何も描画しない
     if (!open) {
         return null
     }
 
-    const hasFailed = Boolean(result?.failed.length)
-    const isCompleted = result !== null
-    const hasInvalidName = configIds.some((configId) => {
-        const name = names[configId]?.trim() ?? ""
+    // 保存できる構成が1件も選ばれていない場合は確認ボタンを押せない
+    const canConfirm = selectedIds.length > 0 && !isSubmitting
 
-        return name.length === 0 || name.length > MAX_CONFIG_NAME_LENGTH
-    })
-
-    // 保存中は入力と閉じる操作を止め、複数回送信や移行結果の取り違えを防ぐ。
-    // resultがある場合は構成ごとの成功・スキップ・失敗を分けて表示し、再試行判断に使えるようにする。
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
@@ -64,7 +57,6 @@ export function SavedBuildMigrationDialog({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="saved-build-migration-title"
-                aria-describedby="saved-build-migration-description"
             >
                 <Card className="border-slate-200 bg-white shadow-2xl">
                     <CardHeader className="border-b border-slate-100">
@@ -77,13 +69,9 @@ export function SavedBuildMigrationDialog({
                                     <CloudUpload className="size-5 text-sky-600" />
                                     構成をアカウントへ保存
                                 </CardTitle>
-                                <CardDescription
-                                    id="saved-build-migration-description"
-                                    className="mt-2 text-slate-600"
-                                >
-                                    {isCompleted
-                                        ? "移行結果を確認してください。"
-                                        : `このブラウザに保存された${configCount}件の構成を、ログイン中のアカウントへ保存しますか？`}
+                                <CardDescription className="mt-2 text-slate-600">
+                                    このブラウザに保存された構成を、ログイン中のアカウントへ保存できます。
+                                    保存する構成を選んでください。
                                 </CardDescription>
                             </div>
 
@@ -101,98 +89,136 @@ export function SavedBuildMigrationDialog({
                         </div>
                     </CardHeader>
 
-                    <CardContent className="space-y-3 py-5">
-                        {!isCompleted && (
-                            <div className="space-y-4">
-                                <p className="text-sm leading-6 text-slate-600">
-                                    構成は1件ずつ保存されます。保存に失敗しても、ブラウザ内の構成は削除されません。
-                                </p>
+                    <CardContent className="space-y-4 py-5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                            <span>保存できる残り枠: {remainingSlots}件</span>
+                            <span>{selectedIds.length}件を選択中</span>
+                        </div>
 
-                                <div className="space-y-3">
-                                    {configIds.map((configId) => (
-                                        <label
-                                            key={configId}
-                                            className="grid gap-1.5 text-sm font-medium text-slate-800"
-                                        >
-                                            構成{configId}の保存名
-                                            <Input
-                                                value={names[configId] ?? ""}
-                                                maxLength={MAX_CONFIG_NAME_LENGTH}
-                                                aria-invalid={(() => {
-                                                    const name = names[configId]?.trim() ?? ""
+                        <p className="text-xs text-slate-600">
+                            一致 {counts.duplicate}件 / 新規 {counts.new}件 /
+                            上限超過 {counts.overLimit}件
+                        </p>
 
-                                                    return name.length === 0 ||
-                                                        name.length > MAX_CONFIG_NAME_LENGTH
-                                                })()}
-                                                onChange={(event) => onNameChange(
-                                                    configId,
-                                                    event.target.value,
-                                                )}
+                        {replacesInitialConfig && (
+                            <p className="rounded-md bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+                                ログイン時に作成された空の「構成1」は、選択した構成で置き換えます。
+                            </p>
+                        )}
+
+                        <ul className="max-h-72 space-y-2 overflow-auto">
+                            {candidates.map(({config, status}) => {
+                                // 重複と上限超過は選べないため、理由を表示して無効化する
+                                const selectable = status === "new"
+                                const checked = selectable &&
+                                    selectedIds.includes(config.id)
+
+                                return (
+                                    <li key={config.id}>
+                                        <label className="flex items-start gap-3 rounded-md border border-slate-200 p-3">
+                                            <Checkbox
+                                                checked={checked}
+                                                disabled={!selectable || isSubmitting}
+                                                aria-label={`${config.name}を引き継ぐ`}
+                                                onCheckedChange={(next) =>
+                                                    onToggle(config.id, next === true)}
                                             />
-                                            <span className="text-xs font-normal text-slate-500">
-                                                {names[configId]?.trim().length ?? 0} / {MAX_CONFIG_NAME_LENGTH}文字
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-sm font-medium text-slate-900">
+                                                    {config.name}
+                                                </span>
+                                                <span className="block text-xs text-slate-500">
+                                                    {config.parts.length}パーツ
+                                                    {status === "duplicate" && " ・移行済み"}
+                                                    {status === "over-limit" && " ・上限のため保存できません"}
+                                                </span>
                                             </span>
                                         </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                                    </li>
+                                )
+                            })}
+                        </ul>
 
-                        {isCompleted && result && (
-                            <div className="space-y-3 text-sm">
-                                <p className="font-medium text-emerald-700">
-                                    {result.created.length > 0
-                                        ? `${result.created.length}件の構成を保存しました。`
-                                        : "新しく保存した構成はありません。"}
+                        <div className="space-y-2 rounded-md border border-slate-200 p-3">
+                            <p className="text-xs font-semibold text-slate-700">
+                                アカウントの構成（{serverConfigs.length}件）
+                            </p>
+
+                            {serverConfigs.length === 0 && (
+                                <p className="text-xs text-slate-500">
+                                    アカウントには構成がありません。
                                 </p>
+                            )}
 
-                                {result.skipped.length > 0 && (
-                                    <p className="text-slate-600">
-                                        {result.skipped.length}件は移行済みのためスキップしました。
-                                    </p>
-                                )}
+                            <ul className="max-h-40 space-y-1 overflow-auto">
+                                {serverConfigs.map((config) => (
+                                    <li
+                                        key={config.id}
+                                        className="flex items-center justify-between gap-2 text-xs text-slate-700"
+                                    >
+                                        <span className="min-w-0 truncate">
+                                            {config.name}
+                                            <span className="ml-1 text-slate-400">
+                                                {config.parts}パーツ
+                                            </span>
+                                        </span>
 
-                                {hasFailed && (
-                                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
-                                        <p className="font-medium">
-                                            {result.failed.length}件の保存に失敗しました。
-                                        </p>
-                                        <ul className="mt-2 list-disc space-y-1 pl-5">
-                                            {result.failed.map((failure) => (
-                                                <li key={failure.configId}>
-                                                    構成{failure.configId}：{failure.message}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </CardContent>
+                                        {pendingDeleteId === config.id ? (
+                                            <span className="flex shrink-0 gap-1">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    onClick={() => {
+                                                        onDeleteServerConfig(config.id)
+                                                        setPendingDeleteId(null)
+                                                    }}
+                                                >
+                                                    削除する
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setPendingDeleteId(null)}
+                                                >
+                                                    やめる
+                                                </Button>
+                                            </span>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={isSubmitting}
+                                                onClick={() => setPendingDeleteId(config.id)}
+                                            >
+                                                削除
+                                            </Button>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
 
-                    <CardFooter className="justify-end gap-2">
-                        {!isCompleted && (
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                             <Button
                                 type="button"
                                 variant="outline"
                                 disabled={isSubmitting}
                                 onClick={onDismiss}
                             >
-                                今回は移行しない
+                                保存しない
                             </Button>
-                        )}
-                        <Button
-                            type="button"
-                            disabled={isSubmitting || (!isCompleted && hasInvalidName)}
-                            onClick={isCompleted ? onDismiss : onConfirm}
-                        >
-                            {isSubmitting
-                                ? "保存中…"
-                                : isCompleted
-                                    ? "閉じる"
-                                    : "アカウントへ保存"}
-                        </Button>
-                    </CardFooter>
+                            <Button
+                                type="button"
+                                disabled={!canConfirm}
+                                onClick={onConfirm}
+                            >
+                                {isSubmitting ? "保存中..." : "選択した構成を保存"}
+                            </Button>
+                        </div>
+                    </CardContent>
                 </Card>
             </div>
         </div>
