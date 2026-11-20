@@ -1,6 +1,6 @@
 import {readFileSync} from "node:fs"
 
-import {afterEach, beforeEach, describe, expect, it} from "vitest"
+import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
 import {D1ConfigOrderRepository} from "../src/db/config-order-repository"
 import {D1SavedBuildRepository} from "../src/db/d1-saved-build-repository"
@@ -68,6 +68,8 @@ describe("SQL結合テスト", () => {
     })
 
     afterEach(() => {
+        // 失敗しても次のテストへ時刻固定を持ち越さない
+        vi.useRealTimers()
         context?.sqlite.close()
     })
 
@@ -81,6 +83,7 @@ describe("SQL結合テスト", () => {
         expect(names).not.toContain("config_slot")
         expect(names).not.toContain("is_default")
         expect(names).toContain("user_id")
+        expect(names).toContain("update_token")
 
         // 子テーブルも存在する
         const tables = context.sqlite
@@ -262,6 +265,85 @@ describe("SQL結合テスト", () => {
 
         expect(current?.name).toBe("パーツあり")
         expect(current?.parts).toHaveLength(1)
+    })
+
+    // 同じミリ秒に競合した更新があっても、保存済みのパーツを消さない。
+    it("同じミリ秒の競合した更新でもパーツを保持する", async () => {
+        const repository = new D1SavedBuildRepository(context.database)
+        const partId = seedFramePart(context.sqlite)
+
+        await repository.ensureInitialConfig(USER_ID)
+        const created = await repository.create(USER_ID, "パーツ付き", [
+            {slotKey: "frame", partId},
+        ])
+
+        // 更新時刻を固定し、同一ミリ秒の競合を再現する
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date("2026-08-05T00:00:00.000Z"))
+
+        const updated = await repository.update(
+            USER_ID,
+            created.id,
+            created.version,
+            "更新後",
+            [{slotKey: "frame", partId}],
+        )
+
+        expect(updated.kind).toBe("updated")
+
+        // 古いversionの更新は競合し、パーツは変わらない
+        const conflicted = await repository.update(
+            USER_ID,
+            created.id,
+            created.version,
+            "競合する更新",
+            [],
+        )
+
+        expect(conflicted.kind).toBe("conflict")
+
+        const current = await repository.findById(USER_ID, created.id)
+
+        expect(current?.name).toBe("更新後")
+        expect(current?.parts).toHaveLength(1)
+    })
+
+    // 競合した更新では、パーツの追加も行われない。
+    it("競合した更新ではパーツを追加しない", async () => {
+        const repository = new D1SavedBuildRepository(context.database)
+        const partId = seedFramePart(context.sqlite)
+
+        await repository.ensureInitialConfig(USER_ID)
+        const created = await repository.create(USER_ID, "パーツ付き", [
+            {slotKey: "frame", partId},
+        ])
+
+        // パーツを空にして更新する
+        const cleared = await repository.update(
+            USER_ID,
+            created.id,
+            created.version,
+            "パーツなし",
+            [],
+        )
+
+        expect(cleared.kind).toBe("updated")
+
+        // 古いversionでパーツを追加しようとしても、競合して追加されない
+        const conflicted = await repository.update(
+            USER_ID,
+            created.id,
+            created.version,
+            "競合する追加",
+            [{slotKey: "frame", partId}],
+        )
+
+        expect(conflicted.kind).toBe("conflict")
+
+        const current = await repository.findById(USER_ID, created.id)
+
+        expect(current?.name).toBe("パーツなし")
+        expect(current?.parts).toEqual([])
     })
 
     // 重複スロットの作成は、構成本体も含めて取り消される(バッチのトランザクション)。
