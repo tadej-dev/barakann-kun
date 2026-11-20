@@ -1,5 +1,10 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 
+import {
+    AUTH_LOGOUT_FLUSH_EVENT,
+    type LogoutFlushDetail,
+} from "@/features/auth/authEvents"
+
 import {toSavedBuildParts} from "@/features/saved-builds/savedBuildMapper"
 import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
 import type {
@@ -7,19 +12,19 @@ import type {
     SelectedParts,
 } from "@/features/simulator/simulatorTypes"
 
-// 変更が落ち着いてから保存するまでの待ち時間
+// 保存待ち時間
 const AUTO_SAVE_DELAY_MS = 800
 
 type UseConfigAutoSaveProps = {
     collection: ConfigCollection
-    selectedParts: SelectedParts // 現在編集中のパーツ
+    selectedParts: SelectedParts // 編集中パーツ
     activeConfigId: ConfigId // 編集中の構成
-    isConfigLoading: boolean // 構成の読み込み中は保存しない
-    isActiveConfigLoaded: boolean // 保存内容を読み込む前の構成は上書きしない
-    autoSaveEnabled: boolean // 復元が終わるまでは保存しない
+    isConfigLoading: boolean // 読み込み中
+    isActiveConfigLoaded: boolean // 未読込
+    autoSaveEnabled: boolean // 復元中
 }
 
-// パーツの組み合わせを比較するための指紋
+// パーツの組み合わせを比較するためのキーを作る
 function createPartsFingerprint(
     parts: {slotKey: string; partId: number}[],
 ): string {
@@ -56,12 +61,12 @@ export function useConfigAutoSave({
         currentConfigIdRef.current = activeConfigId
     }, [activeConfigId])
 
-    const save = useCallback(async () => {
+    const save = useCallback(async (): Promise<boolean> => {
         const config = configs.find((candidate) =>
             candidate.id === currentConfigIdRef.current)
 
         if (!config) {
-            return
+            return false
         }
 
         const parts = toSavedBuildParts(selectedParts)
@@ -72,8 +77,11 @@ export function useConfigAutoSave({
             // 同じ構成・同じ内容の再保存を抑止する
             fingerprintRef.current =
                 `${config.id}:${createPartsFingerprint(parts)}`
+
+            return true
         } catch {
             // 失敗時は次回の変更で再試行する
+            return false
         } finally {
             inFlightRef.current = false
 
@@ -83,6 +91,70 @@ export function useConfigAutoSave({
             }
         }
     }, [configs, selectedParts, updateConfig])
+
+    // ログアウト直前に、待機中の自動保存を確定させる
+    useEffect(() => {
+        function flushPendingSave(event: Event) {
+            const detail = (event as CustomEvent<LogoutFlushDetail>).detail
+
+            if (!detail) {
+                return
+            }
+
+            // 依頼を処理したことを示し、保存できたかを返す
+            detail.handled = true
+            const finish = (ok: boolean) => detail.respond(ok)
+
+            // 待機中のタイマーがあれば取り消し、その場で保存する
+            if (timerRef.current) {
+                clearTimeout(timerRef.current)
+                timerRef.current = undefined
+            }
+
+            // 保存中・操作中・読み込み中は、確実に保存できたと言えないため失敗とする
+            if (inFlightRef.current ||
+                !autoSaveEnabled || !isActiveConfigLoaded ||
+                isConfigLoading || configsOperation !== null) {
+                finish(false)
+                return
+            }
+
+            const config = configs.find((candidate) =>
+                candidate.id === activeConfigId)
+
+            // 対象構成が無い場合は保存できない
+            if (!config) {
+                finish(false)
+                return
+            }
+
+            const parts = toSavedBuildParts(selectedParts)
+
+            // 保存対象が無ければ、そのまま完了を通知する
+            if (`${config.id}:${createPartsFingerprint(parts)}` ===
+                `${config.id}:${createPartsFingerprint(config.parts)}`) {
+                finish(true)
+                return
+            }
+
+            void save().then(finish)
+        }
+
+        window.addEventListener(AUTH_LOGOUT_FLUSH_EVENT, flushPendingSave)
+
+        return () => {
+            window.removeEventListener(AUTH_LOGOUT_FLUSH_EVENT, flushPendingSave)
+        }
+    }, [
+        autoSaveEnabled,
+        isActiveConfigLoaded,
+        isConfigLoading,
+        configsOperation,
+        configs,
+        activeConfigId,
+        selectedParts,
+        save,
+    ])
 
     useEffect(() => {
         // 初期取得中・明示操作中は、未確定の状態を自動保存しない

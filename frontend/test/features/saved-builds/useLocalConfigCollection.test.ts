@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it} from "vitest"
-import {act, renderHook, waitFor} from "@testing-library/react"
+import {act, cleanup, renderHook, waitFor} from "@testing-library/react"
 
 import {useLocalConfigCollection} from "@/features/saved-builds/useLocalConfigCollection"
 import {
@@ -19,6 +19,7 @@ describe("useLocalConfigCollection", () => {
     })
 
     afterEach(() => {
+        cleanup()
         window.localStorage.clear()
     })
 
@@ -99,6 +100,26 @@ describe("useLocalConfigCollection", () => {
         expect(loadLocalConfigCollection().configs[0]).toMatchObject({
             name: "レース用",
             parts: [createPart(20)],
+        })
+    })
+
+    // ログアウトなどで有効になったときは、保存済みの内容を読み直す。
+    it("有効になったときに保存済みの内容を読み直す", async () => {
+        const {result, rerender} = renderHook(
+            ({enabled}: {enabled: boolean}) =>
+                useLocalConfigCollection({enabled}),
+            {initialProps: {enabled: false}},
+        )
+
+        saveLocalConfigCollection(
+            [{id: "external", name: "外部の構成", parts: []}],
+            ["config:external"],
+        )
+        rerender({enabled: true})
+
+        await waitFor(() => {
+            expect(result.current.builds.builds[0]?.name)
+                .toBe("外部の構成")
         })
     })
 

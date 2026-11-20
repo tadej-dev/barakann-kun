@@ -16,10 +16,10 @@ import {
 type LocalBuildOperation = "create" | "rename" | "update" | "delete"
 
 type UseLocalConfigCollectionOptions = {
-    enabled: boolean // 未ログイン時だけローカルの内容を扱う
+    enabled: boolean // ローカル利用時のみ
 }
 
-// 保存できなかったときに画面へ出す文言
+// 保存失敗メッセージ
 const SAVE_ERROR_MESSAGE =
     "構成を保存できませんでした。ブラウザの保存領域を確認してください。"
 
@@ -76,14 +76,14 @@ function loadCollection(): LocalConfigCollection {
 export function useLocalConfigCollection({
     enabled,
 }: UseLocalConfigCollectionOptions) {
-    // localStorageは同期的に読めるため、初回描画時に読み込んでおく
+    // 初回読み込み
     const [collection, setCollection] = useState<LocalConfigCollection>(
         loadCollection,
     )
     const [operation, setOperation] = useState<LocalBuildOperation | null>(null)
     const [isSavingOrder, setIsSavingOrder] = useState(false)
     const [errorMessage, setErrorMessage] = useState("")
-    // 操作のたびに最新の内容を参照するため、stateとは別に保持する
+    // 最新内容の参照用
     const collectionRef = useRef(collection)
 
     useEffect(() => {
@@ -97,6 +97,28 @@ export function useLocalConfigCollection({
         }
 
         return subscribeToLocalConfigChanges((next) => {
+            setCollection(next)
+            collectionRef.current = next
+        })
+    }, [enabled])
+
+    // ログアウト直後など、外部で保存された内容を読み直す。
+    // 初回マウント時は読み込み済みなので、有効になった瞬間だけ実行する
+    const wasEnabledRef = useRef(enabled)
+
+    useEffect(() => {
+        const becameEnabled = enabled && !wasEnabledRef.current
+
+        wasEnabledRef.current = enabled
+
+        if (!becameEnabled) {
+            return
+        }
+
+        // Effect内の同期的な更新を避けるため、マイクロタスクで反映する
+        queueMicrotask(() => {
+            const next = loadCollection()
+
             setCollection(next)
             collectionRef.current = next
         })
@@ -136,7 +158,7 @@ export function useLocalConfigCollection({
             throw new Error(message)
         }
 
-        // 構成のIDは、サーバーと同じUUID形式で発行する
+        // UUID形式のID
         const config: StoredConfig = {
             id: crypto.randomUUID(),
             name,
