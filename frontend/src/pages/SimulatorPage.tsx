@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react"
+import {useEffect, useRef, useState} from "react"
 
 import {fetchCategories} from "@/api/categories"
 import {Simulator} from "@/components/simulator/Simulator"
@@ -13,7 +13,14 @@ import {
     deleteSavedBuild,
     fetchSavedBuilds,
 } from "@/api/savedBuilds"
-import {buildMigrationPlan} from "@/lib/local-config-sync"
+import {
+    buildMigrationPlan,
+    canMigrateForAccount,
+    intersectSelectableIds,
+    loadLocalOrigin,
+    saveLocalOrigin,
+    selectMigrationTargets,
+} from "@/lib/local-config-sync"
 import type {SavedBuild} from "@/api/savedBuilds"
 import {loadLocalConfigCollection} from "@/lib/simulator-storage"
 import type {MigrationPlan} from "@/lib/local-config-sync"
@@ -50,7 +57,7 @@ export function SimulatorPage() {
         )
     }, [isGoogleLoginCancelled])
 
-    // 未ログイン時に作った構成(ブラウザ保存)を、ログイン時に引き継ぐ
+    // ローカル構成の引き継ぎ
     const [localCollection] = useState(loadLocalConfigCollection)
     const [migrationPlan, setMigrationPlan] = useState<MigrationPlan | null>(null)
     const [serverConfigs, setServerConfigs] = useState<SavedBuild[]>([])
@@ -58,8 +65,12 @@ export function SimulatorPage() {
     const [dismissedMigrationUserId, setDismissedMigrationUserId] =
         useState<string | null>(null)
     const [isMigrating, setIsMigrating] = useState(false)
+    const [isDeletingServerConfig, setIsDeletingServerConfig] = useState(false)
     const [migrationErrorMessage, setMigrationErrorMessage] = useState("")
     const [savedBuildsReloadKey, setSavedBuildsReloadKey] = useState(0)
+    // 中断用の世代番号
+    const generationRef = useRef(0)
+    const isMountedRef = useRef(true)
     const authUserId = authStatus === "authenticated"
         ? user?.id ?? null
         : null
@@ -91,9 +102,23 @@ export function SimulatorPage() {
         }
     }, [])
 
+    useEffect(() => {
+        isMountedRef.current = true
+
+        return () => {
+            isMountedRef.current = false
+            generationRef.current += 1
+        }
+    }, [])
+
     // ログイン後、ブラウザの構成とアカウントの構成を比べて移行候補を作る
     useEffect(() => {
         if (!authUserId || dismissedMigrationUserId === authUserId) {
+            return
+        }
+
+        // 別アカウント由来のデータは、そのアカウントへ移行しない
+        if (!canMigrateForAccount(loadLocalOrigin(), authUserId)) {
             return
         }
 
@@ -102,10 +127,11 @@ export function SimulatorPage() {
         }
 
         let cancelled = false
+        const controller = new AbortController()
 
         void (async () => {
             try {
-                const fetchedConfigs = await fetchSavedBuilds()
+                const fetchedConfigs = await fetchSavedBuilds(controller.signal)
 
                 if (cancelled) {
                     return
@@ -133,6 +159,7 @@ export function SimulatorPage() {
 
         return () => {
             cancelled = true
+            controller.abort()
         }
     }, [authUserId, dismissedMigrationUserId, localCollection])
 
@@ -176,7 +203,7 @@ export function SimulatorPage() {
         }
     }, []) // 初回表示時のみ実行
 
-    // 移行候補があるときだけダイアログを表示する
+    // ダイアログ表示
     const isMigrationDialogOpen = Boolean(
         authStatus === "authenticated" && user && migrationPlan)
 
@@ -186,17 +213,29 @@ export function SimulatorPage() {
             return
         }
 
-        const targets = migrationPlan.candidates.filter((candidate) =>
-            candidate.status === "new" &&
-            selectedConfigIds.includes(candidate.config.id))
+        const targets = selectMigrationTargets(
+            migrationPlan,
+            selectedConfigIds,
+        )
 
+        // 残り枠を超える選択は保存しない(ダイアログ側でも確定を止めている)
         if (targets.length === 0) {
-            dismissMigrationDialog()
+            setMigrationErrorMessage("保存する構成を選んでください。")
+            return
+        }
+
+        if (targets.length > migrationPlan.remainingSlots) {
+            setMigrationErrorMessage(
+                "残り枠を超えています。選択を減らしてください。",
+            )
             return
         }
 
         setIsMigrating(true)
         setMigrationErrorMessage("")
+        const generation = generationRef.current
+        const isCurrent = () =>
+            isMountedRef.current && generationRef.current === generation
         let created = 0
         let failed = 0
 
@@ -214,9 +253,13 @@ export function SimulatorPage() {
                 )
                 return
             }
+
+            if (!isCurrent()) {
+                return
+            }
         }
 
-        for (const {config} of targets) {
+        for (const config of targets) {
             try {
                 await createSavedBuild(
                     config.name,
@@ -228,39 +271,122 @@ export function SimulatorPage() {
                 created += 1
             } catch {
                 failed += 1
+
+                if (!isCurrent()) {
+                    return
+                }
             }
         }
 
-        setIsMigrating(false)
-        setMigrationPlan(null)
-        setDismissedMigrationUserId(authUserId)
+        if (!isCurrent()) {
+            return
+        }
 
-        // 保存できた構成があれば、構成一覧を再取得する
+        // 失敗が残る場合は、再取得が終わるまで保存中扱いにして二重実行を防ぐ
+        if (failed === 0) {
+            setIsMigrating(false)
+        }
+
+        // 保存できた構成があれば、由来を記録して一覧を再取得する
         if (created > 0) {
+            saveLocalOrigin(authUserId)
             setSavedBuildsReloadKey((current) => current + 1)
         }
 
+        // 失敗が残る場合は、状態を取り直してダイアログに残し再試行できるようにする
         if (failed > 0) {
-            setMigrationErrorMessage(
-                `${failed}件の構成を保存できませんでした。`,
-            )
+            try {
+                const refreshed = await fetchSavedBuilds()
+
+                if (isCurrent()) {
+                    const plan = buildMigrationPlan(
+                        localCollection.configs,
+                        refreshed,
+                        MAX_SAVED_BUILDS,
+                    )
+
+                    setServerConfigs(refreshed)
+                    setMigrationPlan(plan)
+                    // 移行済み・上限外になった構成を選択から外す
+                    setSelectedConfigIds((current) =>
+                        intersectSelectableIds(plan, current))
+                    setMigrationErrorMessage(
+                        `${failed}件の構成を保存できませんでした。もう一度お試しください。`,
+                    )
+                }
+            } catch {
+                if (isCurrent()) {
+                    // 状態を確認できないため、選択を空にして二重作成を防ぐ
+                    setSelectedConfigIds([])
+                    setMigrationErrorMessage(
+                        `${failed}件の構成を保存できませんでした。`,
+                    )
+                }
+            }
+
+            setIsMigrating(false)
+
+            return
         }
+
+        // 全件成功したときだけダイアログを閉じる
+        setMigrationPlan(null)
+        setDismissedMigrationUserId(authUserId)
     }
 
     // アカウントの構成を削除し、残り枠と上限超過を再計算する
     async function deleteServerConfig(configId: string) {
         const target = serverConfigs.find((config) => config.id === configId)
 
-        if (!target || isMigrating) {
+        // 削除中は別の削除や移行を始めない
+        if (!target || isMigrating || isDeletingServerConfig) {
             return
         }
+
+        setIsDeletingServerConfig(true)
+        const generation = generationRef.current
+        const isCurrent = () =>
+            isMountedRef.current && generationRef.current === generation
 
         try {
             await deleteSavedBuild(target.id, target.version)
         } catch {
-            setMigrationErrorMessage("構成を削除できませんでした。")
+            // 競合した場合に備えて最新の構成を取り直し、再試行できるようにする
+            try {
+                const refreshed = await fetchSavedBuilds()
+
+                if (isCurrent()) {
+                    const plan = buildMigrationPlan(
+                        localCollection.configs,
+                        refreshed,
+                        MAX_SAVED_BUILDS,
+                    )
+
+                    setServerConfigs(refreshed)
+                    setMigrationPlan(plan)
+                    // 選択の絞り込み
+                    setSelectedConfigIds((current) =>
+                        intersectSelectableIds(plan, current))
+                }
+            } catch {
+                // 再取得にも失敗した場合は、元のエラーだけを表示する
+            }
+
+            if (isCurrent()) {
+                setMigrationErrorMessage("構成を削除できませんでした。")
+                setIsDeletingServerConfig(false)
+            }
+
             return
         }
+
+        if (!isCurrent()) {
+            return
+        }
+
+        // サイドバーの一覧も、削除を反映して取り直す
+        setSavedBuildsReloadKey((current) => current + 1)
+        setIsDeletingServerConfig(false)
 
         const rest = serverConfigs.filter((config) => config.id !== configId)
 
@@ -272,9 +398,9 @@ export function SimulatorPage() {
         )
 
         setMigrationPlan(plan)
-        setSelectedConfigIds((current) => current.filter((id) =>
-            plan.candidates.some((candidate) =>
-                candidate.config.id === id && candidate.status === "new")))
+        // 削除で状況が変わったため、選択も移行可能なものへ絞る
+        setSelectedConfigIds((current) =>
+            intersectSelectableIds(plan, current))
     }
 
     // ダイアログを閉じたユーザーを記録し、同じ画面で繰り返し表示しない
@@ -341,15 +467,6 @@ export function SimulatorPage() {
                 </div>
             )}
 
-            {migrationErrorMessage && (
-                <div
-                    className="border-b border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-800"
-                    role="alert"
-                >
-                    {migrationErrorMessage}
-                </div>
-            )}
-
             <Simulator
                 categories={categories}
                 savedBuildsReloadKey={savedBuildsReloadKey}
@@ -369,7 +486,8 @@ export function SimulatorPage() {
                 }))}
                 onDeleteServerConfig={(configId) => void deleteServerConfig(configId)}
                 selectedIds={selectedConfigIds}
-                isSubmitting={isMigrating}
+                isSubmitting={isMigrating || isDeletingServerConfig}
+                errorMessage={migrationErrorMessage}
                 onToggle={(configId, checked) => setSelectedConfigIds(
                     (current) => checked
                         ? [...current, configId]

@@ -21,8 +21,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {GoogleIcon} from "@/features/auth/GoogleIcon"
 import {AccountDeleteDialog} from "@/features/auth/AccountDeleteDialog"
+import {LogoutSaveDialog} from "@/features/auth/LogoutSaveDialog"
 import {DisplayNameDialog} from "@/features/auth/DisplayNameDialog"
 import {useAuth} from "@/features/auth/useAuth"
+import {useLogoutWithSave} from "@/features/auth/useLogoutWithSave"
 
 // ユーザー名からアバター用の頭文字を作成
 function getUserInitials(displayName: string): string {
@@ -43,11 +45,18 @@ export function Header() {
         isDeletingAccount,
         isLoggingOut,
         login,
-        logout,
         status,
         updateDisplayName,
         user,
     } = useAuth()
+    const {
+        status: logoutSaveStatus,
+        errorMessage: logoutSaveError,
+        saveAndLogout,
+        retry,
+        skipSaveAndLogout,
+        cancel,
+    } = useLogoutWithSave()
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
     const [isNameDialogOpen, setIsNameDialogOpen] = useState(false)
     // 開くたびに値を変え、ダイアログの入力内容を現在の表示名から始め直す
@@ -152,8 +161,8 @@ export function Header() {
 
                                     {/* ログアウト後のセッション再取得はAuthProviderへ集約する。 */}
                                     <DropdownMenuItem
-                                        disabled={isLoggingOut}
-                                        onClick={() => void logout()}
+                                        disabled={isLoggingOut || logoutSaveStatus === "saving"}
+                                        onClick={() => void saveAndLogout()}
                                     >
                                         <LogOut className="size-4" />
                                         {isLoggingOut
@@ -214,6 +223,14 @@ export function Header() {
                 currentName={user?.displayName ?? ""}
                 onSubmit={updateDisplayName}
                 onDismiss={() => setIsNameDialogOpen(false)}
+            />
+
+            <LogoutSaveDialog
+                status={logoutSaveStatus}
+                errorMessage={logoutSaveError}
+                onRetry={() => void retry()}
+                onSkip={() => void skipSaveAndLogout()}
+                onCancel={cancel}
             />
 
             <AccountDeleteDialog

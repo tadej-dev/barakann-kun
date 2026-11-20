@@ -1,3 +1,11 @@
-// ログアウト完了を画面へ知らせるイベント名
-// 認証状態の変化に合わせて、画面側の一時的な状態を戻すために使う
+// ログアウト完了イベント
 export const AUTH_LOGGED_OUT_EVENT = "barakann:auth-logged-out"
+
+// 自動保存の確定依頼イベント
+export const AUTH_LOGOUT_FLUSH_EVENT = "barakann:logout-flush-autosave"
+
+// 確定依頼の受け渡し（handled / respond）
+export type LogoutFlushDetail = {
+    handled: boolean
+    respond: (ok: boolean) => void
+}

@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
-import {act, renderHook} from "@testing-library/react"
+import {act, cleanup, renderHook} from "@testing-library/react"
 import {useState} from "react"
 
+import {
+    AUTH_LOGOUT_FLUSH_EVENT,
+    type LogoutFlushDetail,
+} from "@/features/auth/authEvents"
 import type {Part} from "@/types/part"
 import {useLocalConfigCollection} from "@/features/saved-builds/useLocalConfigCollection"
 import type {ConfigCollection} from "@/features/simulator/useConfigCollection"
@@ -61,6 +65,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
     })
 
     afterEach(() => {
+        cleanup()
         vi.useRealTimers()
         window.localStorage.clear()
     })
@@ -100,6 +105,33 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         })
 
         expect(loadLocalConfigCollection().configs[0]?.parts).toEqual([])
+    })
+
+    // ログアウト前の確定依頼では、待ち時間を置かずに保存する。
+    it("ログアウト前の確定依頼で待たずに保存する", async () => {
+        const {result} = renderHook(() => useHarness())
+
+        act(() => {
+            result.current.setSelectedParts({
+                frame: createPart(10, 500000, 1133),
+            })
+        })
+
+        const respond = vi.fn()
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
+                detail: {
+                    handled: false,
+                    respond,
+                } satisfies LogoutFlushDetail,
+            }))
+            await Promise.resolve()
+            await Promise.resolve()
+        })
+
+        expect(loadLocalConfigCollection().configs[0]?.parts).toHaveLength(1)
+        expect(respond).toHaveBeenCalledWith(true)
     })
 
     // 保存済みと同じ内容では、保存を繰り返さない。

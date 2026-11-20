@@ -7,18 +7,19 @@ import {Checkbox} from "@/components/ui/checkbox"
 import type {MigrationCandidate} from "@/lib/local-config-sync"
 
 type SavedBuildMigrationDialogProps = {
-    open: boolean // ダイアログを表示するか
-    candidates: MigrationCandidate[] // 移行候補(重複・上限超過を含む)
-    remainingSlots: number // アカウント側に残っている保存枠
-    replacesInitialConfig: boolean // ログイン直後の空の構成1を置き換えるか
-    counts: {duplicate: number; new: number; overLimit: number} // 判定結果の件数
-    serverConfigs: {id: string; name: string; parts: number}[] // アカウントの構成
-    onDeleteServerConfig: (configId: string) => void // アカウントの構成を削除して枠を空ける
-    selectedIds: string[] // 保存する構成として選ばれているID
-    isSubmitting: boolean // 保存中か
-    onToggle: (configId: string, checked: boolean) => void // 構成の選択切り替え
-    onConfirm: () => void // 選択した構成を保存
-    onDismiss: () => void // 保存せずに閉じる
+    open: boolean // 表示可否
+    candidates: MigrationCandidate[] // 候補
+    remainingSlots: number // 残り枠
+    replacesInitialConfig: boolean // 初期構成の置き換え
+    counts: {duplicate: number; new: number; overLimit: number} // 判定件数
+    serverConfigs: {id: string; name: string; parts: number}[] // アカウント構成
+    onDeleteServerConfig: (configId: string) => void // 構成の削除
+    selectedIds: string[] // 選択ID
+    isSubmitting: boolean // 保存中
+    errorMessage?: string // エラー理由
+    onToggle: (configId: string, checked: boolean) => void // 選択切替
+    onConfirm: () => void // 保存
+    onDismiss: () => void // 閉じる
 }
 
 // ブラウザの構成をアカウントへ引き継ぐ確認ダイアログ
@@ -32,11 +33,12 @@ export function SavedBuildMigrationDialog({
     onDeleteServerConfig,
     selectedIds,
     isSubmitting,
+    errorMessage = "",
     onToggle,
     onConfirm,
     onDismiss,
 }: SavedBuildMigrationDialogProps) {
-    // 削除ボタンを押した構成。確認のため2段階にする
+    // 削除確認中のID
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
     // 閉じている間は何も描画しない
@@ -44,19 +46,29 @@ export function SavedBuildMigrationDialog({
         return null
     }
 
-    // 保存できる構成が1件も選ばれていない場合は確認ボタンを押せない
-    const canConfirm = selectedIds.length > 0 && !isSubmitting
+    // 確定可否
+    const isOverCapacity = selectedIds.length > remainingSlots
+    const canConfirm = selectedIds.length > 0 &&
+        !isOverCapacity &&
+        !isSubmitting
 
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
             role="presentation"
+            onKeyDown={(event) => {
+                // Escapeで閉じる(保存中は閉じない)
+                if (event.key === "Escape" && !isSubmitting) {
+                    onDismiss()
+                }
+            }}
         >
             <div
                 className="w-full max-w-md"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="saved-build-migration-title"
+                aria-describedby="saved-build-migration-description"
             >
                 <Card className="border-slate-200 bg-white shadow-2xl">
                     <CardHeader className="border-b border-slate-100">
@@ -69,7 +81,10 @@ export function SavedBuildMigrationDialog({
                                     <CloudUpload className="size-5 text-sky-600" />
                                     構成をアカウントへ保存
                                 </CardTitle>
-                                <CardDescription className="mt-2 text-slate-600">
+                                <CardDescription
+                                    id="saved-build-migration-description"
+                                    className="mt-2 text-slate-600"
+                                >
                                     このブラウザに保存された構成を、ログイン中のアカウントへ保存できます。
                                     保存する構成を選んでください。
                                 </CardDescription>
@@ -108,8 +123,8 @@ export function SavedBuildMigrationDialog({
 
                         <ul className="max-h-72 space-y-2 overflow-auto">
                             {candidates.map(({config, status}) => {
-                                // 重複と上限超過は選べないため、理由を表示して無効化する
-                                const selectable = status === "new"
+                                // 重複だけを選べない。上限超過は他の選択を外せば選べる
+                                const selectable = status !== "duplicate"
                                 const checked = selectable &&
                                     selectedIds.includes(config.id)
 
@@ -130,7 +145,7 @@ export function SavedBuildMigrationDialog({
                                                 <span className="block text-xs text-slate-500">
                                                     {config.parts.length}パーツ
                                                     {status === "duplicate" && " ・移行済み"}
-                                                    {status === "over-limit" && " ・上限のため保存できません"}
+                                                    {status === "over-limit" && " ・残り枠を超えています"}
                                                 </span>
                                             </span>
                                         </label>
@@ -200,6 +215,21 @@ export function SavedBuildMigrationDialog({
                                 ))}
                             </ul>
                         </div>
+
+                        {errorMessage && (
+                            <p
+                                role="alert"
+                                className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-800"
+                            >
+                                {errorMessage}
+                            </p>
+                        )}
+
+                        {isOverCapacity && (
+                            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                残り枠を超えています。選択を減らしてください。
+                            </p>
+                        )}
 
                         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                             <Button

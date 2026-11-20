@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
-import {cleanup, fireEvent, render, screen, within} from "@testing-library/react"
+import {cleanup, fireEvent, render, screen, waitFor, within} from "@testing-library/react"
 import {MemoryRouter} from "react-router"
 
 import {Header} from "@/components/layout/Header"
@@ -202,6 +202,28 @@ describe("Header", () => {
     // アカウントメニューを開き、ログアウトを実行できる。
     it("アカウントメニューからログアウトできる", async () => {
         const logout = vi.fn()
+
+        // ログアウト前の保存で取得するAPIを空データで返す
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input)
+
+            if (url.includes("/api/config-order")) {
+                return new Response(JSON.stringify({items: ["config:1"]}), {
+                    status: 200,
+                    headers: {"content-type": "application/json"},
+                })
+            }
+
+            if (url.includes("/api/builds")) {
+                return new Response(JSON.stringify([]), {
+                    status: 200,
+                    headers: {"content-type": "application/json"},
+                })
+            }
+
+            throw new Error(`unexpected fetch: ${url}`)
+        }))
+
         renderHeader(createAuthValue({
             status: "authenticated",
             user: {id: "user-1", displayName: "テスト 太郎"},
@@ -213,7 +235,11 @@ describe("Header", () => {
         )
         fireEvent.click(await screen.findByText("ログアウト"))
 
-        expect(logout).toHaveBeenCalledTimes(1)
+        await waitFor(() => {
+            expect(logout).toHaveBeenCalledTimes(1)
+        })
+
+        vi.unstubAllGlobals()
     })
 
     // ログイン済みでも操作に失敗したときは、理由を添えて知らせる。

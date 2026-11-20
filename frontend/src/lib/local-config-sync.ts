@@ -2,26 +2,26 @@ import type {SavedBuild} from "@/api/savedBuilds"
 import type {StoredConfig} from "@/features/saved-builds/configRules"
 import {saveLocalConfigCollection} from "@/lib/simulator-storage"
 
-// ローカル構成の由来アカウントを保存するキー
+// 由来アカウントの保存キー
 const ORIGIN_STORAGE_KEY = "barakann-local-config-origin-v1"
 
-// 構成の移行可否。重複・上限超過を画面で区別する
+// 移行可否（新規・重複・上限超過）
 export type MigrationCandidateStatus = "new" | "duplicate" | "over-limit"
 
-// 1件の移行候補。構成そのものと、移行できるかの判定結果を持つ
+// 移行候補
 export type MigrationCandidate = {
-    config: StoredConfig // ローカル保存構成
-    status: MigrationCandidateStatus // 新規・重複・上限超過のいずれか
+    config: StoredConfig // ローカル構成
+    status: MigrationCandidateStatus // 判定結果
 }
 
-// 移行ダイアログに表示する候補と、初期状態の選択
+// 移行計画
 export type MigrationPlan = {
-    candidates: MigrationCandidate[] // 移行ダイアログに表示する候補(ローカル構成と判定結果)
-    defaultSelectedIds: string[] // 既定で選択する構成(重複と上限超過は除く)
-    remainingSlots: number // 保存できる残り件数
-    // ログイン時に自動作成された空の「構成1」。選択した構成で置き換える
+    candidates: MigrationCandidate[] // 候補
+    defaultSelectedIds: string[] // 既定選択
+    remainingSlots: number // 残り枠
+    // 置き換える初期構成
     replaceInitialConfig: {id: string; version: number} | null
-    // ダイアログの上部に出す判定結果の件数
+    // 判定件数
     counts: {
         duplicate: number // 完全一致
         new: number // 新規
@@ -29,10 +29,10 @@ export type MigrationPlan = {
     }
 }
 
-// ログアウト時にローカルへ保存する構成のまとまり
+// ログアウト保存用の構成
 export type SavedConfigSnapshot = {
-    configs: StoredConfig[] // 構成の内容
-    order: string[] // 表示順(構成IDの並び)
+    configs: StoredConfig[] // 構成
+    order: string[] // 表示順
 }
 
 // localStorageが使えない環境でも処理を止めない
@@ -70,30 +70,47 @@ export function loadLocalOrigin(): string | null {
     return storage.getItem(ORIGIN_STORAGE_KEY)
 }
 
-// ローカル構成の由来アカウントを記録する。nullで消去する
-export function saveLocalOrigin(accountId: string | null): void {
+// ローカル構成の由来アカウントを記録する。nullで消去する。
+// 保存できたかを返し、呼び出し元が失敗を判断できるようにする
+export function saveLocalOrigin(accountId: string | null): boolean {
     const storage = getStorage()
 
-    // localStorageが使えない環境では記録できないため、何もせず戻る
+    // localStorageが使えない環境では記録できないため、失敗として返す
     if (!storage) {
-        return
+        return false
     }
 
-    // nullは「由来を消す」指示。別アカウントの判定を残さない
-    if (accountId === null) {
-        storage.removeItem(ORIGIN_STORAGE_KEY)
-        return
-    }
+    try {
+        // nullは「由来を消す」指示。別アカウントの判定を残さない
+        if (accountId === null) {
+            storage.removeItem(ORIGIN_STORAGE_KEY)
+            return true
+        }
 
-    // 由来を記録し、次回ログイン時に同じアカウントか判定する
-    storage.setItem(ORIGIN_STORAGE_KEY, accountId)
+        // 由来を記録し、次回ログイン時に同じアカウントか判定する
+        storage.setItem(ORIGIN_STORAGE_KEY, accountId)
+
+        return true
+    } catch {
+        // 容量超過などで書けなかった場合は失敗として返す
+        return false
+    }
+}
+
+// ローカルの構成を、このアカウントへ移行してよいか判定する
+// 由来が無い(未ログインで作った)か、同じアカウントのときだけ移行する
+export function canMigrateForAccount(
+    origin: string | null,
+    accountId: string,
+): boolean {
+    return origin === null || origin === accountId
 }
 
 // ローカル構成から、移行候補と重複・上限超過を判定する
 export function buildMigrationPlan(
-    localConfigs: StoredConfig[], // ブラウザに保存されている構成
-    serverConfigs: SavedBuild[], // アカウントに保存済みの構成
-    maxConfigs: number, // 構成の上限(20件)
+    localConfigs: StoredConfig[], // ローカル構成
+    serverConfigs: SavedBuild[], // アカウント構成
+    maxConfigs: number, // 上限
 ): MigrationPlan {
     // ログイン直後は空の「構成1」が1件だけ自動作成されている。
     // これを残したまま移行すると件数が増えてしまうため、置き換え対象として扱う。
@@ -124,15 +141,25 @@ export function buildMigrationPlan(
     // 残り枠をいくつ使ったかを数えるカウンター
     let newCount = 0
 
+    // パーツが空の構成は移行しても意味が無いため、候補から外す
+    // (新規利用者の初期構成「構成1」で毎回ダイアログが出るのを防ぐ)
+    const migratableConfigs = localConfigs.filter((config) =>
+        config.parts.length > 0)
+
+    // ローカル同士で同じ構成が並ぶ場合も、2件目以降を重複として扱う
+    const localMatchKeys = new Set<string>()
+
     // ローカルの並び順のまま判定し、画面の表示順と一致させる
-    const candidates = localConfigs.map((config): MigrationCandidate => {
-        // 名前＋パーツ構成からキーを作り、アカウント側に同じ構成があるか調べる
+    const candidates = migratableConfigs.map((config): MigrationCandidate => {
+        // 名前＋パーツ構成からキーを作り、アカウント側・ローカル側に同じ構成があるか調べる
         const matchKey = createConfigMatchKey(config)
 
         // 同じ構成が既にある場合は、二重登録しないよう選択不可にする
-        if (serverMatchKeys.has(matchKey)) {
+        if (serverMatchKeys.has(matchKey) || localMatchKeys.has(matchKey)) {
             return {config, status: "duplicate"}
         }
+
+        localMatchKeys.add(matchKey)
 
         // 残り枠を超えた分は移行できないため、上限超過として扱う
         if (newCount >= remainingSlots) {
@@ -168,21 +195,48 @@ export function buildMigrationPlan(
     }
 }
 
+// 選択されたIDのうち、実際に移行できる構成を返す
+export function selectMigrationTargets(
+    plan: MigrationPlan,
+    selectedIds: string[],
+): StoredConfig[] {
+    return plan.candidates
+        .filter((candidate) =>
+            candidate.status !== "duplicate" &&
+            selectedIds.includes(candidate.config.id))
+        .map((candidate) => candidate.config)
+}
+
+// 再取得後の計画に合わせて、移行できない構成を選択から外す
+export function intersectSelectableIds(
+    plan: MigrationPlan,
+    selectedIds: string[],
+): string[] {
+    return selectedIds.filter((id) => plan.candidates.some((candidate) =>
+        candidate.config.id === id && candidate.status !== "duplicate"))
+}
+
 // アカウントの構成をローカルへ保存する(ログアウト時)
 export function saveServerSnapshotToLocal(
     accountId: string,
     snapshot: SavedConfigSnapshot,
 ): boolean {
     // 容量超過などで保存できなかった場合は、中途半端に由来だけ記録しない
-    const saved = saveLocalConfigCollection(snapshot.configs, snapshot.order)
+    // 失敗時に戻せるよう、以前の由来を退避する
+    const previousOrigin = loadLocalOrigin()
 
-    // 保存に失敗したらfalseを返し、呼び出し元が再試行や中止を選べるようにする
-    if (!saved) {
+    // 由来を先に記録し、構成の保存に失敗したら元へ戻す
+    if (!saveLocalOrigin(accountId)) {
         return false
     }
 
-    // 保存できたときだけ由来を記録し、次回ログイン時の判定に使う
-    saveLocalOrigin(accountId)
+    const saved = saveLocalConfigCollection(snapshot.configs, snapshot.order)
+
+    // 保存に失敗したら以前の由来へ戻し、中途半端な状態を残さない
+    if (!saved) {
+        saveLocalOrigin(previousOrigin)
+        return false
+    }
 
     return true
 }

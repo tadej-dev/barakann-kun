@@ -53,7 +53,7 @@ describe("SavedBuildMigrationDialog", () => {
 
         expect(screen.getByText("通勤用")).toBeTruthy()
         expect(screen.getByText(/・移行済み/)).toBeTruthy()
-        expect(screen.getByText(/・上限のため保存できません/)).toBeTruthy()
+        expect(screen.getByText(/・残り枠を超えています/)).toBeTruthy()
         expect(screen.getByText("保存できる残り枠: 18件")).toBeTruthy()
     })
 
@@ -89,6 +89,37 @@ describe("SavedBuildMigrationDialog", () => {
 
         expect(screen.getByText(/空の「構成1」は、選択した構成で置き換えます/))
             .toBeTruthy()
+    })
+
+    // 上限超過の構成も、他の選択を外せば選べる
+    it("上限超過の構成も選択できる", () => {
+        const props = createProps()
+        const {container} = render(<SavedBuildMigrationDialog {...props} />)
+        const checkboxes = container.querySelectorAll('[data-slot="checkbox"]')
+
+        fireEvent.click(checkboxes[2]!)
+
+        expect(props.onToggle).toHaveBeenCalledWith("local-3", true)
+    })
+
+    // 残り枠を超える選択では保存できない
+    it("残り枠を超える選択では保存できない", () => {
+        const props = {
+            ...createProps(),
+            selectedIds: ["local-1", "local-2", "local-3"],
+            remainingSlots: 1,
+        }
+
+        render(<SavedBuildMigrationDialog {...props} />)
+
+        expect(screen.getByText(/残り枠を超えています。選択を減らしてください/))
+            .toBeTruthy()
+
+        const button = screen.getByRole("button", {
+            name: "選択した構成を保存",
+        }) as HTMLButtonElement
+
+        expect(button.disabled).toBe(true)
     })
 
     // 選択が無い場合は保存できない
