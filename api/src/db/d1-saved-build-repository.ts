@@ -200,26 +200,27 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
     ): Promise<UpdateSavedBuildResult> {
         // 更新後のパーツを事前検証して同じ新世代でまとめて置き換える
         const snapshots = await this.loadPartSnapshots(parts)
-        const nextVersion = version + 1
         const now = new Date().toISOString()
-        const versionGuard = `EXISTS (
+        // この更新だけを識別するトークン。別の更新と取り違えないために使う
+        const updateToken = crypto.randomUUID()
+        const tokenGuard = `EXISTS (
             SELECT 1
             FROM saved_builds
             WHERE id = ?
               AND user_id = ?
-              AND version = ?
-              AND updated_at = ?
+              AND update_token = ?
         )`
-        const guardParameters = [buildId, userId, nextVersion, now]
+        const guardParameters = [buildId, userId, updateToken]
         const statements = [
             this.database.prepare(
                  `UPDATE saved_builds
-                 SET name = ?, version = version + 1, updated_at = ?
+                 SET name = ?, version = version + 1,
+                     updated_at = ?, update_token = ?
                  WHERE id = ? AND user_id = ? AND version = ?`,
-            ).bind(name, now, buildId, userId, version),
+            ).bind(name, now, updateToken, buildId, userId, version),
             this.database.prepare(
                 `DELETE FROM saved_build_parts
-                 WHERE saved_build_id = ? AND ${versionGuard}`,
+                 WHERE saved_build_id = ? AND ${tokenGuard}`,
             ).bind(buildId, ...guardParameters),
             ...parts.map((part) => {
                 const snapshot = snapshots.get(part.partId)
@@ -234,7 +235,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
                          created_at, updated_at
                      )
                      SELECT ?, ?, ?, ?, ?, ?, ?
-                     WHERE ${versionGuard}`,
+                     WHERE ${tokenGuard}`,
                 ).bind(
                     buildId,
                     part.slotKey,
@@ -248,7 +249,7 @@ export class D1SavedBuildRepository implements SavedBuildRepository {
             }),
         ]
 
-        // version条件と構成パーツの置き換えを同一バッチで実行する
+        // version条件付きの更新と、トークンで守ったパーツ置き換えを同一バッチで実行する
         const results = await this.database.batch(statements)
         const buildUpdate = results[0]
 
