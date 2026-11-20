@@ -1,6 +1,6 @@
 import type * as React from "react"
 import {Columns3} from "lucide-react"
-import {useEffect, useMemo, useState} from "react"
+import {useEffect, useMemo, useRef, useState} from "react"
 
 import {fetchPartsByIds} from "@/api/parts"
 import {Badge} from "@/components/ui/badge"
@@ -97,12 +97,24 @@ export function BuildComparisonDialog({
     const [partsById, setPartsById] = useState(new Map<number, Part>())
     const [isLoading, setIsLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState("")
+    // 取得の世代。古い取得の完了で新しい表示を壊さないために使う
+    const requestIdRef = useRef(0)
     const selectedBuilds = useMemo(() => builds.filter((build) =>
         selectedKeys.includes(build.key),
     ), [builds, selectedKeys])
 
     useEffect(() => {
+        const requestId = ++requestIdRef.current
+
         if (!open || selectedBuilds.length === 0) {
+            // 選択が無くなったら読み込み表示を下ろす
+            // Effect内の同期更新を避けるため、マイクロタスクで反映する
+            queueMicrotask(() => {
+                if (requestIdRef.current === requestId) {
+                    setIsLoading(false)
+                }
+            })
+
             return
         }
 
@@ -117,7 +129,10 @@ export function BuildComparisonDialog({
 
             try {
                 if (partIds.length === 0) {
-                    setPartsById(new Map())
+                    // 最新の取得だけが結果を反映する
+                    if (requestIdRef.current === requestId) {
+                        setPartsById(new Map())
+                    }
 
                     return
                 }
@@ -127,7 +142,10 @@ export function BuildComparisonDialog({
                     controller.signal,
                 )
 
-                setPartsById(new Map(parts.map((part) => [part.id, part])))
+                // 古い取得の結果で新しい表示を上書きしない
+                if (requestIdRef.current === requestId) {
+                    setPartsById(new Map(parts.map((part) => [part.id, part])))
+                }
             } catch (error) {
                 if (!controller.signal.aborted) {
                     setErrorMessage(error instanceof Error
@@ -135,7 +153,8 @@ export function BuildComparisonDialog({
                         : "比較用パーツの取得に失敗しました")
                 }
             } finally {
-                if (!controller.signal.aborted) {
+                // 最新の取得だけが読み込み表示を下ろす
+                if (requestIdRef.current === requestId) {
                     setIsLoading(false)
                 }
             }

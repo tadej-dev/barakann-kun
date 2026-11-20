@@ -170,6 +170,60 @@ describe("BuildComparisonDialog", () => {
         })
     })
 
+    // 取得中に選択を0件まで減らすと、読み込み表示が残らない。
+    it("取得中に選択を減らすと読み込み表示が消える", async () => {
+        mockedFetchPartsByIds.mockImplementation(() => new Promise(() => {}))
+        const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
+        render(<BuildComparisonDialog builds={builds} categories={categories} />)
+
+        fireEvent.click(screen.getByRole("button", {name: "比較"}))
+
+        expect(await screen.findByText("比較データを読み込んでいます…"))
+            .toBeTruthy()
+
+        const checkboxes = screen.getAllByRole("checkbox")
+
+        // 2件とも外して選択を0件にする
+        fireEvent.click(checkboxes[0]!)
+        fireEvent.click(checkboxes[1]!)
+
+        await waitFor(() => {
+            expect(screen.queryByText("比較データを読み込んでいます…"))
+                .toBeNull()
+        })
+    })
+
+    // 取得を中断しても、読み込み表示もエラーも残らない。
+    it("取得を中断すると読み込み表示とエラーが残らない", async () => {
+        mockedFetchPartsByIds.mockImplementation((_ids, signal) =>
+            new Promise((_resolve, reject) => {
+                signal?.addEventListener("abort", () => {
+                    reject(new DOMException("aborted", "AbortError"))
+                })
+            }))
+        const builds = [
+            createBuild("a", "通勤用", 1),
+            createBuild("b", "レース用", 2),
+        ]
+
+        render(<BuildComparisonDialog builds={builds} categories={categories} />)
+        fireEvent.click(screen.getByRole("button", {name: "比較"}))
+
+        expect(await screen.findByText("比較データを読み込んでいます…"))
+            .toBeTruthy()
+
+        const checkboxes = screen.getAllByRole("checkbox")
+
+        fireEvent.click(checkboxes[0]!)
+        fireEvent.click(checkboxes[1]!)
+
+        await waitFor(() => {
+            expect(screen.queryByText("比較データを読み込んでいます…"))
+                .toBeNull()
+        })
+        expect(screen.queryByRole("alert")).toBeNull()
+    })
+
     // 比較できるのは4件までで、5件目からは選べない。
     it("構成は4件までしか選べない", async () => {
         const builds = [
