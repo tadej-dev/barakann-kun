@@ -52,49 +52,88 @@ export function useConfigAutoSave({
 
     const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
     const inFlightRef = useRef(false)
+    // 実行中の保存。ログアウト時の確定依頼で完了を待つ
+    const inFlightPromiseRef = useRef<Promise<boolean> | null>(null)
     const pendingRef = useRef(false)
     const fingerprintRef = useRef("")
     const currentConfigIdRef = useRef(activeConfigId)
     const [revision, setRevision] = useState(0)
+    // 非同期処理から最新の状態を参照するためのref
+    const latestRef = useRef({
+        configs,
+        selectedParts,
+        autoSaveEnabled,
+        isActiveConfigLoaded,
+        isConfigLoading,
+    })
 
     useEffect(() => {
         currentConfigIdRef.current = activeConfigId
     }, [activeConfigId])
 
+    useEffect(() => {
+        latestRef.current = {
+            configs,
+            selectedParts,
+            autoSaveEnabled,
+            isActiveConfigLoaded,
+            isConfigLoading,
+        }
+    }, [
+        configs,
+        selectedParts,
+        autoSaveEnabled,
+        isActiveConfigLoaded,
+        isConfigLoading,
+    ])
+
     const save = useCallback(async (): Promise<boolean> => {
-        const config = configs.find((candidate) =>
+        const latest = latestRef.current
+        const config = latest.configs.find((candidate) =>
             candidate.id === currentConfigIdRef.current)
 
         if (!config) {
             return false
         }
 
-        const parts = toSavedBuildParts(selectedParts)
+        const parts = toSavedBuildParts(latest.selectedParts)
         inFlightRef.current = true
 
+        const task = (async (): Promise<boolean> => {
+            try {
+                await updateConfig(config, parts)
+                // 同じ構成・同じ内容の再保存を抑止する
+                fingerprintRef.current =
+                    `${config.id}:${createPartsFingerprint(parts)}`
+
+                return true
+            } catch {
+                // 失敗時は次回の変更で再試行する
+                return false
+            } finally {
+                inFlightRef.current = false
+
+                if (pendingRef.current) {
+                    pendingRef.current = false
+                    setRevision((current) => current + 1)
+                }
+            }
+        })()
+
+        inFlightPromiseRef.current = task
+
         try {
-            await updateConfig(config, parts)
-            // 同じ構成・同じ内容の再保存を抑止する
-            fingerprintRef.current =
-                `${config.id}:${createPartsFingerprint(parts)}`
-
-            return true
-        } catch {
-            // 失敗時は次回の変更で再試行する
-            return false
+            return await task
         } finally {
-            inFlightRef.current = false
-
-            if (pendingRef.current) {
-                pendingRef.current = false
-                setRevision((current) => current + 1)
+            if (inFlightPromiseRef.current === task) {
+                inFlightPromiseRef.current = null
             }
         }
-    }, [configs, selectedParts, updateConfig])
+    }, [updateConfig])
 
     // ログアウト直前に、待機中の自動保存を確定させる
     useEffect(() => {
-        function flushPendingSave(event: Event) {
+        async function flushPendingSave(event: Event) {
             const detail = (event as CustomEvent<LogoutFlushDetail>).detail
 
             if (!detail) {
@@ -111,16 +150,36 @@ export function useConfigAutoSave({
                 timerRef.current = undefined
             }
 
-            // 保存中・操作中・読み込み中は、確実に保存できたと言えないため失敗とする
-            if (inFlightRef.current ||
-                !autoSaveEnabled || !isActiveConfigLoaded ||
-                isConfigLoading || configsOperation !== null) {
+            // 実行中の保存があれば、終わるまで待つ
+            if (inFlightPromiseRef.current) {
+                const ok = await inFlightPromiseRef.current
+
+                if (!ok) {
+                    finish(false)
+                    return
+                }
+            }
+
+            // 待機中に別の保存が始まっていた場合も、もう一度待つ
+            if (inFlightPromiseRef.current) {
+                const ok = await inFlightPromiseRef.current
+
+                if (!ok) {
+                    finish(false)
+                    return
+                }
+            }
+
+            const latest = latestRef.current
+
+            if (!latest.autoSaveEnabled || !latest.isActiveConfigLoaded ||
+                latest.isConfigLoading) {
                 finish(false)
                 return
             }
 
-            const config = configs.find((candidate) =>
-                candidate.id === activeConfigId)
+            const config = latest.configs.find((candidate) =>
+                candidate.id === currentConfigIdRef.current)
 
             // 対象構成が無い場合は保存できない
             if (!config) {
@@ -128,16 +187,24 @@ export function useConfigAutoSave({
                 return
             }
 
-            const parts = toSavedBuildParts(selectedParts)
+            const parts = toSavedBuildParts(latest.selectedParts)
+            const fingerprint =
+                `${config.id}:${createPartsFingerprint(parts)}`
+            const loadedFingerprint =
+                `${config.id}:${createPartsFingerprint(config.parts)}`
 
-            // 保存対象が無ければ、そのまま完了を通知する
-            if (`${config.id}:${createPartsFingerprint(parts)}` ===
-                `${config.id}:${createPartsFingerprint(config.parts)}`) {
+            // 読み込み時と同じ、またはこのセッションで保存済みなら追加の保存は不要
+            if (fingerprint === loadedFingerprint ||
+                fingerprint === fingerprintRef.current) {
                 finish(true)
                 return
             }
 
-            void save().then(finish)
+            // 明示操作中でも、保存はサーバー側のversionで守られるためここでは止めない
+            // 保存後に加えた変更があれば、最新の状態でもう一度保存する
+            const ok = await save()
+
+            finish(ok)
         }
 
         window.addEventListener(AUTH_LOGOUT_FLUSH_EVENT, flushPendingSave)
@@ -145,16 +212,7 @@ export function useConfigAutoSave({
         return () => {
             window.removeEventListener(AUTH_LOGOUT_FLUSH_EVENT, flushPendingSave)
         }
-    }, [
-        autoSaveEnabled,
-        isActiveConfigLoaded,
-        isConfigLoading,
-        configsOperation,
-        configs,
-        activeConfigId,
-        selectedParts,
-        save,
-    ])
+    }, [save])
 
     useEffect(() => {
         // 初期取得中・明示操作中は、未確定の状態を自動保存しない

@@ -8,12 +8,16 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import type {LogoutSaveStatus} from "@/features/auth/useLogoutWithSave"
+import type {
+    LogoutFailureKind,
+    LogoutSaveStatus,
+} from "@/features/auth/useLogoutWithSave"
 
 type LogoutSaveDialogProps = {
     status: LogoutSaveStatus // ステータス（保存・失敗）
+    failureKind: LogoutFailureKind // 失敗の種類
     errorMessage: string // エラー原因
-    onRetry: () => void // 再保存
+    onRetry: () => void // 再試行
     onSkip: () => void // 保存なしでログアウト
     onCancel: () => void // キャンセル
 }
@@ -21,6 +25,7 @@ type LogoutSaveDialogProps = {
 // ログアウト前に、構成をブラウザへ保存していることを知らせるダイアログ
 export function LogoutSaveDialog({
     status,
+    failureKind,
     errorMessage,
     onRetry,
     onSkip,
@@ -32,6 +37,10 @@ export function LogoutSaveDialog({
     }
 
     const isSaving = status === "saving"
+    const isSucceeded = status === "succeeded"
+    // ログアウトだけ失敗した場合は、構成が保存済みかどうかで文言を変える
+    const isLogoutFailure = failureKind === "logout" ||
+        failureKind === "skip-logout"
 
     return (
         <div
@@ -53,12 +62,22 @@ export function LogoutSaveDialog({
                             <CloudUpload className="size-5 text-sky-600" />
                             {isSaving
                                 ? "構成を保存しています"
-                                : "構成を保存できませんでした"}
+                                : isSucceeded
+                                    ? "構成を保存しました"
+                                    : isLogoutFailure
+                                        ? "ログアウトできませんでした"
+                                        : "構成を保存できませんでした"}
                         </CardTitle>
                         <CardDescription className="mt-2 text-slate-600">
                             {isSaving
                                 ? "保存が終わるとログアウトします。画面を閉じないでください。"
-                                : "このままログアウトすると、ブラウザに構成が残りません。"}
+                                : isSucceeded
+                                    ? "構成を保存してログアウトしました。"
+                                    : failureKind === "logout"
+                                    ? "構成は保存しましたが、ログアウトに失敗しました。再試行してください。"
+                                    : failureKind === "skip-logout"
+                                        ? "構成を保存せずにログアウトしようとしましたが、失敗しました。"
+                                        : "このままログアウトすると、ブラウザに構成が残りません。"}
                         </CardDescription>
                     </CardHeader>
 
@@ -81,6 +100,10 @@ export function LogoutSaveDialog({
                                 >
                                     キャンセル
                                 </Button>
+                            ) : isSucceeded ? (
+                                <Button type="button" onClick={onCancel}>
+                                    閉じる
+                                </Button>
                             ) : (
                                 <>
                                     <Button
@@ -90,13 +113,15 @@ export function LogoutSaveDialog({
                                     >
                                         キャンセル
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={onSkip}
-                                    >
-                                        保存せずログアウト
-                                    </Button>
+                                    {failureKind === "save" && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={onSkip}
+                                        >
+                                            保存せずログアウト
+                                        </Button>
+                                    )}
                                     <Button type="button" onClick={onRetry}>
                                         再試行
                                     </Button>
