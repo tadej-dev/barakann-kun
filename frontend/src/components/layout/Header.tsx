@@ -51,6 +51,7 @@ export function Header() {
     } = useAuth()
     const {
         status: logoutSaveStatus,
+        failureKind: logoutSaveFailureKind,
         errorMessage: logoutSaveError,
         saveAndLogout,
         retry,
@@ -227,6 +228,7 @@ export function Header() {
 
             <LogoutSaveDialog
                 status={logoutSaveStatus}
+                failureKind={logoutSaveFailureKind}
                 errorMessage={logoutSaveError}
                 onRetry={() => void retry()}
                 onSkip={() => void skipSaveAndLogout()}

@@ -10,7 +10,10 @@ import {useAuth} from "@/features/auth/useAuth"
 import {saveServerSnapshotToLocal} from "@/lib/local-config-sync"
 
 // ダイアログ状態（idleは非表示）
-export type LogoutSaveStatus = "idle" | "saving" | "failed"
+export type LogoutSaveStatus = "idle" | "saving" | "failed" | "succeeded"
+
+// 失敗の種類。ダイアログの文言を出し分けるために使う
+export type LogoutFailureKind = "save" | "logout" | "skip-logout" | null
 
 // 確定待ちの上限（3秒）
 const FLUSH_TIMEOUT_MS = 3000
@@ -51,6 +54,7 @@ export function useLogoutWithSave() {
     const {user, logout} = useAuth()
     const [status, setStatus] = useState<LogoutSaveStatus>("idle")
     const [errorMessage, setErrorMessage] = useState("")
+    const [failureKind, setFailureKind] = useState<LogoutFailureKind>(null)
     // 実行番号（古い結果の破棄用）
     const runIdRef = useRef(0)
     const controllerRef = useRef<AbortController | null>(null)
@@ -84,6 +88,7 @@ export function useLogoutWithSave() {
 
         setStatus("saving")
         setErrorMessage("")
+        setFailureKind(null)
 
         try {
             // 直前の編集を確定できたかを確認する
@@ -97,6 +102,7 @@ export function useLogoutWithSave() {
             // 自動保存を確定できなければ失敗として扱う
             if (!flushed) {
                 setStatus("failed")
+                setFailureKind("save")
                 setErrorMessage(
                     "自動保存を確定できませんでした。もう一度お試しください。",
                 )
@@ -124,18 +130,36 @@ export function useLogoutWithSave() {
             // 保存に失敗した場合は、ログアウトせず再試行できるようにする
             if (!saveServerSnapshotToLocal(user.id, snapshot)) {
                 setStatus("failed")
+                setFailureKind("save")
                 setErrorMessage("ブラウザに構成を保存できませんでした")
                 return
             }
 
-            await logout()
-            setStatus("idle")
+            const loggedOut = await logout()
+
+            // ログアウト中にキャンセルされていたら、結果を反映しない
+            if (!isCurrent()) {
+                return
+            }
+
+            if (!loggedOut) {
+                setStatus("failed")
+                setFailureKind("logout")
+                setErrorMessage(
+                    "ログアウトに失敗しました。もう一度お試しください。",
+                )
+                return
+            }
+
+            // 成功を表示し、利用者が閉じるまで残す
+            setStatus("succeeded")
         } catch (error) {
             if (!isCurrent()) {
                 return
             }
 
             setStatus("failed")
+            setFailureKind("save")
             setErrorMessage(error instanceof Error
                 ? error.message
                 : "構成の保存に失敗しました")
@@ -149,19 +173,60 @@ export function useLogoutWithSave() {
         controllerRef.current = null
         setStatus("idle")
         setErrorMessage("")
+        setFailureKind(null)
     }, [])
 
     // 保存せずにログアウトする
     const skipSaveAndLogout = useCallback(async () => {
         cancel()
-        await logout()
+        const loggedOut = await logout()
+
+        // ログアウトに失敗した場合は、ダイアログを開き直して知らせる
+        if (!loggedOut) {
+            setStatus("failed")
+            setFailureKind("skip-logout")
+            setErrorMessage(
+                "ログアウトに失敗しました。もう一度お試しください。",
+            )
+        }
     }, [cancel, logout])
+
+    // 保存済みの状態で、ログアウトだけをやり直す
+    const logoutOnly = useCallback(async () => {
+        cancel()
+        const loggedOut = await logout()
+
+        if (!loggedOut) {
+            setStatus("failed")
+            setFailureKind("logout")
+            setErrorMessage(
+                "ログアウトに失敗しました。もう一度お試しください。",
+            )
+        }
+    }, [cancel, logout])
+
+    // 失敗の種類に応じて再試行する
+    const retry = useCallback(async () => {
+        if (failureKind === "logout") {
+            await logoutOnly()
+            return
+        }
+
+        if (failureKind === "skip-logout") {
+            await skipSaveAndLogout()
+            return
+        }
+
+        // 保存に失敗した場合は、保存からやり直す
+        await saveAndLogout()
+    }, [failureKind, logoutOnly, saveAndLogout, skipSaveAndLogout])
 
     return {
         status,
         errorMessage,
+        failureKind,
         saveAndLogout,
-        retry: saveAndLogout,
+        retry,
         skipSaveAndLogout,
         cancel,
     }

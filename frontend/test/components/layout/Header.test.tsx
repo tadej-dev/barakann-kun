@@ -201,7 +201,7 @@ describe("Header", () => {
 
     // アカウントメニューを開き、ログアウトを実行できる。
     it("アカウントメニューからログアウトできる", async () => {
-        const logout = vi.fn()
+        const logout = vi.fn(async () => true)
 
         // ログアウト前の保存で取得するAPIを空データで返す
         vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {

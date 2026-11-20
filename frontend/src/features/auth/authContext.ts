@@ -16,7 +16,7 @@ export type AuthContextValue = AuthState & {
     isLoggingOut: boolean
     deleteAccount: () => Promise<void>
     login: () => Promise<void>
-    logout: () => Promise<void>
+    logout: () => Promise<boolean>
     refreshSession: () => Promise<void>
     // 表示名を変更する。失敗時はエラーを投げ、呼び出し側(ダイアログ)で表示する
     updateDisplayName: (displayName: string) => Promise<void>

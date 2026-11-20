@@ -134,6 +134,141 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         expect(respond).toHaveBeenCalledWith(true)
     })
 
+    // 実行中の保存があっても、終わるまで待って確定する。
+    it("実行中の保存を待ってから確定する", async () => {
+        const configs = [{
+            id: "slow-1",
+            name: "構成1",
+            version: 1,
+            createdAt: "",
+            updatedAt: "",
+            parts: [],
+        }]
+        const updateConfig = vi.fn(() => new Promise<void>((resolve) => {
+            setTimeout(resolve, 100)
+        }))
+
+        function useSlowHarness() {
+            const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
+
+            useConfigAutoSave({
+                collection: {
+                    configs,
+                    configsOperation: null,
+                    updateConfig,
+                } as unknown as ConfigCollection,
+                selectedParts,
+                activeConfigId: "slow-1",
+                isConfigLoading: false,
+                isActiveConfigLoaded: true,
+                autoSaveEnabled: true,
+            })
+
+            return {setSelectedParts, updateConfig}
+        }
+
+        const {result} = renderHook(() => useSlowHarness())
+
+        act(() => {
+            result.current.setSelectedParts({frame: createPart(10)})
+        })
+
+        // 800ms後に保存が始まる
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+        })
+
+        const respond = vi.fn()
+
+        // 保存中に確定依頼を出しても、完了を待って成功する
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
+                detail: {handled: false, respond} satisfies LogoutFlushDetail,
+            }))
+            await vi.advanceTimersByTimeAsync(500)
+        })
+
+        expect(respond).toHaveBeenCalledWith(true)
+        // 待機後に二重保存しない
+        expect(updateConfig).toHaveBeenCalledTimes(1)
+    })
+
+    // 変更が無い場合は、ログアウト時に保存しない。
+    it("変更が無ければログアウト時に保存しない", async () => {
+        renderHook(() => useHarness())
+
+        // 初期読み込み後の書き込みを数えないよう、ここから監視する
+        const setItem = vi.spyOn(Storage.prototype, "setItem")
+        const respond = vi.fn()
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
+                detail: {handled: false, respond} satisfies LogoutFlushDetail,
+            }))
+            await Promise.resolve()
+        })
+
+        expect(respond).toHaveBeenCalledWith(true)
+        expect(setItem).not.toHaveBeenCalled()
+
+        setItem.mockRestore()
+    })
+
+    // 実行中の保存が失敗した場合は、確定失敗として返す。
+    it("実行中の保存が失敗したら確定失敗にする", async () => {
+        const configs = [{
+            id: "slow-2",
+            name: "構成1",
+            version: 1,
+            createdAt: "",
+            updatedAt: "",
+            parts: [],
+        }]
+        const updateConfig = vi.fn(() => new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error("failed")), 100)
+        }))
+
+        function useFailingHarness() {
+            const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
+
+            useConfigAutoSave({
+                collection: {
+                    configs,
+                    configsOperation: null,
+                    updateConfig,
+                } as unknown as ConfigCollection,
+                selectedParts,
+                activeConfigId: "slow-2",
+                isConfigLoading: false,
+                isActiveConfigLoaded: true,
+                autoSaveEnabled: true,
+            })
+
+            return {setSelectedParts}
+        }
+
+        const {result} = renderHook(() => useFailingHarness())
+
+        act(() => {
+            result.current.setSelectedParts({frame: createPart(10)})
+        })
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+        })
+
+        const respond = vi.fn()
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
+                detail: {handled: false, respond} satisfies LogoutFlushDetail,
+            }))
+            await vi.advanceTimersByTimeAsync(500)
+        })
+
+        expect(respond).toHaveBeenCalledWith(false)
+    })
+
     // 保存済みと同じ内容では、保存を繰り返さない。
     it("保存済みと同じ内容では保存しない", async () => {
         const {result} = renderHook(() => useHarness())

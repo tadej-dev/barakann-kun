@@ -132,6 +132,8 @@ export function AuthProvider({children}: AuthProviderProps) {
             window.dispatchEvent(new Event(AUTH_LOGGED_OUT_EVENT))
             // Cookie削除後のサーバー状態を再取得し、全画面の表示を同じ状態へ揃える。
             await refreshSession()
+
+            return true
         } catch (error) {
             setAuthState((current) => ({
                 ...current,
@@ -140,6 +142,8 @@ export function AuthProvider({children}: AuthProviderProps) {
                     "ログアウトに失敗しました",
                 ),
             }))
+
+            return false
         } finally {
             setIsLoggingOut(false)
         }
