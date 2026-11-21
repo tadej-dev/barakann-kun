@@ -1,5 +1,5 @@
-// 候補選択(フロント)と保存APIで共通に使う規格比較コア。
-// Part(フロント)とCompatibilityPart(API)の両方に適合する最小入力で動く。
+// 候補選択（画面）と保存APIで共通に使う規格判定
+// Part（画面）とCompatibilityPart（API）の両方に合う最小入力で動く
 
 export type CompatibilityStatus =
     | "compatible"
@@ -12,14 +12,13 @@ export type CompatibilityInput = {
     specifications?: Record<string, string>
 }
 
-// 規格ごとの判定結果。画面で「非適合：フリーボディ（カセット：HG／XDR）」のように並べるために使う。
-// reasons(文章)は保存APIのエラー文などで使うため残し、こちらは表示用の構造データとして併せて返す。
+// 規格ごとの判定結果。画面で状態別にまとめて表示するために使う
 export type CompatibilityDetail = {
-    label: string // 規格名(例: フリーボディ)
+    label: string // 規格名（例: フリーボディ）
     status: CompatibilityStatus
-    specificationKey?: string // 値を日本語ラベルへ変換するための規格キー。整形済みの値なら省略する
-    candidateValue?: string // 判定対象(候補)側の値。未登録なら省略
-    selectedValue?: string // 比較相手(選択済み)側の値。未登録なら省略
+    specificationKey?: string // 表示用ラベルへの変換に使う規格キー（省略可）
+    candidateValue?: string // 候補側の値（省略可）
+    selectedValue?: string // 選択済み側の値（省略可）
 }
 
 type PairCompatibilityResult = {
@@ -36,8 +35,8 @@ type EqualityRule = {
     protectedCategoryLabel?: string
 }
 
-// 変速段数をそろえる必要がある駆動系のカテゴリー。
-// レバーの段数に合わせてディレイラー・カセット・チェーン・チェーンリングの幅が決まるため、全組み合わせで比較する。
+// 変速段数をそろえる必要がある駆動系のカテゴリー
+// レバーの段数に合わせてディレイラー・カセット・チェーン・チェーンリングの幅が決まるため、全組み合わせで比較する
 const DRIVETRAIN_SPEED_CATEGORIES = [
     "shift_brake_lever",
     "front_derailleur",
@@ -47,15 +46,15 @@ const DRIVETRAIN_SPEED_CATEGORIES = [
     "chain",
 ] as const
 
-// 変速方式(機械式・電動有線・電動無線)をそろえる必要があるカテゴリー。
-// 信号をやり取りするのはレバーとディレイラーだけなので、クランクなどは含めない。
+// 変速方式(機械式・電動有線・電動無線)をそろえる必要があるカテゴリー
+// 信号をやり取りするのはレバーとディレイラーだけなので、クランクなどは含めない
 const SHIFT_SYSTEM_CATEGORIES = [
     "shift_brake_lever",
     "front_derailleur",
     "rear_derailleur",
 ] as const
 
-// 指定したカテゴリーの全組み合わせに、同じ規格キーの一致ルールを作る。
+// 指定したカテゴリーの全組み合わせに、同じ規格キーの一致ルールを作る
 function createPairwiseRules(
     categories: readonly string[],
     specificationKey: string,
@@ -72,7 +71,7 @@ function createPairwiseRules(
     return rules
 }
 
-// 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する。
+// 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義する
 export const EQUALITY_RULES: EqualityRule[] = [
     {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
     {categories: ["wheel", "tire"], specificationKey: "wheel_diameter", label: "ホイール径"},
@@ -107,8 +106,8 @@ export const EQUALITY_RULES: EqualityRule[] = [
         protectedCategory: "frame",
         protectedCategoryLabel: "フレーム",
     },
-    // コンポセットは構成品(クランク・カセット・キャリパー)の規格をセット本体に持たせて判定する。
-    // 構成品のカテゴリーはセットが占有するため、単体パーツとの組み合わせはこの3つだけになる。
+    // コンポセットは構成品(クランク・カセット・キャリパー)の規格をセット本体に持たせて判定する
+    // 構成品のカテゴリーはセットが占有するため、単体パーツとの組み合わせはこの3つだけになる
     {categories: ["groupset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
     {categories: ["groupset", "wheel"], specificationKey: "freehub_body", label: "フリーボディ"},
     {categories: ["groupset", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
@@ -126,7 +125,7 @@ export const EQUALITY_RULES: EqualityRule[] = [
 
 export const STANDARD_COCKPIT_INTERFACE = "standard_1_1_8"
 
-// 丸型1-1/8コラムのオープン規格。標準コックピットの装着可否を分岐させるために使う。
+// 丸型1-1/8コラムのオープン規格。標準コックピットの装着可否を分岐させるために使う
 const ROUND_STEERER_OPEN_COCKPIT_INTERFACES: readonly string[] = [
     "fsa_acr",
     "focus_cis",
@@ -134,12 +133,11 @@ const ROUND_STEERER_OPEN_COCKPIT_INTERFACES: readonly string[] = [
     "orbea_icr",
 ]
 
-// オープン規格: 専用規格だがサードパーティ製コックピットが装着できるフレームのcockpit_interface。
-// 丸型コラム系は標準1-1/8のステム/一体型ハンドルも装着できる。
-// D字コラム系(Deda DCR対応車種など)は標準丸型を装着できず、規格一致品のみ装着できる。
+// 専用規格でもサードパーティ製コックピットが装着できるフレームの規格値
+// 丸型コラム系は標準1-1/8のステム／一体型ハンドルも装着でき、D字コラム系は規格一致品のみ
 const OPEN_COCKPIT_INTERFACES = new Set<string>([
     ...ROUND_STEERER_OPEN_COCKPIT_INTERFACES,
-    // D字コラムだがサードパーティ(Deda DCR等)の専用コックピットが存在する車種
+    // サードパーティ製の専用コックピットがある車種
     "bianchi_specialissima_rc",
     "bmc_ics",
     "cannondale_delta",
@@ -159,12 +157,12 @@ export type FrameCockpitStatus =
     | "unknown"
 
 function getSpecification(part: CompatibilityInput, key: string) {
-    // 規格が未登録の場合はundefinedのまま返し、適合不明として扱えるようにする。
+    // 規格が未登録の場合はundefinedのまま返し、適合不明として扱えるようにする
     return part.specifications?.[key]
 }
 
-// カンマ区切りの規格値は、いずれか一致すれば適合とみなす。
-// 複数フリーボディ対応など、1パーツが複数規格に跨るケースを表現する。
+// カンマ区切りの規格値は、いずれか一致すれば適合とみなす
+// 複数フリーボディ対応など、1パーツが複数規格に跨るケースを表現する
 function specificationValuesMatch(first: string, second: string) {
     const firstValues = first.split(",").map((value) => value.trim()).filter(Boolean)
     const secondValues = second.split(",").map((value) => value.trim()).filter(Boolean)
@@ -177,7 +175,7 @@ function hasCategoryPair(
     secondCategory: string,
     expectedCategories: readonly [string, string],
 ) {
-    // 同じカテゴリー同士を誤って関連判定しないよう、異なる2カテゴリーだけを対象にする。
+    // 同じカテゴリー同士を誤って関連判定しないよう、異なる2カテゴリーだけを対象にする
     return (
         expectedCategories.includes(firstCategory) &&
         expectedCategories.includes(secondCategory) &&
@@ -186,7 +184,7 @@ function hasCategoryPair(
 }
 
 function isIntegratedHandlebar(part: CompatibilityInput) {
-    // ステムカテゴリーを占有するハンドルは、フレームへ直接接続する一体型コックピットとして扱う。
+    // ステムカテゴリーを占有するハンドルは、フレームへ直接接続する一体型コックピットとして扱う
     return (
         part.categoryKey === "handlebar" &&
         (part.blockedCategoryKeys ?? []).includes("stem")
@@ -200,7 +198,7 @@ export function getFrameCockpitStatus(
         return null
     }
 
-    // ハンドル選択枠を占有するフレームは、専用コックピットが商品に含まれる。
+    // ハンドル選択枠を占有するフレームは、専用コックピットが商品に含まれる
     if ((frame.blockedCategoryKeys ?? []).includes("handlebar")) {
         return "included"
     }
@@ -215,15 +213,14 @@ export function getFrameCockpitStatus(
         return "standard"
     }
 
-    // サードパーティ製コックピットが装着できるオープン規格か判定する。
+    // サードパーティ製コックピットが装着できるオープン規格か判定する
     return OPEN_COCKPIT_INTERFACES.has(cockpitInterface)
         ? "open"
         : "dedicated"
 }
 
-// コラム規格(steerer_standard)から、上端のコラム径(mm)を引く。
-// 専用形状(Cannondale Delta / BMC ICS / Giant OverDrive Aero)は丸型ではないため含めず、
-// 径の比較対象外にする。
+// コラム規格から上端のコラム径（mm）を引く
+// 専用形状（Cannondale Delta / BMC ICS / Giant OverDrive Aero）は丸型ではないため対象外
 const STEERER_TOP_MM: Record<string, number> = {
     tapered_1_1_8_1_5: 28.6,
     tapered_1_1_8_1_3_8: 28.6,
@@ -233,7 +230,7 @@ const STEERER_TOP_MM: Record<string, number> = {
     straight_1_1_4: 31.8,
 }
 
-// 丸型のコラムか判定する。専用形状や未登録は径の比較をしない。
+// 丸型のコラムか判定する。専用形状や未登録は径の比較をしない
 function isRoundSteerer(steererStandard: string | undefined) {
     return (
         steererStandard !== undefined &&
@@ -241,8 +238,8 @@ function isRoundSteerer(steererStandard: string | undefined) {
     )
 }
 
-// フレームのコラム径と、ステム・一体型ハンドルのクランプ径を比較する。
-// どちらかの径が分からない場合は判定しない(未確認にもしない)。
+// フレームのコラム径と、ステム・一体型ハンドルのクランプ径を比較する
+// どちらかの径が分からない場合は判定しない(未確認にもしない)
 function compareSteererClamp(
     frame: CompatibilityInput,
     connectedPart: CompatibilityInput,
@@ -274,7 +271,7 @@ function compareSteererClamp(
         }
 }
 
-// null を除いてコックピット系の判定を1つにまとめる。
+// null を除いてコックピット系の判定を1つにまとめる
 function combineCockpitChecks(
     ...results: (PairCompatibilityResult | null)[]
 ) {
@@ -283,8 +280,8 @@ function combineCockpitChecks(
     )
 }
 
-// 丸型1-1/8コラムのフレームは、専用規格でも標準コックピットを装着できる。
-// 標準規格そのもの、または丸型コラムのオープン規格であればtrueを返す。
+// 丸型1-1/8コラムのフレームは、専用規格でも標準コックピットを装着できる
+// 標準規格そのもの、または丸型コラムのオープン規格であればtrueを返す
 function acceptsStandardCockpit(frame: CompatibilityInput) {
     const cockpitInterface = getSpecification(frame, "cockpit_interface")
 
@@ -292,29 +289,29 @@ function acceptsStandardCockpit(frame: CompatibilityInput) {
         return true
     }
 
-    // コラム規格が登録されていれば、上端が1-1/8インチの丸型コラムかで判定する。
-    // 専用形状(Delta/ICS/OverDrive Aero)は丸型ではないため対象外になる。
+    // コラム規格が登録されていれば、上端が1-1/8インチの丸型コラムかで判定する
+    // 専用形状（Cannondale Delta / BMC ICS / Giant OverDrive Aero）は丸型ではないため対象外
     const steererStandard = getSpecification(frame, "steerer_standard")
 
     if (steererStandard && isRoundSteerer(steererStandard)) {
         return STEERER_TOP_MM[steererStandard] === 28.6
     }
 
-    // コラム規格が未登録のフレームは、従来の丸型コラム一覧で判定する(後方互換)。
+    // コラム規格が未登録のフレームは、従来の丸型コラム一覧で判定する(後方互換)
     return (
         !!cockpitInterface &&
         ROUND_STEERER_OPEN_COCKPIT_INTERFACES.includes(cockpitInterface)
     )
 }
 
-// 付属コックピットをサードパーティ品へ交換できるフレームか判定する。
-// 交換可フレームでは、フレームが占有するハンドル/ステムを規格判定側で可否決定する。
+// 付属コックピットをサードパーティ品へ交換できるフレームか判定する
+// 交換可フレームでは、フレームが占有するハンドル/ステムを規格判定側で可否決定する
 export function allowsCockpitReplacement(frame: CompatibilityInput) {
     return getSpecification(frame, "cockpit_replaceable") === "true"
 }
 
-// システムタグ(cockpit_system)が交差すれば、規格名が違っても装着できるとみなす。
-// 例: Deda DCR系フレームと、DCR対応を宣言したサードパーティ製ハンドル。
+// システムタグ(cockpit_system)が交差すれば、規格名が違っても装着できるとみなす
+// 例: Deda DCR系フレームと、DCR対応を宣言したサードパーティ製ハンドル
 function cockpitSystemsMatch(
     frame: CompatibilityInput,
     connectedPart: CompatibilityInput,
@@ -329,8 +326,8 @@ function cockpitSystemsMatch(
     return specificationValuesMatch(frameSystem, connectedSystem)
 }
 
-// パーツがカテゴリーを占有しているか判定する。
-// 交換可能な付属コックピットの占有は、規格判定側で可否を決めるため占有扱いから除く。
+// パーツがカテゴリーを占有しているか判定する
+// 交換可能な付属コックピットの占有は、規格判定側で可否を決めるため占有扱いから除く
 export function blocksCategory(
     part: CompatibilityInput,
     categoryKey: string,
@@ -352,7 +349,7 @@ function compareCockpitInterface(
 ): PairCompatibilityResult {
     const frameStatus = getFrameCockpitStatus(frame)
 
-    // 付属コックピットでも、交換可フレームは規格適合したサードパーティ品を許可する。
+    // 付属コックピットでも、交換可フレームは規格適合したサードパーティ品を許可する
     if (frameStatus === "included" && !allowsCockpitReplacement(frame)) {
         return {
             status: "incompatible",
@@ -367,7 +364,7 @@ function compareCockpitInterface(
         }
     }
 
-    // システムタグが交差すれば、規格名が一致しなくても装着できる。
+    // システムタグが交差すれば、規格名が一致しなくても装着できる
     if (cockpitSystemsMatch(frame, connectedPart)) {
         return {
             status: "compatible",
@@ -380,7 +377,7 @@ function compareCockpitInterface(
 
     if (!connectedInterface) {
         // 専用品(D字オープン規格・付属コックピットを含む)は規格不明の候補へ逃がさず、
-        // 適合が確認できた製品だけを選択可能にする。
+        // 適合が確認できた製品だけを選択可能にする
         const requiresInterfaceMatch =
             frameStatus === "dedicated" ||
             frameStatus === "included" ||
@@ -398,7 +395,7 @@ function compareCockpitInterface(
     }
 
     if (frameInterface !== connectedInterface) {
-        // 丸型コラムのオープン規格は、標準1-1/8のコックピットも装着できる。
+        // 丸型コラムのオープン規格は、標準1-1/8のコックピットも装着できる
         if (
             acceptsStandardCockpit(frame) &&
             connectedInterface === STANDARD_COCKPIT_INTERFACE
@@ -453,20 +450,20 @@ function compareCockpitParts(
     selectedCategory: string,
 ): PairCompatibilityResult | null {
     if (hasCategoryPair(candidateCategory, selectedCategory, ["frame", "handlebar"])) {
-        // フォークは独立パーツでなくフレームのcockpit_interfaceとして扱う。
-        // ハンドルがフォーク(フレーム)へ直接付くか、ステムを介して付くかを分岐して判定する。
+        // フォークは独立パーツでなくフレームのcockpit_interfaceとして扱う
+        // ハンドルがフォーク(フレーム)へ直接付くか、ステムを介して付くかを分岐して判定する
         const frame = candidateCategory === "frame" ? candidate : selectedPart
         const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
         const frameStatus = getFrameCockpitStatus(frame)
         const cockpitConnection = getSpecification(frame, "cockpit_connection")
 
-        // コックピット付属フレームや規格未確認フレームは、ハンドル側の規格値で比較する。
+        // コックピット付属フレームや規格未確認フレームは、ハンドル側の規格値で比較する
         if (frameStatus === "included" || frameStatus === "unknown") {
             return compareCockpitInterface(frame, handlebar)
         }
 
-        // 一体型ハンドルはステムを兼ねてフォークへ直結するため、フォーク規格と比較する。
-        // コラム径が分かる場合は径も比較する。
+        // 一体型ハンドルはステムを兼ねてフォークへ直結するため、フォーク規格と比較する
+        // コラム径が分かる場合は径も比較する
         if (isIntegratedHandlebar(handlebar)) {
             return combineCockpitChecks(
                 compareCockpitInterface(frame, handlebar),
@@ -474,12 +471,12 @@ function compareCockpitParts(
             )
         }
 
-        // フレームに専用ステムが付属する車種では、そのステムへ通常ハンドルをクランプ径で組み付ける。
+        // フレームに専用ステムが付属する車種では、そのステムへ通常ハンドルをクランプ径で組み付ける
         if ((frame.blockedCategoryKeys ?? []).includes("stem")) {
             return compareHandlebarClamp(frame, handlebar)
         }
 
-        // 一体型コックピット専用フレームは、通常ハンドルを組み付けられない。
+        // 一体型コックピット専用フレームは、通常ハンドルを組み付けられない
         if (cockpitConnection === "integrated_only") {
             return {
                 status: "incompatible",
@@ -487,19 +484,19 @@ function compareCockpitParts(
             }
         }
 
-        // 専用フォーク(cockpit_interfaceが専用規格)のフレームは、ステムもハンドルも専用規格を要求する。
-        // 通常ハンドルをスルーせず、フォーク規格と一致するハンドルだけを許可する。
+        // 専用フォーク(cockpit_interfaceが専用規格)のフレームは、ステムもハンドルも専用規格を要求する
+        // 通常ハンドルをスルーせず、フォーク規格と一致するハンドルだけを許可する
         if (frameStatus === "dedicated") {
             return compareCockpitInterface(frame, handlebar)
         }
 
-        // D字コラムのオープン規格も、規格一致する専用ハンドルだけを許可する。
-        // 丸型コラムのオープン規格は標準ハンドルを装着できるため、下のnullへ流してステム径で判定する。
+        // D字コラムのオープン規格も、規格一致する専用ハンドルだけを許可する
+        // 丸型コラムのオープン規格は標準ハンドルを装着できるため、下のnullへ流してステム径で判定する
         if (frameStatus === "open" && !acceptsStandardCockpit(frame)) {
             return compareCockpitInterface(frame, handlebar)
         }
 
-        // 標準フォークの通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する。
+        // 標準フォークの通常ハンドルはフレームへ直接接続しないため、選択したステムとのクランプ径で別途判定する
         return null
     }
 
@@ -518,7 +515,7 @@ function compareCockpitParts(
             }
         }
 
-        // コックピット規格(形状)に加え、コラム径も判定する。
+        // コックピット規格(形状)に加え、コラム径も判定する
         return combineCockpitChecks(
             compareCockpitInterface(frame, stem),
             compareSteererClamp(frame, stem),
@@ -528,7 +525,7 @@ function compareCockpitParts(
     if (hasCategoryPair(candidateCategory, selectedCategory, ["stem", "handlebar"])) {
         const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
 
-        // 一体型ハンドルはステムを置き換えるため、クランプ径ではなくカテゴリー排他で処理する。
+        // 一体型ハンドルはステムを置き換えるため、クランプ径ではなくカテゴリー排他で処理する
         if (isIntegratedHandlebar(handlebar)) {
             return null
         }
@@ -556,7 +553,7 @@ function compareTireAndTube(
         !Number.isFinite(minWidth) ||
         !Number.isFinite(maxWidth)
     ) {
-        // 規格不足は安全側に倒し、適合と断定せず利用者へ確認を促す。
+        // 規格不足は安全側に倒し、適合と断定せず利用者へ確認を促す
         return {
             status: "unknown",
             reasons: ["タイヤとチューブのサイズ情報が不足しています"],
@@ -583,8 +580,8 @@ function compareTireAndTube(
     }
 }
 
-// フレームのタイヤクリアランスとタイヤ幅を比較する。
-// 一致ではなく「最大幅以下か」で判定するため、一致ルールとは別に扱う。
+// フレームのタイヤクリアランスとタイヤ幅を比較する
+// 一致ではなく「最大幅以下か」で判定するため、一致ルールとは別に扱う
 function compareFrameAndTire(
     frame: CompatibilityInput,
     tire: CompatibilityInput,
@@ -607,7 +604,7 @@ function compareFrameAndTire(
     }
 
     if (tireWidth > maxWidth) {
-        // フレームは構成の基準なので、入らないタイヤはフレームを維持したまま選べない扱いにする。
+        // フレームは構成の基準なので、入らないタイヤはフレームを維持したまま選べない扱いにする
         return {
             status: "incompatible",
             reasons: [
@@ -622,8 +619,8 @@ function compareFrameAndTire(
     }
 }
 
-// 複数ルールの判定結果を1つにまとめる。
-// 同じ組み合わせに規格が複数ある場合(段数と変速方式など)、最も重い結果を採用し、理由はすべて残す。
+// 複数ルールの判定結果を1つにまとめる
+// 同じ組み合わせに規格が複数ある場合(段数と変速方式など)、最も重い結果を採用し、理由はすべて残す
 function combinePairResults(
     results: PairCompatibilityResult[],
 ): PairCompatibilityResult | null {
@@ -631,7 +628,7 @@ function combinePairResults(
         return null
     }
 
-    // 重い順に採用する。
+    // 重い順に採用する
     const hasIncompatible = results.some((result) => result.status === "incompatible")
     const hasUnknown = results.some((result) => result.status === "unknown")
     const status: CompatibilityStatus = hasIncompatible
@@ -647,7 +644,7 @@ function combinePairResults(
     }
 }
 
-// 一致ルール1件分の判定。両方の規格が未登録ならnullを返す。
+// 一致ルール1件分の判定。両方の規格が未登録ならnullを返す
 function compareByEqualityRule(
     rule: EqualityRule,
     candidate: CompatibilityInput,
@@ -662,7 +659,7 @@ function compareByEqualityRule(
         return null
     }
 
-    // 規格名と両側の値は、どの判定結果でも同じ形で表示用に添える。
+    // 規格名と両側の値は、どの判定結果でも同じ形で表示用に添える
     const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [{
         label: rule.label,
         status,
@@ -710,8 +707,8 @@ function compareByEqualityRule(
     }
 }
 
-// 規格ごとの詳細を持たない判定結果に、規格名だけの詳細を補う。
-// コックピットやカテゴリーの占有のように、値の一致では表せない判定で使う。
+// 規格ごとの詳細を持たない判定結果に、規格名だけの詳細を補う
+// コックピットやカテゴリーの占有のように、値の一致では表せない判定で使う
 function withSummaryDetail(
     result: PairCompatibilityResult,
     label: string,
@@ -726,7 +723,7 @@ function withSummaryDetail(
     }
 }
 
-// 2パーツ間の規格判定。対象カテゴリーの組み合わせがなければnullを返す。
+// 2パーツ間の規格判定。対象カテゴリーの組み合わせがなければnullを返す
 export function compareParts(
     candidate: CompatibilityInput,
     candidateCategory: string,
@@ -737,7 +734,7 @@ export function compareParts(
     const selectedBlocksCandidateCategory = blocksCategory(selected, candidateCategory)
 
     if (candidateBlocksSelectedCategory || selectedBlocksCandidateCategory) {
-        // 一体型パーツや付属コックピットとの二重選択を拒否する。
+        // 一体型パーツや付属コックピットとの二重選択を拒否する
         return {
             status: "incompatible",
             reasons: ["別の選択パーツが対象カテゴリーを占有するため同時に選択できません"],
@@ -773,7 +770,7 @@ export function compareParts(
             return null
         }
 
-        // 値は単位つきで整形済みのため、規格キーを付けずにそのまま表示する。
+        // 値は単位つきで整形済みのため、規格キーを付けずにそのまま表示する
         const tireWidth = getSpecification(tire, "tire_width_mm")
         const maxWidth = getSpecification(frame, "max_tire_width_mm")
         const tireValue = tireWidth ? `${tireWidth}mm` : undefined
@@ -790,7 +787,7 @@ export function compareParts(
         }
     }
 
-    // 該当する一致ルールをすべて評価し、結果をまとめる。
+    // 該当する一致ルールをすべて評価し、結果をまとめる
     const ruleResults: PairCompatibilityResult[] = []
 
     for (const rule of EQUALITY_RULES) {
@@ -882,7 +879,7 @@ export function findCompatibilityIssues(
             const key = `${slotKeys.join("|")}::${reasons.join("|")}`
             const existing = issues.get(key)
 
-            // 同じパーツ組み合わせの両方向の結果は、重要度の高い方を残す。
+            // 同じパーツ組み合わせの両方向の結果は、重要度の高い方を残す
             // 重い順: 非互換 > 未確認
             const statusRank = {unknown: 2, incompatible: 3} as const
 
