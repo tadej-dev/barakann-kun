@@ -1,11 +1,16 @@
 import {
     Bike,
+    BookOpen,
     ChevronDown,
+    FileText,
+    Menu,
     LogOut,
     Pencil,
+    ShieldCheck,
     Trash2,
+    X,
 } from "lucide-react"
-import {NavLink} from "react-router"
+import {NavLink, useNavigate} from "react-router"
 import {useState} from "react"
 
 import {
@@ -16,6 +21,8 @@ import {Button} from "@/components/ui/button"
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuGroupLabel,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -24,6 +31,7 @@ import {AccountDeleteDialog} from "@/features/auth/AccountDeleteDialog"
 import {LogoutSaveDialog} from "@/features/auth/LogoutSaveDialog"
 import {DisplayNameDialog} from "@/features/auth/DisplayNameDialog"
 import {useAuth} from "@/features/auth/useAuth"
+import {cn} from "@/lib/utils"
 import {useLogoutWithSave} from "@/features/auth/useLogoutWithSave"
 
 // ユーザー名からアバター用の頭文字を作成
@@ -37,6 +45,13 @@ function getUserInitials(displayName: string): string {
     return initials.slice(0, 2).toUpperCase() || "U"
 }
 
+// ヘッダーから開けるサイト内ページ
+const siteLinks = [
+    {label: "使い方", to: "/guide", icon: BookOpen},
+    {label: "利用規約", to: "/terms", icon: FileText},
+    {label: "プライバシーポリシー", to: "/privacy", icon: ShieldCheck},
+]
+
 // ヘッダー
 export function Header() {
     const {
@@ -49,6 +64,8 @@ export function Header() {
         updateDisplayName,
         user,
     } = useAuth()
+    const navigate = useNavigate()
+    const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false)
     const {
         status: logoutSaveStatus,
         failureKind: logoutSaveFailureKind,
@@ -215,6 +232,71 @@ export function Header() {
                         </>
                     )}
 
+                    {/* ログイン状態にかかわらず、三本線メニューからサイト内ページを開ける */}
+                    <DropdownMenu
+                        open={isSiteMenuOpen}
+                        onOpenChange={setIsSiteMenuOpen}
+                    >
+                        <DropdownMenuTrigger
+                            render={
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white aria-expanded:bg-slate-800 aria-expanded:text-white"
+                                    aria-label={isSiteMenuOpen
+                                        ? "サイト内メニューを閉じる"
+                                        : "サイト内メニューを開く"}
+                                    aria-expanded={isSiteMenuOpen}
+                                />
+                            }
+                        >
+                            <span className="relative flex size-4 items-center justify-center">
+                                <Menu
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "absolute size-4 transition-all duration-200",
+                                        isSiteMenuOpen
+                                            ? "scale-75 rotate-90 opacity-0"
+                                            : "scale-100 rotate-0 opacity-100",
+                                    )}
+                                />
+                                <X
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "absolute size-4 transition-all duration-200",
+                                        isSiteMenuOpen
+                                            ? "scale-100 rotate-0 opacity-100"
+                                            : "scale-75 -rotate-90 opacity-0",
+                                    )}
+                                />
+                            </span>
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent className="w-48" align="end">
+                            <DropdownMenuGroup>
+                                <DropdownMenuGroupLabel>
+                                    サイト情報
+                                </DropdownMenuGroupLabel>
+
+                                {siteLinks.map((link) => {
+                                    const Icon = link.icon
+
+                                    return (
+                                        <DropdownMenuItem
+                                            key={link.to}
+                                            onClick={() => navigate(link.to)}
+                                        >
+                                            <Icon
+                                                aria-hidden="true"
+                                                className="size-3.5"
+                                            />
+                                            {link.label}
+                                        </DropdownMenuItem>
+                                    )
+                                })}
+                            </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 

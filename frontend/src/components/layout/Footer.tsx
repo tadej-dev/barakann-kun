@@ -3,6 +3,10 @@ import { NavLink } from "react-router"
 // フッターリンク一覧
 const footerLinks = [
     {
+        label: "使い方", // 表示名
+        to: "/guide", // 遷移先
+    },
+    {
         label: "利用規約", // 表示名
         to: "/terms", // 遷移先
     },
@@ -14,7 +18,7 @@ const footerLinks = [
 
 // フッター
 export function Footer() {
-    // リンク配列をmapし、規約ページの追加・変更を1か所で管理する。
+    // リンク配列をmapし、フッターリンクの追加・変更を1か所で管理する。
     return (
         <footer className="shrink-0 border-t border-slate-800 bg-[#0b0f12] px-10 py-6 text-sm text-slate-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

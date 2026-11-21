@@ -9,6 +9,7 @@ import { Header } from "@/components/layout/Header"
 import { PrivacyPage } from "@/pages/PrivacyPage"
 import { SimulatorPage } from "@/pages/SimulatorPage"
 import { TermsPage } from "@/pages/TermsPage"
+import { GuidePage } from "@/pages/GuidePage"
 
 // アプリケーション本体
 function App() {
@@ -25,6 +26,7 @@ function App() {
                         path="/simulator"
                         element={<Navigate to="/" replace />}
                     />
+                    <Route path="/guide" element={<GuidePage />} />
                     <Route path="/terms" element={<TermsPage />} />
                     <Route path="/privacy" element={<PrivacyPage />} />
                     {/* 未知のURLは利用者が迷わないようシミュレーターへ戻す。 */}

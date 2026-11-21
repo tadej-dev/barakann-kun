@@ -9,14 +9,17 @@ import {Footer} from "@/components/layout/Footer"
 afterEach(cleanup)
 
 describe("Footer", () => {
-    // 利用規約・プライバシーポリシーのリンク先が正しいことを確認する。
-    it("規約ページへのリンク先を設定する", () => {
+    // 使い方・利用規約・プライバシーポリシーのリンク先が正しいことを確認する。
+    it("各ページへのリンク先を設定する", () => {
         render(
             <MemoryRouter>
                 <Footer />
             </MemoryRouter>
         )
 
+        expect(
+            screen.getByText("使い方").closest("a")?.getAttribute("href"),
+        ).toBe("/guide")
         expect(
             screen.getByText("利用規約").closest("a")?.getAttribute("href"),
         ).toBe("/terms")
@@ -37,6 +40,6 @@ describe("Footer", () => {
             name: "フッターナビゲーション",
         })
 
-        expect(within(nav).getAllByRole("link")).toHaveLength(2)
+        expect(within(nav).getAllByRole("link")).toHaveLength(3)
     })
 })
