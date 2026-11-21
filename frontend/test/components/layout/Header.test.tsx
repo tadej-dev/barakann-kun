@@ -54,6 +54,39 @@ beforeEach(() => {
 })
 
 describe("Header", () => {
+    // 未ログインでも、三本線メニューからサイト内ページを開ける
+    it("未ログインでもメニューからサイト内ページを開ける", async () => {
+        renderHeader(createAuthValue({status: "unauthenticated"}))
+
+        fireEvent.click(
+            screen.getByRole("button", {name: "サイト内メニューを開く"}),
+        )
+
+        expect(await screen.findByRole("menuitem", {name: "使い方"}))
+            .toBeTruthy()
+        expect(screen.getByRole("menuitem", {name: "利用規約"})).toBeTruthy()
+        expect(screen.getByRole("menuitem", {name: "プライバシーポリシー"}))
+            .toBeTruthy()
+    })
+
+    // ログイン中も、三本線メニューからサイト内ページを開ける
+    it("ログイン中もメニューからサイト内ページを開ける", async () => {
+        renderHeader(createAuthValue({
+            status: "authenticated",
+            user: {id: "user-1", displayName: "テスト 太郎"},
+        }))
+
+        fireEvent.click(
+            screen.getByRole("button", {name: "サイト内メニューを開く"}),
+        )
+
+        expect(await screen.findByRole("menuitem", {name: "使い方"}))
+            .toBeTruthy()
+        expect(screen.getByRole("menuitem", {name: "利用規約"})).toBeTruthy()
+        expect(screen.getByRole("menuitem", {name: "プライバシーポリシー"}))
+            .toBeTruthy()
+    })
+
     // 認証確認が終わるまでは、ログインボタンを一瞬出さない。
     it("認証状態の確認中は待機表示だけを出す", () => {
         renderHeader(createAuthValue({status: "loading"}))
