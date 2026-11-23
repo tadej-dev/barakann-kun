@@ -3,7 +3,9 @@ import {describe, expect, it} from "vitest"
 import {verifyCsrfToken} from "../src/auth/csrf"
 import {isJsonContentType} from "../src/routes/route-helpers"
 
+// CSRFハッシュの計算に使うテスト用の秘密鍵
 const SECRET = "test-secret"
+// リクエスト本文とCookieに含めるテスト用トークン
 const TOKEN = "csrf-token-value"
 
 // Auth.jsと同じ手順で、Cookieへ保存される「トークン|ハッシュ」を作る
@@ -18,12 +20,14 @@ async function createCookieValue(token: string, secret: string) {
     return `${token}|${hash}`
 }
 
+// Cookieヘッダーだけを持つリクエストを作成
 function createRequest(url: string, cookies: string[]) {
     return new Request(url, {
         headers: {cookie: cookies.join("; ")},
     })
 }
 
+// HTTPSとHTTPで読み分けるCSRF Cookieと本文トークンの照合
 describe("verifyCsrfToken", () => {
     it("HTTPSでは__Host- Cookieで検証する", async () => {
         const value = await createCookieValue(TOKEN, SECRET)
@@ -34,7 +38,7 @@ describe("verifyCsrfToken", () => {
         await expect(verifyCsrfToken(request, SECRET, TOKEN)).resolves.toBe(true)
     })
 
-    // サブドメインから差し込める接頭辞なしCookieを、HTTPSで読んではならない。
+    // サブドメインから差し込める接頭辞なしCookieを、HTTPSで読んではならない
     it("HTTPSでは接頭辞なしCookieを読まない", async () => {
         const value = await createCookieValue(TOKEN, SECRET)
         const request = createRequest("https://example.com/api/saved-builds", [
@@ -54,7 +58,7 @@ describe("verifyCsrfToken", () => {
         await expect(verifyCsrfToken(request, SECRET, TOKEN)).resolves.toBe(true)
     })
 
-    // __Secure- は接頭辞だけでは発行元を制限できないため候補にしない。
+    // __Secure- は接頭辞だけでは発行元を制限できないため候補にしない
     it("HTTPSでは__Secure- Cookieを読まない", async () => {
         const value = await createCookieValue(TOKEN, SECRET)
         const request = createRequest("https://example.com/api/saved-builds", [
@@ -100,13 +104,14 @@ describe("verifyCsrfToken", () => {
     })
 })
 
+// JSONのContent-Typeだけを受け付ける判定
 describe("isJsonContentType", () => {
     it("application/jsonとcharset付きを受け付ける", () => {
         expect(isJsonContentType("application/json")).toBe(true)
         expect(isJsonContentType("Application/JSON; charset=utf-8")).toBe(true)
     })
 
-    // フォーム送信・text/plainはクロスサイトから送信できるため受け付けない。
+    // フォーム送信・text/plainはクロスサイトから送信できるため受け付けない
     it("JSON以外のContent-Typeは受け付けない", () => {
         expect(isJsonContentType("application/x-www-form-urlencoded")).toBe(false)
         expect(isJsonContentType("multipart/form-data; boundary=x")).toBe(false)

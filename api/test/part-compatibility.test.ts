@@ -2,7 +2,7 @@ import {describe, expect, it} from "vitest"
 
 import {findIncompatiblePartPairs} from "../src/db/part-compatibility"
 
-// 保存構成の規格判定に使う最小パーツ。付属品判定に必要な項目だけを持つ。
+// 保存構成の規格判定に使う最小パーツ（ID・カテゴリー・規格・占有カテゴリー）
 function part(
     id: number,
     categoryKey: string,
@@ -17,12 +17,13 @@ function part(
     }
 }
 
+// 保存構成のパーツ組み合わせで規格不一致を検出
 describe("保存構成の規格適合チェック", () => {
     // フレーム側のコックピット規格と一致しないハンドルは、接続方式の違いに
-    // よらず保存不可にし、競合する両パーツをslotKeys/partIdsへ整形して返す。
+    // よらず保存不可にし、競合する両パーツをslotKeys/partIdsへ整形して返す
     it.each([
         [
-            // 専用インターフェースのフレームへ、標準規格のハンドルを組むケース。
+            // 専用インターフェースのフレームへ、標準規格のハンドルを組むケース
             "一体型専用フレーム",
             {
                 cockpit_interface: "canyon_cp0018",
@@ -31,7 +32,7 @@ describe("保存構成の規格適合チェック", () => {
             {cockpit_interface: "standard_1_1_8"},
         ],
         [
-            // ステムを介さずハンドルがフォークへ直結する専用フォークのケース。
+            // ステムを介さずハンドルがフォークへ直結する専用フォークのケース
             "専用フォーク(either接続)",
             {
                 cockpit_interface: "cannondale_delta",
@@ -59,7 +60,7 @@ describe("保存構成の規格適合チェック", () => {
         },
     )
 
-    // システムタグが交差すれば、規格名が違っても適合として扱う。
+    // システムタグが交差すれば、規格名が違っても適合として扱う
     it("コックピットシステムが交差するフレームとハンドルは不一致にしない", () => {
         const issues = findIncompatiblePartPairs([
             {
@@ -81,7 +82,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues).toHaveLength(0)
     })
 
-    // 交換可の付属コックピットは、システムが一致するハンドルへの交換を許可する。
+    // 交換可の付属コックピットは、システムが一致するハンドルへの交換を許可
     it("交換可の付属コックピットは適合ハンドルへの交換を不一致にしない", () => {
         const issues = findIncompatiblePartPairs([
             {
@@ -104,7 +105,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues).toHaveLength(0)
     })
 
-    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを不一致にする。
+    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを不一致にする
     it("交換不可の付属コックピットは別ハンドルを不一致として検出する", () => {
         const issues = findIncompatiblePartPairs([
             {
@@ -126,7 +127,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues).toHaveLength(1)
     })
 
-    // 前後に同じ規格でも、反対側にしか対応しないパーツ同士は混ぜて判定しない。
+    // 前後に同じ規格でも、反対側にしか対応しないパーツ同士は混ぜて判定しない
     it("前輪と後輪の規格は混ぜずに判定する", () => {        const issues = findIncompatiblePartPairs([
             {
                 slotKey: "wheel",
@@ -152,7 +153,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.slotKeys).toEqual(["tire:front", "wheel"])
     })
 
-    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを許可する。
+    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを許可
     it("複数フリーボディ対応のホイールは集合内のカセットを不一致にしない", () => {
         const issues = findIncompatiblePartPairs([
             {
@@ -170,7 +171,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues).toEqual([])
     })
 
-    // 対応集合に含まれないカセットは保存不可として検出する。
+    // 対応集合に含まれないカセットは保存不可として検出
     it("複数フリーボディ対応でも集合外のカセットを不一致として検出する", () => {
         const issues = findIncompatiblePartPairs([
             {
@@ -192,7 +193,7 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.partIds).toEqual([2, 1])
     })
 
-    // 規格が未登録の組み合わせは、適合不明として保存を許可する。
+    // 規格が未登録の組み合わせは、適合不明として保存を許可
     it("規格が未登録の組み合わせは保存拒否対象にしない", () => {
         const issues = findIncompatiblePartPairs([
             {

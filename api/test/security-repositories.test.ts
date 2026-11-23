@@ -15,7 +15,9 @@ import {
 } from "../src/db/saved-build-repository"
 
 type PreparedStatement = {
+    // 実行するSQL
     sql: string
+    // SQLへ渡すパラメーター
     parameters: unknown[]
 }
 
@@ -25,8 +27,10 @@ function createDatabaseStub(
 ) {
     const statements: PreparedStatement[] = []
     const database = {
+        // SQLを保持して結果を返す実行部を用意
         prepare(sql: string) {
             return {
+                // SQLと引数を記録して結果を返す
                 bind(...parameters: unknown[]) {
                     statements.push({sql, parameters})
 
@@ -44,12 +48,15 @@ function createDatabaseStub(
     return {database, statements}
 }
 
+// 個人情報の扱いとユーザーID条件を検証するD1クエリ
 describe("security-sensitive D1 queries", () => {
     it("Googleの名前・メール・画像を保存せず、仮の表示名でユーザーを作る", async () => {
         const statements: PreparedStatement[] = []
         const database = {
+            // 保存SQLと引数を記録する実行部を返す
             prepare(sql: string) {
                 return {
+                    // SQLと引数を検証用に記録して実行部を返す
                     bind(...parameters: unknown[]) {
                         statements.push({sql, parameters})
 
@@ -85,8 +92,10 @@ describe("security-sensitive D1 queries", () => {
     it("Auth.jsからの更新では、名前・メール・画像を書き換えない", async () => {
         const statements: PreparedStatement[] = []
         const database = {
+            // 更新SQLの有無を調べる実行部を返す
             prepare(sql: string) {
                 return {
+                    // SQLと引数を記録して実行部を返す
                     bind(...parameters: unknown[]) {
                         statements.push({sql, parameters})
 
@@ -216,11 +225,14 @@ describe("security-sensitive D1 queries", () => {
 
     it("表示順テーブル未適用時は既定順へフォールバックする", async () => {
         const database = {
+            // SQLを受け取るprepare呼び出しを再現
             prepare(sql: string) {
                 return {
+                    // 表示順テーブルの有無で結果を切り替える実行部を返す
                     bind() {
                         return {
                             all: async () => {
+                                // 表示順テーブルが無いD1エラーを再現
                                 if (sql.includes("saved_build_orders")) {
                                     throw new Error(
                                         "D1_ERROR: no such table: saved_build_orders",
@@ -242,8 +254,10 @@ describe("security-sensitive D1 queries", () => {
 
     it("保存時にスロットのカテゴリーと前後位置を検証する", async () => {
         const database = {
+            // パーツ検証用の実行部を用意
             prepare() {
                 return {
+                    // D1のbind呼び出しに合わせて実行部を返す
                     bind() {
                         return {
                             all: async () => ({
@@ -295,11 +309,14 @@ describe("security-sensitive D1 queries", () => {
 
     it("保存時にフレームとコックピットの規格不一致を拒否する", async () => {
         const database = {
+            // SQLの種類でパーツ行と規格行を切り替え
             prepare(sql: string) {
                 return {
+                    // D1のbind呼び出しに合わせて実行部を返す
                     bind() {
                         return {
                             all: async () => {
+                                // パーツの問い合わせならフレームとハンドルを返す
                                 if (sql.includes("FROM parts")) {
                                     return {
                                         results: [
@@ -321,6 +338,7 @@ describe("security-sensitive D1 queries", () => {
                                     }
                                 }
 
+                                // 規格の問い合わせならコックピット規格を返す
                                 if (sql.includes("FROM part_specifications")) {
                                     return {
                                         results: [
@@ -367,6 +385,7 @@ describe("security-sensitive D1 queries", () => {
     })
 })
 
+// Googleプロフィールから取得する情報を検証
 describe("Googleから受け取る情報", () => {
     it("プロフィールからアカウントID(sub)だけを取り出す", () => {
         const user = toGoogleAccountUser({
@@ -384,13 +403,19 @@ describe("Googleから受け取る情報", () => {
     })
 })
 
+// アカウントIDを秘密鍵付きハッシュへ変換する処理を検証
 describe("アカウントIDのハッシュ化", () => {
+    // ハッシュ化に使うテスト用の秘密鍵
     const secret = "test-account-id-hash-secret-long-enough"
+    // ハッシュ化するGoogleのアカウントID
     const googleId = "108123456789012345678"
 
     type AccountRow = {
+        // アカウントに紐づく利用者ID
         user_id: string
+        // 認証プロバイダー（google）
         provider: string
+        // プロバイダー側のアカウントID（平文またはハッシュ値）
         provider_account_id: string
     }
 
@@ -398,13 +423,16 @@ describe("アカウントIDのハッシュ化", () => {
     function createAccountDatabase(accountRows: AccountRow[]) {
         const statements: PreparedStatement[] = []
         const database = {
+            // SQLを保持して結果を返す実行部を用意
             prepare(sql: string) {
                 return {
+                    // SQLと引数を記録して結果を返す
                     bind(...parameters: unknown[]) {
                         statements.push({sql, parameters})
 
                         return {
                             first: async () => {
+                                // auth_accountsの問い合わせなら一致するアカウント行を返す
                                 if (sql.includes("FROM auth_accounts")) {
                                     const [provider, accountId] = parameters
 
@@ -414,6 +442,7 @@ describe("アカウントIDのハッシュ化", () => {
                                     ) ?? null
                                 }
 
+                                // usersの問い合わせならユーザー行を返す
                                 if (sql.includes("FROM users")) {
                                     return {
                                         id: parameters[0],
@@ -424,7 +453,7 @@ describe("アカウントIDのハッシュ化", () => {
                                 return null
                             },
                             run: async () => {
-                                // ハッシュ値への置き換えを、スタブの行にも反映する
+                                // ハッシュ値への置き換えを、スタブの行にも反映
                                 if (sql.includes("UPDATE auth_accounts")) {
                                     const [newId, , provider, oldId] = parameters
                                     const row = accountRows.find((candidate) =>
@@ -432,6 +461,7 @@ describe("アカウントIDのハッシュ化", () => {
                                         candidate.provider_account_id === oldId,
                                     )
 
+                                    // 置き換え対象の行があればハッシュ値を反映
                                     if (row) {
                                         row.provider_account_id = newId as string
                                     }
@@ -448,6 +478,7 @@ describe("アカウントIDのハッシュ化", () => {
         return {database, statements}
     }
 
+    // 連携するGoogleアカウントの入力
     const linkGoogleAccount = {
         userId: "user-1",
         provider: "google",

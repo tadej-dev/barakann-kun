@@ -15,8 +15,9 @@ import {
 } from "../db/config-order-repository"
 import {parseConfigOrderPayload} from "../schemas/config-order"
 
-// 固定構成・追加構成の表示順API
+// 構成の表示順API
 export const configOrderRoute = new Hono<AppEnv>()
+// 構成表示順APIのContext型
 type ConfigOrderContext = ApiRouteContext
 
 // 表示順入力の形式エラー応答
@@ -32,7 +33,7 @@ function invalidPayload(context: ConfigOrderContext) {
     )
 }
 
-// 表示順テーブルが未作成の場合の案内応答
+// 表示順機能のマイグレーション未適用の案内応答
 function migrationRequired(context: ConfigOrderContext) {
     return context.json(
         {
@@ -47,19 +48,22 @@ function migrationRequired(context: ConfigOrderContext) {
 
 // ログインユーザーの現在の表示順を取得
 configOrderRoute.get("/", async (context) => {
-    // 表示順はユーザー固有データなのでセッションから所有者を取得する
+    // 表示順はユーザー固有データなのでセッションから所有者を取得
     const userId = await getUserId(context)
 
+    // 未ログイン時の401応答
     if (!userId) {
         return unauthenticated(context)
     }
 
+    // 保存済みの構成キー（config:<id>形式）を表示順どおりに保持する配列
     let items: string[]
 
     try {
         // 保存順と現在存在する構成の照合はRepositoryへ任せる
         items = await context.var.configOrderRepository.list(userId)
     } catch (error) {
+        // マイグレーション未適用時の503案内応答
         if (error instanceof ConfigOrderMigrationRequiredError) {
             return migrationRequired(context)
         }
@@ -72,9 +76,10 @@ configOrderRoute.get("/", async (context) => {
 
 // 表示順をユーザー所有の構成だけで置き換え
 configOrderRoute.put("/", async (context) => {
-    // 本文からユーザーIDを受け取らずセッションの所有者へ保存する
+    // 本文からユーザーIDを受け取らずセッションの所有者へ保存
     const userId = await getUserId(context)
 
+    // 未ログイン時の401応答
     if (!userId) {
         return unauthenticated(context)
     }
@@ -86,6 +91,7 @@ configOrderRoute.put("/", async (context) => {
         return invalidCsrf(context)
     }
 
+    // 本文のitemsを件数・文字数・重複まで検証した結果
     const parsedPayload = parseConfigOrderPayload(payload)
 
     // 配列の件数や重複を確認してからRepositoryへ渡す
@@ -94,7 +100,7 @@ configOrderRoute.put("/", async (context) => {
     }
 
     try {
-        // Repositoryで現在の所有構成と一致する完全な順列か再確認する
+        // Repositoryで現在の所有構成と一致する完全な順列か再確認
         const items = await context.var.configOrderRepository.save(
             userId,
             parsedPayload.data.items,
@@ -102,10 +108,12 @@ configOrderRoute.put("/", async (context) => {
 
         return context.json({items})
     } catch (error) {
+        // マイグレーション未適用時の503案内応答
         if (error instanceof ConfigOrderMigrationRequiredError) {
             return migrationRequired(context)
         }
 
+        // 所有構成と一致しない並び順の場合の400応答
         if (error instanceof InvalidConfigOrderError) {
             return invalidPayload(context)
         }

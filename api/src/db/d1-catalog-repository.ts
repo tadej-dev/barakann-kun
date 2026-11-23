@@ -1,12 +1,14 @@
 import type {CatalogRepository} from "./catalog-repository"
 import type {Category, Part, PartIncludedItem} from "../types"
 
+// categoriesテーブルの行
 type CategoryRow = {
     id: number
     key: string
     display_name: string
 }
 
+// partsテーブルとブランド・カテゴリーを結合した行
 type PartRow = {
     id: number
     name: string
@@ -22,6 +24,7 @@ type PartRow = {
     updated_at: string
 }
 
+// part_included_itemsテーブルの行
 type IncludedItemRow = {
     part_id: number
     item_name: string
@@ -32,11 +35,13 @@ type IncludedItemRow = {
     is_set_component: number
 }
 
+// part_blocked_categoriesテーブルの行
 type BlockedCategoryRow = {
     part_id: number
     category_key: string
 }
 
+// part_specificationsテーブルの行
 type SpecificationRow = {
     part_id: number
     spec_key: string
@@ -81,9 +86,10 @@ async function queryRows<T>(
 
 // D1を利用したカタログリポジトリ
 export class D1CatalogRepository implements CatalogRepository {
-    // 公開カタログの読み取りSQLをAPIルートから分離する
+    // 公開カタログの読み取りSQLをAPIルートから分離
     constructor(private readonly database: D1Database) {}
 
+    // 表示順に並べたカテゴリー一覧を取得
     async findCategories(): Promise<Category[]> {
         // 表示順は sort_order で決め、同じ値ならID順にする
         const rows = await queryRows<CategoryRow>(
@@ -100,6 +106,7 @@ export class D1CatalogRepository implements CatalogRepository {
         }))
     }
 
+    // カテゴリーキーに一致するパーツをID順で取得
     async findPartsByCategory(categoryKey: string): Promise<Part[]> {
         // パーツ本体をカテゴリーキーで絞り込み
         const rows = await queryRows<PartRow>(
@@ -113,6 +120,7 @@ export class D1CatalogRepository implements CatalogRepository {
         return this.attachRelations(rows)
     }
 
+    // ID一覧に一致するパーツをまとめて取得
     async findPartsByIds(ids: number[]): Promise<Part[]> {
         // 空のID一覧ではD1クエリを発行しない
         if (ids.length === 0) {
@@ -152,6 +160,7 @@ export class D1CatalogRepository implements CatalogRepository {
 
     // 含有品・選択不可カテゴリー・規格情報をパーツへ付加
     private async attachRelations(rows: PartRow[]): Promise<Part[]> {
+        // 関連データを取得する対象のパーツID
         const partIds = rows.map((row) => row.id)
 
         // 関連データをパーツID単位でまとめるための一時マップ
@@ -160,7 +169,7 @@ export class D1CatalogRepository implements CatalogRepository {
         const specifications = new Map<number, Record<string, string>>()
 
         for (const partIdBatch of chunk(partIds, RELATED_QUERY_BATCH_SIZE)) {
-            // D1のバインド変数上限を超えない単位で関連情報を取得する
+            // D1のバインド変数上限を超えない単位で関連情報を取得
             // 関連テーブルは同じID群を使って並列取得
             const parameters = placeholders(partIdBatch.length)
             const [itemRows, blockedRows, specificationRows] = await Promise.all([
@@ -213,6 +222,7 @@ export class D1CatalogRepository implements CatalogRepository {
                 })
                 includedItems.set(row.part_id, items)
 
+                // 付属品カテゴリーも同カテゴリーの二重選択を防ぐため選択不可へ加える
                 if (row.category_key) {
                     const keys = blockedCategoryKeys.get(row.part_id) ?? new Set()
                     keys.add(row.category_key)

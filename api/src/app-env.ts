@@ -11,9 +11,13 @@ export type AppEnv = {
     Variables: {
         // 各リクエストのミドルウェアで登録するRepository
         // テストではD1実装を使わず差し替えられる
+        // アカウント削除・表示名変更を扱うRepository
         accountRepository: AccountRepository
+        // カテゴリー・パーツ一覧を扱うRepository
         catalogRepository: CatalogRepository
+        // 構成一覧の表示順を扱うRepository
         configOrderRepository: ConfigOrderRepository
+        // 保存構成を扱うRepository
         savedBuildRepository: SavedBuildRepository
     }
 }

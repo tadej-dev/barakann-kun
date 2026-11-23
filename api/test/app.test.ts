@@ -124,6 +124,7 @@ function createAuthAdapter(
 
 // 保存構成APIのルート検証用リポジトリ
 class TestSavedBuildRepository implements SavedBuildRepository {
+    // 返す保存構成
     readonly builds: SavedBuild[] = [{
         id: "11111111-1111-4111-8111-111111111111",
         name: "テスト構成",
@@ -137,18 +138,25 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             weight: 1000,
         }],
     }]
+    // 最後に受け取ったユーザーID
     lastUserId: string | null = null
+    // listAllが呼ばれたときにallへ変わるテスト用フラグ
     lastListScope: "legacy" | "all" = "legacy"
+    // 初期構成の作成処理が呼ばれたか
     ensuredInitialConfig = false
+    // countAllが返す構成数
     allCount = 1
+    // 最後に作成・更新へ渡されたパーツ
     lastParts: SavedBuildPartInput[] = []
 
+    // user-1ならallCount、他は0を返す
     async countAll(userId: string): Promise<number> {
         this.lastUserId = userId
 
         return userId === "user-1" ? this.allCount : 0
     }
 
+    // 全構成フラグを立てて構成一覧を返す
     async listAll(userId: string): Promise<SavedBuild[]> {
         this.lastUserId = userId
         this.lastListScope = "all"
@@ -156,11 +164,13 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         return userId === "user-1" ? this.builds : []
     }
 
+    // 初期構成の作成済みフラグを立てる
     async ensureInitialConfig(userId: string): Promise<void> {
         this.lastUserId = userId
         this.ensuredInitialConfig = true
     }
 
+    // user-1の構成からID一致する1件を返す
     async findById(userId: string, buildId: string): Promise<SavedBuild | null> {
         this.lastUserId = userId
 
@@ -169,6 +179,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
             : null
     }
 
+    // 受け取ったパーツに価格と重量を付けて構成を作成
     async create(
         userId: string,
         name: string,
@@ -191,6 +202,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }
     }
 
+    // versionを検証して構成とパーツを更新
     async update(
         userId: string,
         buildId: string,
@@ -201,10 +213,12 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         this.lastUserId = userId
         this.lastParts = parts
 
+        // ユーザーまたは構成IDが一致しなければnot_foundを返す
         if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
             return {kind: "not_found"}
         }
 
+        // versionが1以外なら競合としてconflictを返す
         if (version !== 1) {
             return {kind: "conflict"}
         }
@@ -224,6 +238,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }
     }
 
+    // versionを検証して構成名だけ変更
     async rename(
         userId: string,
         buildId: string,
@@ -232,10 +247,12 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     ): Promise<RenameSavedBuildResult> {
         this.lastUserId = userId
 
+        // ユーザーまたは構成IDが一致しなければnot_foundを返す
         if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
             return {kind: "not_found"}
         }
 
+        // versionが1以外なら競合としてconflictを返す
         if (version !== 1) {
             return {kind: "conflict"}
         }
@@ -250,6 +267,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
         }
     }
 
+    // versionを検証して構成を削除
     async delete(
         userId: string,
         buildId: string,
@@ -257,6 +275,7 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     ): Promise<DeleteSavedBuildResult> {
         this.lastUserId = userId
 
+        // ユーザーまたは構成IDが一致しなければnot_foundを返す
         if (userId !== "user-1" || buildId !== this.builds[0]?.id) {
             return {kind: "not_found"}
         }
@@ -265,19 +284,25 @@ class TestSavedBuildRepository implements SavedBuildRepository {
     }
 }
 
-// アカウント削除APIのルート検証用リポジトリ
+// アカウント削除・表示名変更APIのルート検証用リポジトリ
 class TestAccountRepository implements AccountRepository {
+    // 最後に受け取ったユーザーID
     lastUserId: string | null = null
+    // deleteUserの結果
     result: DeleteAccountResult = {kind: "deleted"}
+    // 最後に受け取った表示名
     lastDisplayName: string | null = null
+    // updateDisplayNameの結果
     updateResult: "updated" | "not_found" = "updated"
 
+    // ユーザーIDを記録し、設定済みの削除結果を返す
     async deleteUser(userId: string): Promise<DeleteAccountResult> {
         this.lastUserId = userId
 
         return this.result
     }
 
+    // 表示名を記録し、設定済みの更新結果を返す
     async updateDisplayName(
         userId: string,
         displayName: string,
@@ -291,21 +316,25 @@ class TestAccountRepository implements AccountRepository {
     }
 }
 
-// 構成スロットAPIのルート検証用リポジトリ
 // 構成表示順APIのルート検証用リポジトリ
 class TestConfigOrderRepository implements ConfigOrderRepository {
+    // 保存されている構成キーの並び
     order = ["config:1", "config:2", "config:3", "config:4"]
+    // 最後に受け取ったユーザーID
     lastUserId: string | null = null
 
+    // ユーザーIDを記録し、保存済みの表示順を返す
     async list(userId: string): Promise<string[]> {
         this.lastUserId = userId
 
         return userId === "user-1" ? this.order : []
     }
 
+    // 受け取った表示順を保存して返す
     async save(userId: string, itemKeys: string[]): Promise<string[]> {
         this.lastUserId = userId
 
+        // user-1の場合だけ表示順を更新
         if (userId === "user-1") {
             this.order = itemKeys
         }
@@ -644,7 +673,7 @@ describe("authentication API", () => {
     })
 })
 
-// 固定構成と追加構成の表示順同期API検証
+// 構成の表示順を保存・取得するAPI検証
 describe("config order API", () => {
     const configOrderRepository = new TestConfigOrderRepository()
     const app = createApp({
@@ -749,7 +778,7 @@ describe("config order API", () => {
     })
 })
 
-// 本人確認と関連データ削除のアカウントAPI検証
+// ログイン中ユーザーのアカウント削除API検証
 describe("account API", () => {
     const accountRepository = new TestAccountRepository()
     const app = createApp({
@@ -863,6 +892,7 @@ describe("saved builds API", () => {
         authAdapter: createAuthAdapter(),
         savedBuildRepository,
     })
+    // ログイン済みセッションCookieを持つリクエスト
     const authenticatedRequest = {
         headers: {
             cookie: "authjs.session-token=test-session-token",
@@ -922,7 +952,7 @@ describe("saved builds API", () => {
         expect(savedBuildRepository.lastUserId).toBe("user-1")
     })
 
-    // scope=all は固定枠を含む全構成を返し、構成が無ければ既定を用意する
+    // 全構成を返し、構成が無ければ初期構成を用意
     it("lists all configs with scope=all", async () => {
         savedBuildRepository.ensuredInitialConfig = false
 
@@ -938,7 +968,7 @@ describe("saved builds API", () => {
         expect(savedBuildRepository.lastListScope).toBe("all")
     })
 
-    // scope=all の作成は、固定枠を含めた20件で上限を判定する
+    // 作成は全構成が20件に達すると上限として拒否
     it("rejects a new config when all configs reached the limit", async () => {
         const limitedRepository = new TestSavedBuildRepository()
         limitedRepository.allCount = 20
@@ -976,6 +1006,7 @@ describe("saved builds API", () => {
         const migrationApp = createApp({
             catalogRepository: createRepository(),
             authAdapter: createAuthAdapter(),
+            // スキーマ未適用を再現するモックリポジトリ
             savedBuildRepository: {
                 ensureInitialConfig: async () => {},
                 listAll: async () => {
@@ -995,7 +1026,7 @@ describe("saved builds API", () => {
         })
     })
 
-    // 他ユーザーの構成IDを指定しても、存在有無を漏らさず404にする。
+    // 他ユーザーの構成IDを指定しても、存在有無を漏らさず404にする
     it("does not expose another user's build", async () => {
         const otherRepository = new TestSavedBuildRepository()
         const otherApp = createApp({
@@ -1204,7 +1235,7 @@ describe("saved builds API", () => {
         })
     })
 
-    // repositoryがconflictを返したら、楽観ロックの競合として409へ変換する。
+    // リポジトリがconflictを返したら、楽観ロックの競合として409へ変換
     it("returns 409 when the build version is stale", async () => {
         const bindings = createAuthBindings()
         const csrf = await getAuthenticatedCsrfRequest(app, bindings)
@@ -1265,7 +1296,7 @@ describe("saved builds API", () => {
     })
 
     it("deletes a build with the expected version", async () => {
-        // 最後の1件は削除できないため、2件ある状態で削除する
+        // 2件ある状態で1件だけ削除
         const deleteRepository = new TestSavedBuildRepository()
         deleteRepository.builds.push({
             ...deleteRepository.builds[0]!,
@@ -1318,6 +1349,7 @@ describe("display name API", () => {
         return {csrfToken: csrfPayload.csrfToken, csrfCookie}
     }
 
+    // CSRFトークン付きで表示名の変更リクエストを送信
     async function patchDisplayName(displayName: unknown) {
         const {csrfToken, csrfCookie} = await getCsrf()
 
@@ -1395,7 +1427,7 @@ describe("display name API", () => {
     })
 
     it("accepts a 100-character display name counted by characters", async () => {
-        // 絵文字も1文字として数える(DBのlength()と同じ)
+        // 文字数はDBのlength()と同じ数え方
         const response = await patchDisplayName("🚲".repeat(100))
 
         expect(response.status).toBe(200)
