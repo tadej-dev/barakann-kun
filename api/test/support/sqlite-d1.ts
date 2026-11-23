@@ -5,16 +5,19 @@ import {fileURLToPath} from "node:url"
 
 // D1の prepare / bind / all / first / run に合わせた最小の実装
 class SqliteStatement {
+    // SQLとパラメーターを保持する文を用意
     constructor(
         private readonly database: Database.Database,
         private readonly sql: string,
         private readonly parameters: unknown[] = [],
     ) {}
 
+    // パラメーターを差し替えた新しい文を返す
     bind(...parameters: unknown[]) {
         return new SqliteStatement(this.database, this.sql, parameters)
     }
 
+    // 全行を取得してD1の応答形式で返す
     async all<T>() {
         const results = this.database
             .prepare(this.sql)
@@ -23,6 +26,7 @@ class SqliteStatement {
         return {results, success: true, meta: {}}
     }
 
+    // 先頭1行を取得し、無ければnullを返す
     async first<T>() {
         const row = this.database
             .prepare(this.sql)
@@ -31,11 +35,12 @@ class SqliteStatement {
         return row ?? null
     }
 
+    // 書き込みを非同期APIとして実行
     async run() {
         return this.runSync()
     }
 
-    // バッチ内で同期的に実行する
+    // バッチ内で同期的に実行
     runSync() {
         const result = this.database
             .prepare(this.sql)
@@ -52,19 +57,23 @@ export function createSqliteD1() {
     sqlite.pragma("foreign_keys = ON")
 
     const database = {
+        // SQLを受け取り、SQLiteの文を用意
         prepare(sql: string) {
             return new SqliteStatement(sqlite, sql)
         },
-        // D1と同じく、バッチは1つのトランザクションとして順に実行する
+        // D1と同じく、バッチは1つのトランザクションとして順に実行
         async batch(statements: SqliteStatement[]) {
+            // 複数の文をまとめて実行するトランザクション関数
             const apply = sqlite.transaction(() =>
                 statements.map((statement) => statement.runSync()))
 
             return apply()
         },
+        // SQLをまとめて実行
         exec(sql: string) {
             sqlite.exec(sql)
         },
+        // SQLiteの設定を取得・変更
         pragma(pragma: string) {
             return sqlite.pragma(pragma)
         },
@@ -73,7 +82,7 @@ export function createSqliteD1() {
     return {database: database as unknown as D1Database, sqlite}
 }
 
-// マイグレーションを名前順に適用する
+// マイグレーションを名前順に適用
 export function applyMigrations(sqlite: Database.Database) {
     const currentDir = path.dirname(fileURLToPath(import.meta.url))
     const migrationsDir = path.resolve(currentDir, "../../migrations")

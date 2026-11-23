@@ -50,17 +50,14 @@ export async function readJson(context: ApiRouteContext): Promise<unknown> {
 export async function getUserId(
     context: ApiRouteContext,
 ): Promise<string | null> {
-    // ユーザーIDはリクエスト本文ではなくAuth.jsのセッションから取得する
+    // ユーザーIDはリクエスト本文ではなくAuth.jsのセッションから取得
     const authUser = await getAuthUser(context)
 
     return authUser?.user?.id ?? null
 }
 
-// 変更系APIが受け付ける本文のContent-Typeか判定する。
-//
-// application/json以外(form-urlencoded・multipart/form-data・text/plain)は、
-// クロスサイトの<form>からも送信でき、プリフライトも発生しない。本文のCSRFトークン
-// 検証だけに頼らず、そもそも受け付けないことで多層防御にする。
+// 変更系APIが受け付ける本文のContent-Typeか判定
+// application/json以外(form-urlencoded・multipart/form-data・text/plain)はクロスサイトの<form>から送信できるため受け付けない
 export function isJsonContentType(contentType: string | null): boolean {
     return contentType?.toLowerCase().startsWith("application/json") ?? false
 }
@@ -70,11 +67,12 @@ export async function hasValidCsrfToken(
     context: ApiRouteContext,
     payload: unknown,
 ): Promise<boolean> {
-    // JSON以外の本文は、CSRF検証の対象にしない
+    // JSON以外の本文はCSRF検証を行わず失敗として返す
     if (!isJsonContentType(context.req.header("content-type") ?? null)) {
         return false
     }
 
+    // 本文から取り出したCSRFトークン（未指定・文字列以外はnull）
     const csrfToken = parseCsrfToken(payload)
 
     // 本文にトークンがなければ暗号学的な検証を行わず失敗として返す

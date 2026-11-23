@@ -8,12 +8,13 @@ import type {
 import {DEFAULT_DISPLAY_NAME} from "./display-name"
 
 // usersテーブルの行
-// メールアドレスとプロフィール画像は保存しない(0062のマイグレーションで列を削除)。
+// メールアドレスとプロフィール画像は保存しない(0062のマイグレーションで列を削除)
 type UserRow = {
     id: string
     display_name: string
 }
 
+// sessionsテーブルの行
 type SessionRow = {
     id: string
     user_id: string
@@ -23,12 +24,14 @@ type SessionRow = {
     updated_at: string
 }
 
+// auth_accountsテーブルの行
 type AccountRow = {
     user_id: string
     provider: string
     provider_account_id: string
 }
 
+// sessionsとusersを結合した行
 type UserSessionRow = UserRow & {
     session_id: string
     session_user_id: string
@@ -57,22 +60,23 @@ function toHex(buffer: ArrayBuffer): string {
 
 // セッションCookieの値をD1へ保存するためのSHA-256ハッシュを生成
 async function hashSessionToken(token: string): Promise<string> {
+    // UTF-8に変換したセッショントークン
     const data = new TextEncoder().encode(token)
+    // SHA-256で計算したダイジェスト
     const digest = await crypto.subtle.digest("SHA-256", data)
 
     return toHex(digest)
 }
 
 // GoogleなどのアカウントIDを、サーバーだけが知る秘密鍵でHMAC-SHA256ハッシュにする
-// DBが流出しても元のIDが分からず、他の流出データとの突き合わせを防ぐため。
-// 同じ入力からは常に同じ値になるので、ログイン時の照合はこれまでどおりできる。
-// 一括置き換えのスクリプト(scripts/hash-account-ids.mjs)も同じ計算方法を使う。
+// DB流出時の突き合わせを防ぎ、同じ入力からは常に同じ値になるためログイン照合に使える
 export async function hashProviderAccountId(
     secret: string,
     provider: string,
     providerAccountId: string,
 ): Promise<string> {
     const encoder = new TextEncoder()
+    // 秘密鍵から作るHMAC署名用の鍵
     const key = await crypto.subtle.importKey(
         "raw",
         encoder.encode(secret),
@@ -81,15 +85,16 @@ export async function hashProviderAccountId(
         ["sign"],
     )
     // プロバイダーごとに別の値になるよう、プロバイダー名も含めてハッシュにする
+    // 一括置き換えのスクリプト(scripts/hash-account-ids.mjs)も同じ計算方法を使う
     const message = encoder.encode(`${provider}:${providerAccountId}`)
+    // プロバイダー名とアカウントIDのHMAC署名
     const signature = await crypto.subtle.sign("HMAC", key, message)
 
     return toHex(signature)
 }
 
 // DBのユーザー行をAuth.jsのユーザー形式へ変換
-// Auth.jsの型はemailを文字列で必須にしているため、空文字を渡す(メールは保存していない)。
-// 画面へ返すセッション情報にはemailを含めない(app.ts)。
+// Auth.jsの型はemailを文字列で必須にしているため空文字を渡す(メールは保存せず、画面にも返さない)
 function toAdapterUser(row: UserRow): AdapterUser {
     return {
         id: row.id,
@@ -106,23 +111,26 @@ export function createD1AuthAdapter(
     database: D1Database,
     accountIdHashSecret?: string,
 ): Adapter {
-    // 複数のAdapterメソッドで同じユーザー列を使うためSQLを共有する
+    // 複数のAdapterメソッドで同じユーザー列を使うためSQLを共有
     const selectUserSql = `
         SELECT id, display_name
         FROM users
     `
 
+    // セッション行を取得する共通SQL
     const selectSessionSql = `
         SELECT id, user_id, token_hash, expires_at, created_at, updated_at
         FROM sessions
     `
 
+    // プロバイダーとアカウントIDで紐付けを検索するSQL
     const selectAccountSql = `
         SELECT user_id, provider, provider_account_id
         FROM auth_accounts
         WHERE provider = ? AND provider_account_id = ?
     `
 
+    // IDからユーザー行を取得しAuth.jsの形式へ変換
     const loadUser = async (id: string): Promise<AdapterUser | null> => {
         // D1のユーザー行をAuth.jsが要求する形式へ変換して返す
         const row = await firstRow<UserRow>(
@@ -147,6 +155,7 @@ export function createD1AuthAdapter(
         return hashProviderAccountId(accountIdHashSecret, provider, providerAccountId)
     }
 
+    // ハッシュ値でOAuthアカウントを探し、平文の旧行はハッシュへ移行
     const findAccountRow = async (
         provider: string,
         providerAccountId: string,
@@ -159,19 +168,21 @@ export function createD1AuthAdapter(
             [provider, storedAccountId],
         )
 
+        // ハッシュ化済みのアカウントが見つかった場合は即座に返す
         if (hashedRow) {
             return hashedRow
         }
 
-        // ハッシュ化を導入する前の行は平文のIDで保存されている。
+        // ハッシュ化を導入する前の行は平文のアカウントIDで保存されている
         // 一括置き換え(scripts/hash-account-ids.mjs)の前にログインした場合に備え、
-        // 見つかったらその場でハッシュ値へ置き換えて、既存ユーザーのデータを引き継ぐ。
+        // 見つかったら即時にハッシュ値へ置き換え、既存ユーザーのデータを引き継ぐ
         const plainRow = await firstRow<AccountRow>(
             database,
             selectAccountSql,
             [provider, providerAccountId],
         )
 
+        // 平文の旧行も無ければ未登録として扱う
         if (!plainRow) {
             return null
         }
@@ -193,6 +204,7 @@ export function createD1AuthAdapter(
         }
     }
 
+    // プロバイダー内のアカウントIDから紐づくアカウントを取得
     const loadAccount = async (
         providerAccountId: string,
         provider: string,
@@ -200,11 +212,12 @@ export function createD1AuthAdapter(
         // プロバイダー内のアカウントIDから紐づくアプリユーザーを探す
         const row = await findAccountRow(provider, providerAccountId)
 
+        // 紐づくアカウントが無ければ未ログインとして扱う
         if (!row) {
             return null
         }
 
-        // Auth.jsへは、受け取った元のIDをそのまま返す(ハッシュ値はDB内だけで使う)
+        // Auth.jsへは受け取った元のIDを変更せず返す(ハッシュ値はDB内だけで使う)
         return {
             provider: row.provider,
             providerAccountId,
@@ -214,9 +227,11 @@ export function createD1AuthAdapter(
     }
 
     return {
+        // ユーザーを作成し、変更可能な仮の表示名を設定
         async createUser(user) {
-            // Googleから受け取った名前・メール・画像は保存しない。
-            // 表示名は仮の名前で作り、利用者が自分で変更する。
+            // Googleから受け取った名前・メール・画像は保存しない
+            // 表示名は仮の名前で作り、利用者が変更するまで固定
+            // ユーザーID（指定が無ければ生成）
             const id = user.id || crypto.randomUUID()
             const timestamp = new Date().toISOString()
 
@@ -240,21 +255,25 @@ export function createD1AuthAdapter(
             }
         },
 
+        // IDからユーザーを取得
         async getUser(id) {
             return loadUser(id)
         },
 
+        // Auth.jsのメール検索は常に未登録として返す
         async getUserByEmail() {
-            // メールアドレスを保存していないため、メールでユーザーを探すことはない。
-            // Auth.jsはメールがない場合にこの処理を呼ばないが、念のため常に見つからない扱いにする。
+            // メールアドレスを保存していないため、メールでユーザーを探すことはない
+            // Auth.jsはメールがない場合にgetUserByEmailを呼ばないが、念のため常に見つからない扱いにする
             return null
         },
 
+        // OAuthアカウントからログイン対象のアプリユーザーを解決
         async getUserByAccount({provider, providerAccountId}) {
-            // OAuthアカウントの組み合わせからログイン対象のユーザーを取得する
-            // (平文で保存されていた行は、ここでハッシュ値へ置き換わる)
+            // OAuthアカウントの組み合わせからログイン対象のユーザーを取得
+            // 平文で保存されていた行は照合時にハッシュ値へ置き換わる
             const account = await findAccountRow(provider, providerAccountId)
 
+            // アカウントの紐付けが無い場合は未ログインとして返す
             if (!account) {
                 return null
             }
@@ -262,11 +281,14 @@ export function createD1AuthAdapter(
             return loadUser(account.user_id)
         },
 
+        // Auth.jsからのプロフィール更新は保存せず、現在のユーザーを返す
         async updateUser(user) {
-            // Auth.jsから渡される名前・メール・画像は外部サービス由来のため保存しない。
-            // 表示名の変更は、利用者の操作だけを受け付けるアカウントAPIで行う。
+            // Auth.jsから渡される名前・メール・画像は外部サービス由来のため保存しない
+            // 表示名の変更は、利用者の操作だけを受け付けるアカウントAPIで行う
+            // 保存済みの現在のユーザー
             const currentUser = await loadUser(user.id)
 
+            // 対象ユーザーが削除済みの場合はエラー
             if (!currentUser) {
                 throw new Error("Auth user not found")
             }
@@ -274,10 +296,12 @@ export function createD1AuthAdapter(
             return currentUser
         },
 
+        // ユーザー行を削除し、削除前のユーザーを返す
         async deleteUser(userId) {
-            // 削除前のユーザーを返せるよう現在値を先に取得する
+            // 削除前のユーザーを返せるよう現在値を先に取得
             const user = await loadUser(userId)
 
+            // 削除対象が無い場合はnullを返す
             if (!user) {
                 return null
             }
@@ -289,15 +313,16 @@ export function createD1AuthAdapter(
             return user
         },
 
+        // OAuthアカウントをハッシュ化したIDでユーザーへ紐付け
         async linkAccount(account) {
             const timestamp = new Date().toISOString()
-            // アカウントIDは平文で保存せず、秘密鍵でハッシュにした値だけを保存する
+            // アカウントIDは平文で保存せず、秘密鍵でハッシュにした値だけを保存
             const storedAccountId = await toStoredAccountId(
                 account.provider,
                 account.providerAccountId,
             )
 
-            // OAuthトークンはこのアプリでは利用せず、漏えいリスクを避けて保存しない。
+            // OAuthトークンはアプリで利用せず、漏えいリスクを避けて保存しない
             await database.prepare(
                 `INSERT INTO auth_accounts (
                      user_id, provider, provider_account_id, created_at, updated_at
@@ -311,8 +336,10 @@ export function createD1AuthAdapter(
             ).run()
         },
 
+        // ハッシュ化したアカウントIDで紐付けを解除
         async unlinkAccount({provider, providerAccountId}) {
-            // 平文の行もハッシュ値へ置き換えてから、ハッシュ値で削除する
+            // 平文の行もハッシュ値へ置き換えてから、ハッシュ値で削除
+            // 削除前の紐付け（存在しない場合はundefined）
             const account = await loadAccount(providerAccountId, provider)
             const storedAccountId = await toStoredAccountId(provider, providerAccountId)
 
@@ -324,12 +351,14 @@ export function createD1AuthAdapter(
             return account ?? undefined
         },
 
+        // プロバイダー内のアカウントIDから紐付けを取得
         async getAccount(providerAccountId, provider) {
             return loadAccount(providerAccountId, provider)
         },
 
+        // セッショントークンのハッシュと有効期限を保存
         async createSession(session) {
-            // Cookieの平文トークンを保存せずSHA-256ハッシュだけをD1へ保存する
+            // Cookieの平文トークンを保存せずSHA-256ハッシュだけをD1へ保存
             const tokenHash = await hashSessionToken(session.sessionToken)
             const timestamp = new Date().toISOString()
 
@@ -349,9 +378,11 @@ export function createD1AuthAdapter(
             return session
         },
 
+        // 有効期限内のセッションとユーザーをセッショントークンから取得
         async getSessionAndUser(sessionToken) {
+            // セッショントークンのSHA-256ハッシュ
             const tokenHash = await hashSessionToken(sessionToken)
-            // Cookieが残っていても、D1上の有効期限を過ぎたセッションは認証に使わない。
+            // Cookieが残っていても、D1上の有効期限を過ぎたセッションは認証に使わない
             const row = await firstRow<UserSessionRow>(
                 database,
                 `SELECT users.id,
@@ -368,6 +399,7 @@ export function createD1AuthAdapter(
                 [tokenHash, new Date().toISOString()],
             )
 
+            // 有効期限切れ・未登録のセッションは未ログインとして返す
             if (!row) {
                 return null
             }
@@ -382,8 +414,9 @@ export function createD1AuthAdapter(
             }
         },
 
+        // セッションの有効期限を延長して返す
         async updateSession(session) {
-            // 有効な現在セッションだけを対象に期限を更新する
+            // 有効な現在セッションだけを対象に期限を更新
             const tokenHash = await hashSessionToken(session.sessionToken)
             const currentSession = await firstRow<SessionRow>(
                 database,
@@ -392,10 +425,12 @@ export function createD1AuthAdapter(
                 [tokenHash, new Date().toISOString()],
             )
 
+            // 有効なセッションが無ければ更新せずnullを返す
             if (!currentSession) {
                 return null
             }
 
+            // 更新後の有効期限（指定が無ければ現在値）
             const expires = session.expires ?? new Date(currentSession.expires_at)
             const timestamp = new Date().toISOString()
 
@@ -412,8 +447,9 @@ export function createD1AuthAdapter(
             }
         },
 
+        // セッショントークンのハッシュからセッションを削除
         async deleteSession(sessionToken) {
-            // ログアウト対象を平文ではなく保存済みハッシュで特定する
+            // ログアウト対象を平文ではなく保存済みハッシュで特定
             const tokenHash = await hashSessionToken(sessionToken)
             const currentSession = await firstRow<SessionRow>(
                 database,
@@ -421,6 +457,7 @@ export function createD1AuthAdapter(
                 [tokenHash],
             )
 
+            // 削除対象のセッションが無ければnullを返す
             if (!currentSession) {
                 return null
             }

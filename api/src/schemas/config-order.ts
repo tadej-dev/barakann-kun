@@ -1,15 +1,16 @@
 import {z} from "zod"
 
-// 固定構成と追加構成の表示順を検証
+// 表示順に使う構成キーの配列（1〜20件・各1〜200文字・重複なし）
 const configOrderItemsSchema = z
     .array(z.string().trim().min(1).max(200))
     .min(1)
     .max(20)
     .superRefine((items, context) => {
-        // 同じ構成キーが複数含まれていないか集合を使って確認する
+        // 同じ構成キーが複数含まれていないか集合を使って確認
         const seen = new Set<string>()
 
         for (const [index, item] of items.entries()) {
+            // 同一の構成キーが2回目以降に現れた場合の重複エラー
             if (seen.has(item)) {
                 context.addIssue({
                     code: "custom",

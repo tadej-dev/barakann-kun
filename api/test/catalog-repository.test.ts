@@ -5,11 +5,14 @@ import {D1CatalogRepository} from "../src/db/d1-catalog-repository"
 // SQL文の種類ごとに返す行を切り替える簡易スタブ
 function createDatabaseStub() {
     const database = {
+        // SQL文字列を保持して実行部を返す
         prepare(sql: string) {
             return {
+                // パラメーターを受け取る形だけ揃えた実行部を返す
                 bind(..._parameters: unknown[]) {
                     return {
                         all: async () => {
+                            // 付属品テーブルの問い合わせには付属品の行を返す
                             if (sql.includes("FROM part_included_items")) {
                                 return {
                                     results: [{
@@ -22,10 +25,12 @@ function createDatabaseStub() {
                                 }
                             }
 
+                            // 占有カテゴリーテーブルの問い合わせには空を返す
                             if (sql.includes("FROM part_blocked_categories")) {
                                 return {results: []}
                             }
 
+                            // 規格テーブルの問い合わせには空を返す
                             if (sql.includes("FROM part_specifications")) {
                                 return {results: []}
                             }
@@ -54,7 +59,9 @@ function createDatabaseStub() {
     return database
 }
 
+// 付属品の重量・価格・セット構成品をカタログ応答へ反映
 describe("d1-catalog-repository", () => {
+    // 付属品の重量を変更せず返し、列の無い価格とセット構成品は既定値にする
     it("付属品の重量をそのまま返す", async () => {
         const repository = new D1CatalogRepository(createDatabaseStub())
         const parts = await repository.findPartsByCategory("frame")

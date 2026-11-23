@@ -9,10 +9,10 @@ export type UpdateDisplayNameResult =
     | {kind: "updated", displayName: string}
     | {kind: "not_found"}
 
-// 認証ユーザーと関連データを削除するRepository契約
+// 認証ユーザーの削除と表示名変更を扱うRepository契約
 export interface AccountRepository {
-    // userIdに紐づく認証情報と保存データをまとめて削除する
+    // userIdに紐づく認証情報と保存データをまとめて削除
     deleteUser(userId: string): Promise<DeleteAccountResult>
-    // ログイン中のユーザーの表示名を変更する(呼び出し側で整形・検証済みの値を渡す)
+    // ログイン中のユーザーの表示名を変更(整形・検証済みの値を呼び出し側から受け取る)
     updateDisplayName(userId: string, displayName: string): Promise<UpdateDisplayNameResult>
 }

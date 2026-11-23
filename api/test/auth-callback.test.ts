@@ -4,6 +4,7 @@ import type {Adapter} from "@auth/core/adapters"
 import {createApp} from "../src/app"
 import type {Bindings} from "../src/types"
 
+// 認証ルート検証に必要なテスト用のWorkers Bindings
 function bindings(): Bindings {
     return {
         DB: {} as D1Database,
@@ -60,14 +61,15 @@ function cookieHeader(response: Response): string {
     return setCookies.map((cookie) => cookie.split(";", 1)[0]).join("; ")
 }
 
+// Googleサインインを開始し、issuerの有無を変えてコールバックを実行
 async function runCallback(issuer?: string): Promise<Response> {
     const app = createApp({authAdapter: adapter()})
     const env = bindings()
-    // CSRFトークンを取得し、以降のPOSTをAuth.jsの検証へ通す。
+    // CSRFトークンを取得し、以降のPOSTをAuth.jsの検証へ通す
     const csrf = await app.request("/api/auth/csrf", {}, env)
     const csrfPayload = await csrf.json() as {csrfToken: string}
     const csrfCookie = csrf.headers.get("set-cookie")?.split(";", 1)[0] ?? ""
-    // サインインを開始し、stateとPKCE検証用Cookieを受け取る。
+    // サインインを開始し、stateとPKCE検証用Cookieを受け取る
     const signin = await app.request(
         "/api/auth/signin/google",
         {
@@ -86,10 +88,11 @@ async function runCallback(issuer?: string): Promise<Response> {
     const location = new URL(signin.headers.get("location") ?? "")
     const cookies = `${csrfCookie}; ${cookieHeader(signin)}`
 
-    // トークン交換とUserInfo取得だけを再現し、issuerの有無による差異を検証する
+    // トークン交換とUserInfo取得だけを再現し、issuerの有無による差異を検証
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
 
+        // トークン交換のURLならアクセストークンを返す
         if (url === "https://oauth2.googleapis.com/token") {
             return new Response(JSON.stringify({
                 access_token: "test-access-token",
@@ -98,6 +101,7 @@ async function runCallback(issuer?: string): Promise<Response> {
             }), {headers: {"content-type": "application/json"}})
         }
 
+        // UserInfo取得のURLならプロフィールを返す
         if (url === "https://openidconnect.googleapis.com/v1/userinfo") {
             return new Response(JSON.stringify({
                 sub: "google-user-1",
@@ -110,12 +114,13 @@ async function runCallback(issuer?: string): Promise<Response> {
         throw new Error(`Unexpected fetch: ${url}`)
     }))
 
-    // サインイン時に発行されたstateを引き継ぎ、issuerの有無だけを切り替えてコールバックを叩く。
+    // サインイン時に発行されたstateを引き継ぎ、issuerの有無だけを切り替えてコールバックを叩く
     const callbackParams = new URLSearchParams({
         code: "test-code",
         state: location.searchParams.get("state") ?? "",
     })
 
+    // issuer指定時だけissパラメーターを付与
     if (issuer) {
         callbackParams.set("iss", issuer)
     }
@@ -131,9 +136,10 @@ async function runCallback(issuer?: string): Promise<Response> {
     }
 }
 
+// issuerの有無にかかわらずGoogleログインコールバックが成立
 describe("Google authentication callback", () => {
-    // Googleはissuerレスポンスパラメータ(iss)を付与する場合がある。
-    // 有無どちらでも同じ戻り先へリダイレクトできることを固定する。
+    // Googleはissuerレスポンスパラメータ(iss)を付与する場合がある
+    // 有無どちらでも同じ戻り先へリダイレクトできることを固定
     it.each([
         ["issuerなし", undefined],
         ["Googleのissuer付き", "https://accounts.google.com"],

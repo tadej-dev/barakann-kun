@@ -7,6 +7,7 @@ import {D1SavedBuildRepository} from "../src/db/d1-saved-build-repository"
 import {SavedBuildLimitExceededError} from "../src/db/saved-build-repository"
 import {applyMigrations, createSqliteD1} from "./support/sqlite-d1"
 
+// テストで使うログイン済みユーザーのID
 const USER_ID = "user-integration"
 
 // フロントとAPIで共有する契約フィクスチャ
@@ -15,7 +16,7 @@ const fixture = JSON.parse(readFileSync(
     "utf8",
 )) as {parts: Record<string, unknown>[]}[]
 
-// マイグレーション適用済みのSQLiteと、その接続を用意する
+// マイグレーション適用済みのSQLiteとD1互換のデータベース、テストユーザーを用意
 function createDatabase() {
     const {database, sqlite} = createSqliteD1()
 
@@ -33,7 +34,7 @@ function createDatabase() {
     return {database, sqlite}
 }
 
-// フレームのカテゴリー・ブランド・パーツを1件ずつ用意する
+// フレームのカテゴリー・ブランド・パーツを1件ずつ用意
 function seedFramePart(sqlite: ReturnType<typeof createDatabase>["sqlite"]) {
     const now = "2026-01-01T00:00:00.000Z"
 
@@ -60,7 +61,9 @@ function seedFramePart(sqlite: ReturnType<typeof createDatabase>["sqlite"]) {
     return Number(result.lastInsertRowid)
 }
 
+// マイグレーション後のSQLiteで保存構成・表示順リポジトリのSQLを検証
 describe("SQL結合テスト", () => {
+    // テストごとに作り直すデータベースと接続
     let context: ReturnType<typeof createDatabase>
 
     beforeEach(() => {
@@ -73,7 +76,7 @@ describe("SQL結合テスト", () => {
         context?.sqlite.close()
     })
 
-    // マイグレーション後のスキーマが最新の形になっている。
+    // マイグレーション後のスキーマが最新の形になっている
     it("マイグレーション後のスキーマに旧列が無い", () => {
         const columns = context.sqlite
             .prepare("SELECT name FROM pragma_table_info('saved_builds')")
@@ -85,7 +88,7 @@ describe("SQL結合テスト", () => {
         expect(names).toContain("user_id")
         expect(names).toContain("update_token")
 
-        // 子テーブルも存在する
+        // 子テーブル2件も存在
         const tables = context.sqlite
             .prepare(
                 `SELECT name FROM sqlite_master
@@ -99,7 +102,7 @@ describe("SQL結合テスト", () => {
         ])
     })
 
-    // 初期構成は構成が0件のときだけ作られる。
+    // 初期構成は構成が0件のときだけ作られる
     it("初期構成は0件のときだけ作成される", async () => {
         const repository = new D1SavedBuildRepository(context.database)
 
@@ -116,7 +119,7 @@ describe("SQL結合テスト", () => {
         expect(await repository.listAll(USER_ID)).toHaveLength(1)
     })
 
-    // 作成・一覧・名前変更・削除が実SQLで成立する。
+    // 作成・一覧・名前変更・削除が実SQLで成立
     it("構成の作成・名前変更・削除が実SQLで成立する", async () => {
         const repository = new D1SavedBuildRepository(context.database)
 
@@ -136,6 +139,7 @@ describe("SQL結合テスト", () => {
 
         expect(renamed.kind).toBe("updated")
 
+        // 名前変更結果がupdated以外なら例外を投げる
         if (renamed.kind !== "updated") {
             throw new Error("名前変更に失敗しました")
         }
@@ -165,7 +169,7 @@ describe("SQL結合テスト", () => {
         expect(await repository.listAll(USER_ID)).toHaveLength(0)
     })
 
-    // 表示順の保存と取得が実SQLで成立する。
+    // 表示順の保存と取得が実SQLで成立
     it("表示順の保存と取得が実SQLで成立する", async () => {
         const builds = new D1SavedBuildRepository(context.database)
         const order = new D1ConfigOrderRepository(context.database)
@@ -183,7 +187,7 @@ describe("SQL結合テスト", () => {
         expect(await order.list(USER_ID)).toEqual(reversed)
     })
 
-    // パーツ付きの作成では、保存時点の価格・重量を保存する。
+    // パーツ付きの作成では、保存時点の価格・重量を保存
     it("パーツ付きの作成でスナップショットを保存する", async () => {
         const repository = new D1SavedBuildRepository(context.database)
         const partId = seedFramePart(context.sqlite)
@@ -193,7 +197,7 @@ describe("SQL結合テスト", () => {
             {slotKey: "frame", partId},
         ])
 
-        // 実リポジトリの出力キーが、共有フィクスチャの契約と一致する
+        // 実リポジトリの出力キーが、共有フィクスチャの契約と一致
         expect(Object.keys(created).sort())
             .toEqual(Object.keys(fixture[0]!).sort())
         expect(Object.keys(created.parts[0]!).sort())
@@ -220,6 +224,7 @@ describe("SQL結合テスト", () => {
 
         expect(updated.kind).toBe("updated")
 
+        // パーツを外す更新がupdated以外なら例外を投げる
         if (updated.kind !== "updated") {
             throw new Error("更新に失敗しました")
         }
@@ -228,7 +233,7 @@ describe("SQL結合テスト", () => {
         expect(updated.build.parts).toEqual([])
     })
 
-    // 更新でパーツを追加でき、スナップショットとversion加算が反映される。
+    // 更新でパーツを追加でき、スナップショットとversion加算が反映される
     it("更新でパーツを追加できる", async () => {
         const repository = new D1SavedBuildRepository(context.database)
         const partId = seedFramePart(context.sqlite)
@@ -248,11 +253,12 @@ describe("SQL結合テスト", () => {
 
         expect(updated.kind).toBe("updated")
 
+        // パーツを追加する更新がupdated以外なら例外を投げる
         if (updated.kind !== "updated") {
             throw new Error("更新に失敗しました")
         }
 
-        // パーツのINSERT経路とスナップショット、version加算を確認する
+        // パーツのINSERT経路とスナップショット、version加算を確認
         expect(updated.build.version).toBe(created.version + 1)
         expect(updated.build.parts).toEqual([{
             slotKey: "frame",
@@ -267,7 +273,7 @@ describe("SQL結合テスト", () => {
         expect(current?.parts).toHaveLength(1)
     })
 
-    // 同じミリ秒に競合した更新があっても、保存済みのパーツを消さない。
+    // 同じミリ秒に競合した更新があっても、保存済みのパーツを消さない
     it("同じミリ秒の競合した更新でもパーツを保持する", async () => {
         const repository = new D1SavedBuildRepository(context.database)
         const partId = seedFramePart(context.sqlite)
@@ -277,7 +283,7 @@ describe("SQL結合テスト", () => {
             {slotKey: "frame", partId},
         ])
 
-        // 更新時刻を固定し、同一ミリ秒の競合を再現する
+        // 更新時刻を固定し、同一ミリ秒の競合を再現
         vi.useFakeTimers()
         vi.setSystemTime(new Date("2026-08-05T00:00:00.000Z"))
 
@@ -308,7 +314,7 @@ describe("SQL結合テスト", () => {
         expect(current?.parts).toHaveLength(1)
     })
 
-    // 競合した更新では、パーツの追加も行われない。
+    // 競合した更新では、パーツの追加も行われない
     it("競合した更新ではパーツを追加しない", async () => {
         const repository = new D1SavedBuildRepository(context.database)
         const partId = seedFramePart(context.sqlite)
@@ -318,7 +324,7 @@ describe("SQL結合テスト", () => {
             {slotKey: "frame", partId},
         ])
 
-        // パーツを空にして更新する
+        // パーツを空にして更新
         const cleared = await repository.update(
             USER_ID,
             created.id,
@@ -346,7 +352,7 @@ describe("SQL結合テスト", () => {
         expect(current?.parts).toEqual([])
     })
 
-    // 重複スロットの作成は、構成本体も含めて取り消される(バッチのトランザクション)。
+    // 重複スロットの作成は、構成本体も含めて取り消される(バッチのトランザクション)
     it("重複スロットの作成は全体を取り消す", async () => {
         const repository = new D1SavedBuildRepository(context.database)
         const partId = seedFramePart(context.sqlite)
@@ -368,7 +374,7 @@ describe("SQL結合テスト", () => {
         expect(parts.count).toBe(0)
     })
 
-    // 上限(20件)を超える作成は拒否される。
+    // 上限(20件)を超える作成は拒否される
     it("上限を超える作成を拒否する", async () => {
         const repository = new D1SavedBuildRepository(context.database)
 
@@ -382,7 +388,7 @@ describe("SQL結合テスト", () => {
             .rejects.toBeInstanceOf(SavedBuildLimitExceededError)
     })
 
-    // 古いversionの変更・削除は競合として拒否される。
+    // 古いversionの変更・削除は競合として拒否される
     it("古いversionの変更と削除は競合になる", async () => {
         const repository = new D1SavedBuildRepository(context.database)
 
@@ -397,7 +403,7 @@ describe("SQL結合テスト", () => {
             .resolves.toEqual({kind: "not_found"})
     })
 
-    // 外部キー違反はSQLite側で拒否される。
+    // 外部キー違反はSQLite側で拒否される
     it("存在しないユーザーの構成は作成できない", () => {
         expect(() => context.sqlite.prepare(
             `INSERT INTO saved_builds (
@@ -412,7 +418,7 @@ describe("SQL結合テスト", () => {
         )).toThrow()
     })
 
-    // 外部キーの整合性が保たれている。
+    // 外部キーの整合性が保たれている
     it("外部キーの整合性が保たれている", async () => {
         const repository = new D1SavedBuildRepository(context.database)
 

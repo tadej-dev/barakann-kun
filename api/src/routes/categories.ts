@@ -5,6 +5,7 @@ import type {AppEnv} from "../app-env"
 // カテゴリー一覧API
 export const categoriesRoute = new Hono<AppEnv>()
 
+// カテゴリー一覧の取得
 categoriesRoute.get("/", async (context) => {
     // Contextに登録されたリポジトリからカテゴリーを取得
     const categories = await context.var.catalogRepository.findCategories()
