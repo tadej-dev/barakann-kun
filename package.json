@@ -14,6 +14,6 @@
     "deploy": "npm --prefix api run deploy"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4"
+    "concurrently": "^10.0.6"
   }
 }
