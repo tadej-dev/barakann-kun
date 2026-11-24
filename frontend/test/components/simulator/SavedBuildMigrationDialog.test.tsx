@@ -181,4 +181,107 @@ describe("SavedBuildMigrationDialog", () => {
 
         expect(props.onDismiss).toHaveBeenCalled()
     })
+
+    // 開いた直後はダイアログ自体へフォーカスを移す
+    it("開いた直後にダイアログへフォーカスする", () => {
+        render(<SavedBuildMigrationDialog {...createProps()} />)
+
+        expect(screen.getByRole("dialog")).toBe(document.activeElement)
+    })
+
+    // Tabキーでダイアログ内の先頭と末尾を循環する
+    it("Tabキーでダイアログ内を循環する", () => {
+        render(<SavedBuildMigrationDialog {...createProps()} />)
+
+        // ダイアログ内の操作
+        const dialog = screen.getByRole("dialog")
+        const closeButton = screen.getByRole("button", {
+            name: "移行ダイアログを閉じる",
+        })
+        const saveButton = screen.getByRole("button", {
+            name: "選択した構成を保存",
+        })
+
+        // ダイアログ自体からTabで先頭の操作へ移る
+        fireEvent.keyDown(dialog, {key: "Tab"})
+        expect(closeButton).toBe(document.activeElement)
+
+        // 先頭からShift+Tabで末尾へ折り返す
+        fireEvent.keyDown(closeButton, {key: "Tab", shiftKey: true})
+        expect(saveButton).toBe(document.activeElement)
+
+        // 末尾からTabで先頭へ折り返す
+        fireEvent.keyDown(saveButton, {key: "Tab"})
+        expect(closeButton).toBe(document.activeElement)
+    })
+
+    // Escapeキーでダイアログを閉じる
+    it("Escapeキーで閉じる", () => {
+        // 移行候補3件のダイアログprops
+        const props = createProps()
+
+        render(<SavedBuildMigrationDialog {...props} />)
+        fireEvent.keyDown(screen.getByRole("dialog"), {key: "Escape"})
+
+        expect(props.onDismiss).toHaveBeenCalledTimes(1)
+    })
+
+    // 保存中はEscapeキーでも閉じず、二重送信を防ぐ
+    it("保存中はEscapeキーで閉じない", () => {
+        // 保存中のダイアログprops
+        const props = {...createProps(), isSubmitting: true}
+
+        render(<SavedBuildMigrationDialog {...props} />)
+        fireEvent.keyDown(screen.getByRole("dialog"), {key: "Escape"})
+
+        expect(props.onDismiss).not.toHaveBeenCalled()
+    })
+
+    // ダイアログを閉じたら、開く前にフォーカスしていた要素へ戻す
+    it("閉じると開く前の要素へフォーカスを戻す", () => {
+        // ダイアログを開く操作の代わりに、事前にフォーカスしたボタン
+        const trigger = document.createElement("button")
+        trigger.textContent = "ダイアログを開く"
+        document.body.append(trigger)
+
+        try {
+            // 移行候補3件のダイアログprops
+            const props = createProps()
+            // 閉じた状態から始め、フォーカスの記録先を用意する
+            const {rerender} = render(
+                <SavedBuildMigrationDialog {...props} open={false} />,
+            )
+            trigger.focus()
+
+            // ダイアログを開くとフォーカスが移る
+            rerender(<SavedBuildMigrationDialog {...props} />)
+            expect(screen.getByRole("dialog")).toBe(document.activeElement)
+
+            // 閉じると、開く前にフォーカスしていた要素へ戻る
+            rerender(<SavedBuildMigrationDialog {...props} open={false} />)
+
+            expect(trigger).toBe(document.activeElement)
+        } finally {
+            // 後続のテストへ余分な要素を残さない
+            trigger.remove()
+        }
+    })
+
+    // モーダル表示中に外へフォーカスが移ってもダイアログ内へ戻す
+    it("ダイアログ外へフォーカスが移ってもダイアログ内へ戻す", () => {
+        render(<SavedBuildMigrationDialog {...createProps()} />)
+
+        // ダイアログ外のボタン
+        const outsideButton = document.createElement("button")
+        document.body.append(outsideButton)
+
+        try {
+            outsideButton.focus()
+
+            expect(screen.getByRole("dialog")).toBe(document.activeElement)
+        } finally {
+            // 後続のテストへ余分な要素を残さない
+            outsideButton.remove()
+        }
+    })
 })

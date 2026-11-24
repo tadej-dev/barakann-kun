@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach, describe, expect, it, vi} from "vitest"
-import {cleanup, fireEvent, render, screen, waitFor} from "@testing-library/react"
+import {cleanup, fireEvent, render, screen, waitFor, within} from "@testing-library/react"
 
 import type {SavedBuild} from "@/api/savedBuilds"
 import {SidebarProvider} from "@/components/ui/sidebar"
@@ -126,6 +126,43 @@ describe("ConfigList（未ログイン時）", () => {
         expect(screen.getByLabelText("構成数").textContent).toBe("2 / 20")
         expect(screen.getAllByRole("button", {name: /を並び替え$/}))
             .toHaveLength(2)
+    })
+
+    // 選択中の構成はaria-currentで示し、一覧はul/liの構造を保つ
+    it("選択中の構成をaria-currentで示し、リスト項目として並べる", () => {
+        renderConfigList({
+            configs: [
+                createConfig("config-1", "構成1"),
+                createConfig("config-2", "通勤用"),
+            ],
+        })
+
+        // 構成を並べるリストと、リスト直下の項目
+        const list = document.querySelector<HTMLElement>(
+            'ul[data-slot="sortable"]',
+        )
+        const items = within(list as HTMLElement).getAllByRole("listitem")
+        const firstItem = items[0]
+        const secondItem = items[1]
+
+        expect(firstItem.getAttribute("role")).toBeNull()
+        // 閉じたレール用と通常表示用の2つのボタンが同じ選択状態を示す
+        expect(
+            within(firstItem)
+                .getAllByRole("button", {name: "構成1を選択"})
+                .every((button) =>
+                    button.getAttribute("aria-current") === "true",
+                ),
+        ).toBe(true)
+        expect(
+            within(secondItem)
+                .getAllByRole("button", {name: "通勤用を選択"})[0]
+                .hasAttribute("aria-current"),
+        ).toBe(false)
+        // 並べ替えハンドルはliとは別のボタンとして残す
+        expect(
+            within(firstItem).getByRole("button", {name: "構成1を並び替え"}),
+        ).toBeTruthy()
     })
 
     // 追加は押せて、一括削除は対象を選ぶまで押せない

@@ -10,10 +10,34 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 // セッションの有効期限を更新する間隔(1時間)
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60
 
-// Googleの認可・トークン・ユーザー情報エンドポイント
-const GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+// 未設定時に使うGoogleの認可・トークン・ユーザー情報エンドポイント
+const DEFAULT_GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+const DEFAULT_GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+const DEFAULT_GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+
+// E2EでOAuthの接続先をモックサーバーへ差し替えるための上書き設定
+// 未設定時はGoogle本番のエンドポイントを使い、通常のログイン経路は変えない
+type GoogleEndpointOverrides = {
+    // 認可エンドポイントの上書き先
+    authorization?: string
+    // トークンエンドポイントの上書き先
+    token?: string
+    // ユーザー情報エンドポイントの上書き先
+    userinfo?: string
+}
+
+// 上書き先が空の場合は既定のGoogleエンドポイントへ戻す
+function resolveGoogleEndpoint(
+    override: string | undefined,
+    defaultUrl: string,
+): string {
+    // 値が設定されている場合だけモックサーバーなどの接続先へ差し替える
+    if (override) {
+        return override
+    }
+
+    return defaultUrl
+}
 
 // GoogleのプロフィールからアカウントID(sub)だけを取り出す
 // 返したidはAuth.jsのproviderAccountIdになる(ユーザーIDは別に自動生成)
@@ -35,6 +59,7 @@ export function toGoogleAccountUser(profile: Record<string, unknown>): {id: stri
 function createGoogleProvider(
     clientId: string,
     clientSecret: string,
+    endpoints: GoogleEndpointOverrides = {},
 ): OAuthConfig<Record<string, unknown>> {
     // discoveryへ依存せずGoogleの各エンドポイントを固定
     return {
@@ -46,17 +71,29 @@ function createGoogleProvider(
         clientId,
         clientSecret,
         authorization: {
-            url: GOOGLE_AUTHORIZATION_ENDPOINT,
+            // E2Eではモックの認可エンドポイント、未設定時はGoogle本番
+            url: resolveGoogleEndpoint(
+                endpoints.authorization,
+                DEFAULT_GOOGLE_AUTHORIZATION_ENDPOINT,
+            ),
             params: {
                 // 本人を見分けるためのアカウントIDだけを求め、名前・メール・画像は求めない
                 scope: "openid",
             },
         },
         token: {
-            url: GOOGLE_TOKEN_ENDPOINT,
+            // E2Eではモックのトークンエンドポイント、未設定時はGoogle本番
+            url: resolveGoogleEndpoint(
+                endpoints.token,
+                DEFAULT_GOOGLE_TOKEN_ENDPOINT,
+            ),
         },
         userinfo: {
-            url: GOOGLE_USERINFO_ENDPOINT,
+            // E2Eではモックのユーザー情報エンドポイント、未設定時はGoogle本番
+            url: resolveGoogleEndpoint(
+                endpoints.userinfo,
+                DEFAULT_GOOGLE_USERINFO_ENDPOINT,
+            ),
         },
         profile: toGoogleAccountUser,
         // stateとPKCEをAuth.js側で検証し、コールバックの改ざんと認可コード横取りへ備える
@@ -76,6 +113,9 @@ export function createAuthConfig(
         AUTH_DEBUG,
         GOOGLE_CLIENT_ID,
         GOOGLE_CLIENT_SECRET,
+        GOOGLE_AUTHORIZATION_ENDPOINT,
+        GOOGLE_TOKEN_ENDPOINT,
+        GOOGLE_USERINFO_ENDPOINT,
     } = context.env
 
     // ルートとテストで共通利用するAuth.js設定を組み立てる
@@ -101,6 +141,12 @@ export function createAuthConfig(
             createGoogleProvider(
                 GOOGLE_CLIENT_ID ?? "",
                 GOOGLE_CLIENT_SECRET ?? "",
+                {
+                    // E2Eでモックサーバーを指す3つの上書き先（未設定はGoogle本番）
+                    authorization: GOOGLE_AUTHORIZATION_ENDPOINT,
+                    token: GOOGLE_TOKEN_ENDPOINT,
+                    userinfo: GOOGLE_USERINFO_ENDPOINT,
+                },
             ),
         ],
         session: {

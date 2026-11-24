@@ -102,7 +102,7 @@ export function Header() {
             <div className="mx-auto flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-8">
                 <div className="flex min-w-0 items-center gap-4">
                     <Button
-                        render={<NavLink to="/" aria-label="シミュレーターへ戻る" />}
+                        render={<NavLink to="/" aria-label="barakann-kun シミュレーターへ戻る" />}
                         nativeButton={false}
                         type="button"
                         variant="ghost"

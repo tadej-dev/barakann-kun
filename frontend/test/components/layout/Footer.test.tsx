@@ -44,4 +44,18 @@ describe("Footer", () => {
 
         expect(within(nav).getAllByRole("link")).toHaveLength(3)
     })
+
+    // 著作権表示は、暗いフッター背景でも読み取れる色にする
+    it("著作権表示に読み取りやすい色を使う", () => {
+        render(
+            <MemoryRouter>
+                <Footer />
+            </MemoryRouter>
+        )
+
+        // 背景色#0b0f12に対してコントラスト比4.5以上になる色
+        expect(
+            screen.getByText("© 2026 barakann-kun").className,
+        ).toContain("text-slate-400")
+    })
 })

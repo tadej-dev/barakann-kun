@@ -56,6 +56,18 @@ beforeEach(() => {
 
 // 認証状態に応じたヘッダーの表示とアカウント操作を保証
 describe("Header", () => {
+    // ブランドボタンは、可視文字を読み上げ名に含める
+    it("ブランドボタンの読み上げ名に可視文字を含める", () => {
+        renderHeader()
+
+        // 可視文字の「barakann-kun」と、戻り先を表す文言を併記する
+        const brandButton = screen.getByRole("button", {
+            name: "barakann-kun シミュレーターへ戻る",
+        })
+
+        expect(within(brandButton).getByText("barakann-kun")).toBeTruthy()
+    })
+
     // 未ログインでも、三本線メニューからサイト内ページを開ける
     it("未ログインでもメニューからサイト内ページを開ける", async () => {
         renderHeader(createAuthValue({status: "unauthenticated"}))

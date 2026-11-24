@@ -82,4 +82,10 @@ export type Bindings = {
     GOOGLE_CLIENT_ID?: string
     // Google OAuthのクライアントシークレット
     GOOGLE_CLIENT_SECRET?: string
+    // E2EでGoogle認可エンドポイントをモックサーバーへ差し替える上書き先（未設定はGoogle本番）
+    GOOGLE_AUTHORIZATION_ENDPOINT?: string
+    // E2EでGoogleトークンエンドポイントをモックサーバーへ差し替える上書き先（未設定はGoogle本番）
+    GOOGLE_TOKEN_ENDPOINT?: string
+    // E2EでGoogleユーザー情報エンドポイントをモックサーバーへ差し替える上書き先（未設定はGoogle本番）
+    GOOGLE_USERINFO_ENDPOINT?: string
 }

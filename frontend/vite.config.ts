@@ -1,7 +1,7 @@
 import path from "path"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import { defineConfig } from "vitest/config"
+import { configDefaults, defineConfig } from "vitest/config"
 
 export default defineConfig({
   plugins: [
@@ -11,6 +11,8 @@ export default defineConfig({
 
   // テストのカバレッジ計測設定。画面のロジックがどこまで検証されているかを見る。
   test: {
+    // Playwrightが実行するE2EテストをVitestの対象から外す
+    exclude: [...configDefaults.exclude, "test/e2e/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],
