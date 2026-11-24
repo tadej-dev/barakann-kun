@@ -4,7 +4,7 @@ import { TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type {
     CandidatePartsSortDescriptor,
     CandidatePartsSortKey,
-} from "./useCandidatePartsTable"
+} from "@/features/simulator/hooks/useCandidatePartsTable"
 
 type CandidatePartsTableHeaderProps = {
     sortDescriptor: CandidatePartsSortDescriptor
