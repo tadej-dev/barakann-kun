@@ -6,8 +6,8 @@ import {CandidatePartsSelectionDialog} from "./CandidatePartsSelectionDialog"
 import {CandidatePartsTableHeader} from "./CandidatePartsTableHeader"
 import {CandidatePartsTableMessage} from "./CandidatePartsTableMessage"
 import {CandidatePartsTableRow} from "./CandidatePartsTableRow"
-import {useCandidatePartsTable} from "./useCandidatePartsTable"
-import {useCandidatePartsSelection} from "./useCandidatePartsSelection"
+import {useCandidatePartsTable} from "@/features/simulator/hooks/useCandidatePartsTable"
+import {useCandidatePartsSelection} from "@/features/simulator/hooks/useCandidatePartsSelection"
 import {
     Table,
     TableBody,

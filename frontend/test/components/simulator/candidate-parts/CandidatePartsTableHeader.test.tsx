@@ -5,7 +5,7 @@ import {cleanup, fireEvent, render, screen} from "@testing-library/react"
 import type {
     CandidatePartsSortDescriptor,
     CandidatePartsSortKey,
-} from "@/components/simulator/candidate-parts/useCandidatePartsTable"
+} from "@/features/simulator/hooks/useCandidatePartsTable"
 import {CandidatePartsTableHeader} from "@/components/simulator/candidate-parts/CandidatePartsTableHeader"
 
 // テストごとに描画したDOMを破棄し、次のテストへ持ち越さない
