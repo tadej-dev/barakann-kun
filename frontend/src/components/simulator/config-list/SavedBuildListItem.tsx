@@ -104,7 +104,7 @@ export function SavedBuildListItem({
                                 type="button"
                                 className="hidden size-8 shrink-0 items-center justify-center rounded-md text-xs font-bold group-data-[collapsible=icon]:flex"
                                 aria-label={`${build.name}を選択`}
-                                aria-selected={isActive}
+                                aria-current={isActive ? "true" : undefined}
                                 disabled={isOperating}
                             />
                         }
@@ -123,7 +123,7 @@ export function SavedBuildListItem({
                                 type="button"
                                 className="min-w-0 flex-1 text-left group-data-[collapsible=icon]:hidden"
                                 aria-label={`${build.name}を選択`}
-                                aria-selected={isActive}
+                                aria-current={isActive ? "true" : undefined}
                                 disabled={isOperating}
                             />
                         }

@@ -5,7 +5,7 @@ export function PrivacyPage() {
         <div className="bg-slate-50 text-slate-900">
             <main className="mx-auto max-w-4xl px-6 py-12">
                 <div className="mb-8">
-                    <p className="mb-3 text-sm font-bold text-sky-600">
+                    <p className="mb-3 text-sm font-bold text-sky-700">
                         Privacy Policy
                     </p>
 

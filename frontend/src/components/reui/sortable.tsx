@@ -24,6 +24,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DraggableAttributes,
   type DraggableSyntheticListeners,
   type DropAnimation,
   type Modifiers,
@@ -48,10 +49,12 @@ import { cn } from "@/lib/utils"
 // Sortable Item Context
 const SortableItemContext = createContext<{
   listeners: DraggableSyntheticListeners | undefined
+  attributes?: DraggableAttributes
   isDragging?: boolean
   disabled?: boolean
 }>({
   listeners: undefined,
+  attributes: undefined,
   isDragging: false,
   disabled: false,
 })
@@ -307,7 +310,6 @@ function SortableItem({
         "data-disabled": disabled,
         ref: setNodeRef,
         style,
-        ...attributes,
         className: cn(
           isSortableDragging && "opacity-50 z-50",
           disabled && "opacity-50",
@@ -320,8 +322,13 @@ function SortableItem({
     <SortableItemContext.Provider
       value={
         isOverlay
-          ? { listeners: undefined, isDragging: true, disabled: false }
-          : { listeners, isDragging: isSortableDragging, disabled }
+          ? {
+              listeners: undefined,
+              attributes: undefined,
+              isDragging: true,
+              disabled: false,
+            }
+          : { listeners, attributes, isDragging: isSortableDragging, disabled }
       }
     >
       {useRender({
@@ -344,12 +351,14 @@ function SortableItemHandle({
   ...props
 }: SortableItemHandleProps) {
   // ハンドルだけにdnd-kitのlistenerを付け、カード本体のクリック操作と分離する。
-  const { listeners, isDragging, disabled } = useContext(SortableItemContext)
+  const { listeners, attributes, isDragging, disabled } =
+    useContext(SortableItemContext)
 
   const defaultProps = {
     "data-slot": "sortable-item-handle",
     "data-dragging": isDragging,
     "data-disabled": disabled,
+    ...attributes,
     ...listeners,
     className: cn(
       cursor && (isDragging ? "cursor-grabbing!" : "cursor-grab!"),

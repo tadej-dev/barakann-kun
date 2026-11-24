@@ -22,7 +22,7 @@ export function Footer() {
     return (
         <footer className="shrink-0 border-t border-slate-800 bg-[#0b0f12] px-10 py-6 text-sm text-slate-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                     © 2026 barakann-kun
                 </p>
 
