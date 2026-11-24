@@ -40,48 +40,48 @@ import type {Part} from "@/types/part"
 
 // シミュレーターの入力値
 export type UseSimulatorControllerProps = {
-    categories: Category[]
-    autoSaveEnabled: boolean
+    categories: Category[] // パーツカテゴリー一覧
+    autoSaveEnabled: boolean // 自動保存を有効にするか
 }
 
 // 画面へ渡すシミュレーターの状態と操作
 export type SimulatorController = {
-    activeCategory: string
-    activeConfigId: ConfigId
-    activeSlot: PartSlot
-    activeParts: Part[]
-    autoSaveEnabled: boolean
-    blockedCategoryKeys: Set<string>
-    blockedMessage: string | undefined
-    blockingCategoryNames: string[]
-    blockingPartNames: string[]
-    configs: ConfigStates
-    isLoadingParts: boolean
-    isConfigLoading: boolean
-    // 保存内容を読み込んで編集中の状態にある構成ID
-    loadedConfigIds: string[]
-    partsError: string
-    restoreError: string
-    savedBuildError: string
-    selectedPart: Part | undefined
-    selectedParts: SelectedParts
-    slotPositionLabel: string | null
-    totalPrice: number
-    totalWeight: number
-    changeCategory: (category: string) => void
-    changeConfig: (configId: ConfigId) => void
-    restoreConfig: (config: SavedBuild) => Promise<void>
-    changeSlot: (slot: PartSlot) => void
-    clearConfig: (configId: ConfigId) => Promise<void>
-    onRemoveBlockingParts: () => void
+    activeCategory: string // 選択中パーツのカテゴリーキー
+    activeConfigId: ConfigId // 編集中の構成ID
+    activeSlot: PartSlot // 選択中のパーツ選択枠
+    activeParts: Part[] // 選択中カテゴリーの候補パーツ
+    autoSaveEnabled: boolean // 自動保存を実行できる状態か
+    blockedCategoryKeys: Set<string> // 占有中で選択できないカテゴリーキー
+    blockedMessage: string | undefined // 占有理由の案内文（選択可能はundefined）
+    blockingCategoryNames: string[] // 選択中カテゴリーを占有するカテゴリー名
+    blockingPartNames: string[] // 選択中カテゴリーを占有するパーツ名
+    configs: ConfigStates // 構成別の選択済みパーツ
+    isLoadingParts: boolean // 候補パーツの読み込み中フラグ
+    isConfigLoading: boolean // 保存構成の読み込み中フラグ
+    loadedConfigIds: string[] // 保存内容を読み込んで編集中の状態にある構成ID
+    partsError: string // 候補パーツ取得のエラーメッセージ
+    restoreError: string // localStorage復元のエラーメッセージ
+    savedBuildError: string // 保存構成読み込みのエラーメッセージ
+    selectedPart: Part | undefined // 選択中の枠に入っているパーツ
+    selectedParts: SelectedParts // 編集中の構成の選択済みパーツ
+    slotPositionLabel: string | null // 選択枠の前後表示名（単一枠はnull）
+    totalPrice: number // 選択済みパーツの合計価格（円）
+    totalWeight: number // 選択済みパーツの合計重量（g）
+    changeCategory: (category: string) => void // カテゴリーを切り替える関数
+    changeConfig: (configId: ConfigId) => void // 構成を切り替える関数
+    restoreConfig: (config: SavedBuild) => Promise<void> // 保存構成を編集状態へ復元する関数
+    changeSlot: (slot: PartSlot) => void // 選択枠を変更する関数
+    clearConfig: (configId: ConfigId) => Promise<void> // 構成の選択内容を空にする関数
+    onRemoveBlockingParts: () => void // 占有中のパーツをまとめて解除する関数
+    // 候補パーツを選択する関数
     onSelectPart: (
         part: Part,
         slotKeys?: string[],
         removeSlotKeys?: string[],
     ) => void
-    prefetchConfig: (config: SavedBuild) => void
-    selectConfig: (config: SavedBuild) => Promise<void>
-    isConfigLoaded: (configId: string) => boolean
+    prefetchConfig: (config: SavedBuild) => void // 保存構成のパーツを先読みする関数
+    selectConfig: (config: SavedBuild) => Promise<void> // 保存構成を選択して読み込む関数
+    isConfigLoaded: (configId: string) => boolean // 構成の保存内容を読み込み済みか返す関数
 }
 
 // 空の選択済みパーツ
@@ -93,17 +93,21 @@ function restoreSavedBuildParts(
     partsById: ReadonlyMap<number, Part>,
 ): SelectedParts {
     // 保存時のslotKeyをそのまま維持し、表示用の最新Partだけを差し替える。
+    // 復元した選択済みパーツ
     const restoredParts: SelectedParts = {}
 
     for (const savedPart of build.parts) {
+        // 保存されたパーツIDに対応する最新パーツ
         const part = partsById.get(savedPart.partId)
 
+        // カタログに無いパーツは復元できない
         if (!part) {
             throw new Error(
                 `「${build.name}」に含まれるパーツを読み込めませんでした`,
             )
         }
 
+        // 保存データとカテゴリーが違う場合は誤った枠へ復元しない
         if (part.categoryKey !== getPartSlotCategoryKey(savedPart.slotKey)) {
             // 保存データとカタログのカテゴリーが違う場合は、誤った枠へ復元しない。
             throw new Error(
@@ -122,10 +126,12 @@ function assertRestoredPartsAreCompatible(
     parts: SelectedParts,
     buildName: string,
 ) {
+    // 最初に見つかった非互換の問題
     const issue = evaluateSelectedPartsCompatibility(parts).find(
         (candidate) => candidate.status === "incompatible",
     )
 
+    // 非互換が無ければ何もしない
     if (!issue) {
         return
     }
@@ -150,10 +156,13 @@ export function useSimulatorController({
                                        }: UseSimulatorControllerProps): SimulatorController {
     // UIからのイベントをReducer・API・キャッシュへ振り分ける唯一の窓口。
     const {status: authStatus, user} = useAuth()
+    // ログイン中のユーザーID（未ログインはnull）
     const authUserId = authStatus === "authenticated"
         ? user?.id ?? null
         : null
+    // localStorageから読み込んだ保存状態
     const [storedState] = useState(loadSimulatorState)
+    // 保存状態に含まれるパーツID（重複を除外）
     const storedPartIds = useMemo(
         () => Array.from(new Set(
             storedState
@@ -169,24 +178,23 @@ export function useSimulatorController({
         storedPartIds.length === 0,
     )
     // localStorageのパーツ取得が終わるまで、ログイン後自動保存を開始しない。
-    const [restoreError, setRestoreError] = useState("")
-    const [isConfigLoading, setIsConfigLoading] = useState(false)
-    // 保存内容を読み込んだ構成。未読込の構成を空で上書きしないために使う
-    const [loadedConfigIds, setLoadedConfigIds] = useState<string[]>([])
-    const [savedBuildError, setSavedBuildError] = useState("")
-    const savedBuildSelectionRequestRef = useRef(0)
-    const previousAuthUserIdRef = useRef(authUserId)
-    // カテゴリー取得・保存構成取得で得たパーツをID単位で再利用
-    const partCacheRef = useRef(new Map<number, Part>())
-    // 複数カードの先読みが同じパーツを要求しても通信を共有
-    const partRequestsRef = useRef(new Map<number, Promise<void>>())
+    const [restoreError, setRestoreError] = useState("") // localStorage復元のエラーメッセージ
+    const [isConfigLoading, setIsConfigLoading] = useState(false) // 保存構成の読み込み中フラグ
+    const [loadedConfigIds, setLoadedConfigIds] = useState<string[]>([]) // 読み込み済みの構成ID
+    const [savedBuildError, setSavedBuildError] = useState("") // 保存構成読み込みのエラーメッセージ
+    const savedBuildSelectionRequestRef = useRef(0) // 保存構成選択の実行番号（古い応答の破棄用）
+    const previousAuthUserIdRef = useRef(authUserId) // 直前の認証ユーザーID
+    const partCacheRef = useRef(new Map<number, Part>()) // カテゴリー取得・保存構成取得で得たパーツをID単位で再利用
+    const partRequestsRef = useRef(new Map<number, Promise<void>>()) // 複数カードの先読みが同じパーツを要求しても通信を共有
 
     // 未取得パーツだけを取得し、同じ構成への同時リクエストは共有
     const loadSavedBuildParts = useCallback((build: SavedBuild) => {
         // 追加構成カードの先読みと選択確定の両方から呼ばれるため、通信共有をここへ集約する。
+        // 保存構成に含まれるパーツID（重複を除外）
         const partIds = Array.from(
             new Set(build.parts.map((part) => part.partId)),
         )
+        // キャッシュに無いパーツID
         const missingPartIds = partIds.filter((partId) =>
             !partCacheRef.current.has(partId),
         )
@@ -196,17 +204,21 @@ export function useSimulatorController({
             return Promise.resolve()
         }
 
+        // まだ取得を開始していないパーツID
         const requestPartIds = missingPartIds.filter((partId) =>
             !partRequestsRef.current.has(partId),
         )
 
         // 同じパーツを別カードが先に要求している場合は、そのPromiseを共有する。
         if (requestPartIds.length > 0) {
+            // パーツ取得のPromise
             const request = fetchPartsByIds(requestPartIds).then((parts) => {
                 cacheParts(partCacheRef.current, parts)
             })
+            // 完了時に共有記録から外すPromise
             const trackedRequest = request.finally(() => {
                 for (const partId of requestPartIds) {
+                    // 記録が同じPromiseのときだけ共有記録を消す
                     if (partRequestsRef.current.get(partId) === trackedRequest) {
                         partRequestsRef.current.delete(partId)
                     }
@@ -233,6 +245,7 @@ export function useSimulatorController({
     // シミュレーターの状態管理
     // 規格判定の基準となるフレームから選択を開始する
     const initialCategory = "frame"
+    // 構成別の選択状態をReducerで管理
     const [simulatorState, dispatch] = useReducer(
         simulatorReducer,
         initialCategory,
@@ -242,6 +255,7 @@ export function useSimulatorController({
                 initialCategory,
             )
 
+            // 保存状態が無ければ初期状態を返す
             if (!storedState) {
                 return initialState
             }
@@ -255,7 +269,9 @@ export function useSimulatorController({
     )
     // Reducerを介してだけ状態を変更し、固定枠と追加構成の排他ルールを一か所で適用する。
 
+    // 選択中の構成ID・選択枠・構成別の選択状態
     const {activeConfigId, activeSlot, configs} = simulatorState
+    // 選択中パーツのカテゴリーキー
     const {categoryKey: activeCategory} = activeSlot
 
     // ユーザー変更時に前ユーザーの追加構成選択と読み込み途中の状態を破棄
@@ -282,20 +298,26 @@ export function useSimulatorController({
             return
         }
 
+        // 復元用パーツ取得を中断する制御
         const controller = new AbortController()
+        // 復元対象の保存状態
         const stateToRestore = storedState
 
+        // 保存済みパーツを取得して構成を復元
         async function restoreStoredParts() {
             try {
+                // 取得した最新パーツ
                 const parts = await fetchPartsByIds(
                     storedPartIds,
                     controller.signal,
                 )
                 cacheParts(partCacheRef.current, parts)
+                // パーツIDからパーツを引く対応表
                 const partsById = new Map(
                     parts.map((part) => [part.id, part]),
                 )
                 // 保存されているすべての構成を復元する
+                // 復元した構成別の選択状態
                 const restoredConfigs = Object.fromEntries(
                     Object.entries(stateToRestore.configs).map(
                         ([configId, selections]) => [
@@ -303,6 +325,7 @@ export function useSimulatorController({
                             Object.fromEntries(
                                 Object.entries(selections).flatMap(
                                     ([slotKey, partId]) => {
+                                        // 保存されたパーツIDに対応する最新パーツ
                                         const part = partsById.get(partId)
 
                                         return part?.categoryKey ===
@@ -316,6 +339,7 @@ export function useSimulatorController({
                     ),
                 ) as ConfigStates
 
+                // 互換性違反で空にした構成があるか
                 let hadIncompatibleState = false
 
                 for (const configId of Object.keys(restoredConfigs)) {
@@ -332,6 +356,7 @@ export function useSimulatorController({
                     }
                 }
 
+                // 互換性違反で空にした構成があれば保存し直す
                 if (hadIncompatibleState) {
                     // 破棄した構成を保存し直し、次回以降の復元失敗を防ぐ
                     saveSimulatorState({
@@ -348,6 +373,7 @@ export function useSimulatorController({
                 setRestoreError("")
                 setHasRestoredStoredParts(true)
             } catch (error) {
+                // 中断されていなければ復元エラーを表示
                 if (!controller.signal.aborted) {
                     setRestoreError(
                         error instanceof Error
@@ -365,6 +391,7 @@ export function useSimulatorController({
 
     // 構成変更時の保存
     useEffect(() => {
+        // localStorageの復元が終わるまでは保存しない
         if (!hasRestoredStoredParts) {
             return
         }
@@ -404,6 +431,7 @@ export function useSimulatorController({
         // 同じカテゴリーを複数スロットが占有しても、表示名は一度だけにまとめる。
         return Array.from(new Set(
             blockingSelections.map(([slotKey]) => {
+                // 占有パーツのカテゴリーキー
                 const categoryKey = getPartSlotCategoryKey(slotKey)
 
                 return categories.find(
@@ -428,6 +456,7 @@ export function useSimulatorController({
     // カテゴリー別のエラーメッセージ
     const [partsErrorsByCategory, setPartsErrorsByCategory] = useState<Record<string, string>>({})
 
+    // 選択中カテゴリーの候補パーツを取得
     useEffect(() => {
         // カテゴリー未選択・他パーツに含まれる場合の終了処理
         if (
@@ -532,6 +561,7 @@ export function useSimulatorController({
 
     // 保存済み構成のパーツを取得し、編集対象として読み込む
     const selectConfig = useCallback(async (config: SavedBuild) => {
+        // 保存構成選択の実行番号
         const requestId = ++savedBuildSelectionRequestRef.current
 
         setIsConfigLoading(true)
@@ -545,6 +575,7 @@ export function useSimulatorController({
                 return
             }
 
+            // 復元した選択済みパーツ
             const restoredParts = restoreSavedBuildParts(
                 config,
                 partCacheRef.current,
@@ -563,15 +594,18 @@ export function useSimulatorController({
                 ? current
                 : [...current, config.id])
         } catch (error) {
+            // 最後に開始した選択でエラー内容があれば理由を表示
             if (
                 requestId === savedBuildSelectionRequestRef.current &&
                 error instanceof Error
             ) {
                 setSavedBuildError(error.message)
+            // 最後に開始した選択なら原因不明のエラーを表示
             } else if (requestId === savedBuildSelectionRequestRef.current) {
                 setSavedBuildError("構成の読み込みに失敗しました")
             }
         } finally {
+            // 最後に開始した選択なら読み込み中表示を解除
             if (requestId === savedBuildSelectionRequestRef.current) {
                 setIsConfigLoading(false)
             }
@@ -646,6 +680,7 @@ export function useSimulatorController({
         isLoadingParts,
         isConfigLoading,
         loadedConfigIds,
+        // 構成の保存内容を読み込み済みか
         isConfigLoaded: (configId: string) =>
             loadedConfigIds.includes(configId),
         partsError,

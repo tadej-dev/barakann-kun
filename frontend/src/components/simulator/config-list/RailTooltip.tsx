@@ -24,6 +24,7 @@ export function RailTooltip({
 }) {
     const {isMobile, state} = useSidebar()
 
+    // サイドバーが開いている・スマホ幅では子要素を直接返す
     if (state !== "collapsed" || isMobile) {
         return children
     }

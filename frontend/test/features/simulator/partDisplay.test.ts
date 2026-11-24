@@ -11,6 +11,7 @@ import {
 import type {Part} from "@/types/part"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 
+// 表示名テスト用のパーツを生成
 function createPart(
     name: string,
     brandName: string,
@@ -19,6 +20,7 @@ function createPart(
     return {name, brandName, modelName}
 }
 
+// バリエーション列の判定用メタデータを生成
 function createMetadata(
     variantName?: string | null,
     specifications: Record<string, string> = {},
@@ -26,9 +28,9 @@ function createMetadata(
     return {variantName, specifications}
 }
 
-// ブランド名の除去条件と、バリエーション列を表示する条件を確認する。
+// ブランド名の除去条件と、バリエーション列を表示する条件を確認
 describe("getPartDisplayName", () => {
-    // 一覧ではブランド列を別表示するため、製品名から先頭の重複を除く。
+    // 一覧ではブランド列を別表示するため、製品名から先頭の重複を除く
     it("製品名の先頭にあるブランド名を除去する", () => {
         expect(getPartDisplayName(
             createPart(
@@ -38,7 +40,7 @@ describe("getPartDisplayName", () => {
         )).toBe("Ultegra CS-R8100")
     })
 
-    // バリエーションを除いたモデル名がある場合は、正規化済み名称を優先する。
+    // バリエーションを除いたモデル名がある場合は、正規化済み名称を優先
     it("modelNameを優先して表示する", () => {
         expect(getPartDisplayName(
             createPart(
@@ -49,28 +51,28 @@ describe("getPartDisplayName", () => {
         )).toBe("S5")
     })
 
-    // DB表記の大文字小文字差で、同じブランドが二重表示されないようにする。
+    // DB表記の大文字小文字差で、同じブランドが二重表示されないようにする
     it("ブランド名の大文字小文字が異なっても除去する", () => {
         expect(getPartDisplayName(
             createPart("sram Rival AXS", "SRAM"),
         )).toBe("Rival AXS")
     })
 
-    // 製品名の途中にブランド文字列があるだけなら、意味を変えずに残す。
+    // 製品名の途中にブランド文字列があるだけなら、意味を変えずに残す
     it("ブランド名が先頭にない製品名はそのまま表示する", () => {
         expect(getPartDisplayName(
             createPart("SuperSix EVO", "Cannondale"),
         )).toBe("SuperSix EVO")
     })
 
-    // 完全一致を除去すると名称が消えるため、最低限元の製品名を表示する。
+    // 完全一致を除去すると名称が消えるため、最低限元の製品名を表示
     it("ブランド名と製品名が同じ場合は空文字にしない", () => {
         expect(getPartDisplayName(
             createPart("Shimano", "Shimano"),
         )).toBe("Shimano")
     })
 
-    // 表示材料がないときは、候補テーブルのバリエーション列自体を省略する。
+    // 表示材料がないときは、候補テーブルのバリエーション列自体を省略
     it("バリエーションと仕様がすべて空なら列を非表示にする", () => {
         expect(hasPartVariantColumn([
             createMetadata(),
@@ -78,7 +80,7 @@ describe("getPartDisplayName", () => {
         ])).toBe(false)
     })
 
-    // variant_nameが空でも規格情報があれば、列を残して仕様を表示する。
+    // variant_nameが空でも規格情報があれば、列を残して仕様を表示
     it("仕様がある場合はバリエーション列を表示する", () => {
         expect(hasPartVariantColumn([
             createMetadata(null, {wheel_diameter: "700C"}),
@@ -86,8 +88,9 @@ describe("getPartDisplayName", () => {
     })
 })
 
-// 同一モデルの集約キーと、バリアントの表示順を確認する。
+// 同一モデルの集約キーと、バリアントの表示順を確認
 describe("getPartModelKey", () => {
+    // 同一モデル判定用のバリアントを生成
     function createVariant(
         variantName: string,
         overrides: Partial<Part> = {},
@@ -105,26 +108,30 @@ describe("getPartModelKey", () => {
         }
     }
 
-    // ブランド・製品名・年式・世代が同じものだけを同じ行にまとめる。
+    // ブランド・製品名・年式・世代が同じものだけを同じ行にまとめる
     it("同一モデル・同一世代は同じキーにする", () => {
+        // サイズだけが異なる同じモデル
         const first = createVariant("360x90mm")
+        // 比較対象となる別サイズの同じモデル
         const second = createVariant("400x110mm")
 
         expect(getPartModelKey(first)).toBe(getPartModelKey(second))
     })
 
-    // 年式や世代が違えば別の行として扱う。
+    // 年式や世代が違えば別の行として扱う
     it("年式・世代が異なれば別のキーにする", () => {
-        const base = createVariant("360x90mm", {modelYear: 2025})
-        const otherYear = createVariant("360x90mm", {modelYear: 2024})
-        const otherEdition = createVariant("360x90mm", {modelYear: 2025, edition: "Gen 7"})
+        const base = createVariant("360x90mm", {modelYear: 2025}) // 比較の基準となる年式のバリアント
+        const otherYear = createVariant("360x90mm", {modelYear: 2024}) // 年式だけが異なるバリアント
+        const otherEdition = createVariant("360x90mm", {modelYear: 2025, edition: "Gen 7"}) // 世代違い
 
         expect(getPartModelKey(base)).not.toBe(getPartModelKey(otherYear))
         expect(getPartModelKey(base)).not.toBe(getPartModelKey(otherEdition))
     })
 })
 
+// バリアント名の並び順を保証
 describe("comparePartVariants", () => {
+    // 並び順テスト用のバリアントを生成
     function createVariant(id: number, variantName: string): Part {
         return {
             id,
@@ -137,8 +144,9 @@ describe("comparePartVariants", () => {
         }
     }
 
-    // 数値を含むバリアント名は、数値の昇順で並べる。
+    // 数値を含むバリアント名は、数値の昇順で並べる
     it("バリアント名の数値を昇順で比較する", () => {
+        // 数値を含むバリアント
         const variants = [
             createVariant(3, "420x100mm"),
             createVariant(1, "360x90mm"),
@@ -150,8 +158,9 @@ describe("comparePartVariants", () => {
     })
 })
 
-// サマリー表示用の、サイズ・世代まで含めた表示名を確認する。
+// サマリー表示用の、サイズ・世代まで含めた表示名を確認
 describe("getPartVariantLabel", () => {
+    // 表示名テスト用のフレームを生成
     function createFramePart(overrides: Partial<Part> = {}): Part {
         return {
             id: 612,
@@ -166,7 +175,7 @@ describe("getPartVariantLabel", () => {
         }
     }
 
-    // サイズと世代を括弧書きで添え、選択内容を判別できるようにする。
+    // サイズと世代を括弧書きで添え、選択内容を判別できるようにする
     it("サイズと世代を表示名へ付加する", () => {
         expect(getPartVariantLabel(createFramePart()))
             .toBe("Nitrogen Frameset（M）")
@@ -175,7 +184,7 @@ describe("getPartVariantLabel", () => {
             .toBe("Nitrogen Frameset（Gen 8 / M）")
     })
 
-    // サイズも世代も無いパーツは、通常の表示名のまま返す。
+    // サイズも世代も無いパーツは、通常の表示名のまま返す
     it("サイズ・世代が無ければモデル名だけを返す", () => {
         expect(getPartVariantLabel(createFramePart({
             variantName: null,
@@ -184,8 +193,9 @@ describe("getPartVariantLabel", () => {
     })
 })
 
-// 占有枠の表示名を、提供元パーツの付属品から補う処理を確認する。
+// 占有枠の表示名を、提供元パーツの付属品から補う処理を確認
 describe("findBlockedSlotItem", () => {
+    // 付属品付きのフレームを生成
     function createSelectedPart(
         includedItems: Part["includedItems"],
     ): Part {
@@ -200,8 +210,9 @@ describe("findBlockedSlotItem", () => {
         }
     }
 
-    // 占有カテゴリーと一致する付属品を提供元パーツから返す。
+    // 占有カテゴリーと一致する付属品を提供元パーツから返す
     it("同じカテゴリーの付属品を返す", () => {
+        // フレームを選択した状態
         const selectedParts: SelectedParts = {
             frame: createSelectedPart([{
                 name: "Basso Fuga Integrated Handlebar",
@@ -220,8 +231,9 @@ describe("findBlockedSlotItem", () => {
             })
     })
 
-    // 一致する付属品がなければ、呼び出し元で従来表示へ戻せるようnullを返す。
+    // 一致する付属品がなければ、呼び出し元で従来表示へ戻せるようnullを返す
     it("一致する付属品がなければnullを返す", () => {
+        // フレームを選択した状態
         const selectedParts: SelectedParts = {
             frame: createSelectedPart([]),
         }

@@ -65,6 +65,7 @@ export function Header() {
         user,
     } = useAuth()
     const navigate = useNavigate()
+    // サイト内メニューを開いているか
     const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false)
     const {
         status: logoutSaveStatus,
@@ -75,10 +76,9 @@ export function Header() {
         skipSaveAndLogout,
         cancel,
     } = useLogoutWithSave()
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-    const [isNameDialogOpen, setIsNameDialogOpen] = useState(false)
-    // 開くたびに値を変え、ダイアログの入力内容を現在の表示名から始め直す
-    const [nameDialogKey, setNameDialogKey] = useState(0)
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false) // アカウント削除の確認ダイアログを開いているか
+    const [isNameDialogOpen, setIsNameDialogOpen] = useState(false) // 表示名変更ダイアログを開いているか
+    const [nameDialogKey, setNameDialogKey] = useState(0) // 開くたびに値を変え、ダイアログの入力内容を現在の表示名から始め直す
 
     // 表示名の変更ダイアログを開く
     function openNameDialog() {

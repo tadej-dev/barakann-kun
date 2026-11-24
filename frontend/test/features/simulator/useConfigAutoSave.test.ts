@@ -14,9 +14,12 @@ import {useConfigAutoSave} from "@/features/simulator/useConfigAutoSave"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import {loadLocalConfigCollection} from "@/lib/simulator-storage"
 
+// 自動保存の待ち時間（ミリ秒）
 const AUTO_SAVE_DELAY_MS = 800
+// ローカル構成の保存キー
 const COLLECTION_STORAGE_KEY = "barakann-config-collection-v2"
 
+// 自動保存テスト用のパーツを生成
 function createPart(id: number, price = 1000, weight = 200): Part {
     return {
         id,
@@ -41,9 +44,12 @@ function createCollection(
     } as unknown as ConfigCollection
 }
 
+// ローカル構成と自動保存を組み合わせたテスト用フック
 function useHarness(options: {isActiveConfigLoaded?: boolean} = {}) {
+    // ローカル構成の操作
     const local = useLocalConfigCollection({enabled: true})
     const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
+    // 選択中の構成ID
     const activeConfigId = local.builds.builds[0]?.id ?? ""
 
     useConfigAutoSave({
@@ -58,6 +64,7 @@ function useHarness(options: {isActiveConfigLoaded?: boolean} = {}) {
     return {local, selectedParts, setSelectedParts, activeConfigId}
 }
 
+// 未ログイン時の構成自動保存のタイミングと確定処理を保証
 describe("useConfigAutoSave（未ログイン時）", () => {
     beforeEach(() => {
         window.localStorage.clear()
@@ -70,7 +77,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         window.localStorage.clear()
     })
 
-    // 選択中の構成の変更を、待ち時間の後にローカルへ保存する。
+    // 選択中の構成の変更を、待ち時間の後にローカルへ保存
     it("選択中の構成の変更をローカルへ自動保存する", async () => {
         const {result} = renderHook(() => useHarness())
 
@@ -89,7 +96,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         ])
     })
 
-    // 保存内容を読み込む前の構成は、空で上書きしない。
+    // 保存内容を読み込む前の構成は、空で上書きしない
     it("未読込の構成は自動保存しない", async () => {
         const {result} = renderHook(() =>
             useHarness({isActiveConfigLoaded: false}))
@@ -107,7 +114,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         expect(loadLocalConfigCollection().configs[0]?.parts).toEqual([])
     })
 
-    // ログアウト前の確定依頼では、待ち時間を置かずに保存する。
+    // ログアウト前の確定依頼では、待ち時間を置かずに保存
     it("ログアウト前の確定依頼で待たずに保存する", async () => {
         const {result} = renderHook(() => useHarness())
 
@@ -117,6 +124,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             })
         })
 
+        // 確定依頼への応答モック
         const respond = vi.fn()
 
         await act(async () => {
@@ -134,8 +142,9 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         expect(respond).toHaveBeenCalledWith(true)
     })
 
-    // 実行中の保存があっても、終わるまで待って確定する。
+    // 実行中の保存があっても、終わるまで待って確定
     it("実行中の保存を待ってから確定する", async () => {
+        // 保存対象の構成一覧
         const configs = [{
             id: "slow-1",
             name: "構成1",
@@ -144,10 +153,12 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             updatedAt: "",
             parts: [],
         }]
+        // 100ミリ秒後に完了する保存処理のモック
         const updateConfig = vi.fn(() => new Promise<void>((resolve) => {
             setTimeout(resolve, 100)
         }))
 
+        // 保存に時間がかかる自動保存のテスト用フック
         function useSlowHarness() {
             const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
 
@@ -178,9 +189,10 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
         })
 
+        // 確定依頼への応答モック
         const respond = vi.fn()
 
-        // 保存中に確定依頼を出しても、完了を待って成功する
+        // 保存中に確定依頼を出しても、完了を待って成功
         await act(async () => {
             window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
                 detail: {handled: false, respond} satisfies LogoutFlushDetail,
@@ -193,12 +205,13 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         expect(updateConfig).toHaveBeenCalledTimes(1)
     })
 
-    // 変更が無い場合は、ログアウト時に保存しない。
+    // 変更が無い場合は、ログアウト時に保存しない
     it("変更が無ければログアウト時に保存しない", async () => {
         renderHook(() => useHarness())
 
-        // 初期読み込み後の書き込みを数えないよう、ここから監視する
+        // 初期読み込み後の書き込みを数えないよう、ここから監視
         const setItem = vi.spyOn(Storage.prototype, "setItem")
+        // 確定依頼への応答モック
         const respond = vi.fn()
 
         await act(async () => {
@@ -214,8 +227,9 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         setItem.mockRestore()
     })
 
-    // 実行中の保存が失敗した場合は、確定失敗として返す。
+    // 実行中の保存が失敗した場合は、確定失敗として返す
     it("実行中の保存が失敗したら確定失敗にする", async () => {
+        // 保存対象の構成一覧
         const configs = [{
             id: "slow-2",
             name: "構成1",
@@ -224,10 +238,12 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             updatedAt: "",
             parts: [],
         }]
+        // 100ミリ秒後に失敗する保存処理のモック
         const updateConfig = vi.fn(() => new Promise<void>((_, reject) => {
             setTimeout(() => reject(new Error("failed")), 100)
         }))
 
+        // 保存が失敗する自動保存のテスト用フック
         function useFailingHarness() {
             const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
 
@@ -257,6 +273,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
         })
 
+        // 確定依頼への応答モック
         const respond = vi.fn()
 
         await act(async () => {
@@ -269,7 +286,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         expect(respond).toHaveBeenCalledWith(false)
     })
 
-    // 保存済みと同じ内容では、保存を繰り返さない。
+    // 保存済みと同じ内容では、保存を繰り返さない
     it("保存済みと同じ内容では保存しない", async () => {
         const {result} = renderHook(() => useHarness())
 
@@ -284,6 +301,7 @@ describe("useConfigAutoSave（未ログイン時）", () => {
             await Promise.resolve()
         })
 
+        // 1回目の保存内容
         const saved = window.localStorage.getItem(COLLECTION_STORAGE_KEY)
 
         await act(async () => {

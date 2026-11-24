@@ -62,6 +62,7 @@ export function ConfigList({
         orderedConfigs,
         totalSavedCount,
     } = collection
+    // 一覧操作の状態と処理
     const controller = useConfigListController({
         collection,
         activeConfigId,

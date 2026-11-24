@@ -51,16 +51,17 @@ export type BuildComparisonTriggerProps = {
 type BuildComparisonDialogProps = {
     builds: ComparisonBuild[]
     categories: Category[]
-    // 配置先に合わせてボタンの見た目を変えたい場合に指定する（未指定なら既定のボタン）
-    renderTrigger?: (props: BuildComparisonTriggerProps) => React.ReactNode
+    renderTrigger?: (props: BuildComparisonTriggerProps) => React.ReactNode // 比較対象の構成
 }
 
+// 価格を日本円の整数表記へ変換する書式
 const currencyFormatter = new Intl.NumberFormat("ja-JP", {
     style: "currency",
     currency: "JPY",
     maximumFractionDigits: 0,
 })
 
+// 構成の合計価格と合計重量を集計
 function snapshotTotals(
     build: ComparisonBuild,
     partsById: ReadonlyMap<number, Part>,
@@ -70,7 +71,9 @@ function snapshotTotals(
     return build.parts.reduce((totals, snapshot) => {
         const part = partsById.get(snapshot.partId)
 
+        // 前後ペア販売のパーツは1回だけ集計
         if (part && getPartPackageUnit(part) === "pair") {
+            // 同じペアパーツを集計済みなら加算しない
             if (countedPairIds.has(part.id)) {
                 return totals
             }
@@ -92,24 +95,25 @@ export function BuildComparisonDialog({
     categories,
     renderTrigger,
 }: BuildComparisonDialogProps) {
-    const [open, setOpen] = useState(false)
-    const [selectedKeys, setSelectedKeys] = useState<string[]>([])
-    const [partsById, setPartsById] = useState(new Map<number, Part>())
-    const [isLoading, setIsLoading] = useState(false)
-    const [errorMessage, setErrorMessage] = useState("")
-    // 取得の世代。古い取得の完了で新しい表示を壊さないために使う
-    const requestIdRef = useRef(0)
-    const selectedBuilds = useMemo(() => builds.filter((build) =>
+    const [open, setOpen] = useState(false) // 比較ダイアログを開いているか
+    const [selectedKeys, setSelectedKeys] = useState<string[]>([]) // 比較対象に選んだ構成キー(最大4件)
+    const [partsById, setPartsById] = useState(new Map<number, Part>()) // 比較に使うパーツをIDから引く表
+    const [isLoading, setIsLoading] = useState(false) // 比較用パーツの読み込み中か
+    const [errorMessage, setErrorMessage] = useState("") // 比較用パーツの取得エラー
+    const requestIdRef = useRef(0) // 取得の世代。古い取得の完了で新しい表示を壊さないために使う
+    const selectedBuilds = useMemo(() => builds.filter((build) => // 選択済みキーに対応する構成(最大4件)
         selectedKeys.includes(build.key),
     ), [builds, selectedKeys])
 
     useEffect(() => {
         const requestId = ++requestIdRef.current
 
+        // 非表示または比較対象が無い場合は取得しない
         if (!open || selectedBuilds.length === 0) {
             // 選択が無くなったら読み込み表示を下ろす
             // Effect内の同期更新を避けるため、マイクロタスクで反映する
             queueMicrotask(() => {
+                // 古い取得結果で読み込み表示を変えない
                 if (requestIdRef.current === requestId) {
                     setIsLoading(false)
                 }
@@ -123,11 +127,13 @@ export function BuildComparisonDialog({
         )))
         const controller = new AbortController()
 
+        // 比較に必要なパーツを取得
         async function loadParts() {
             setIsLoading(true)
             setErrorMessage("")
 
             try {
+                // 比較対象のパーツIDが無い場合は空の表へ戻す
                 if (partIds.length === 0) {
                     // 最新の取得だけが結果を反映する
                     if (requestIdRef.current === requestId) {
@@ -147,6 +153,7 @@ export function BuildComparisonDialog({
                     setPartsById(new Map(parts.map((part) => [part.id, part])))
                 }
             } catch (error) {
+                // 通信中断によるエラーは表示しない
                 if (!controller.signal.aborted) {
                     setErrorMessage(error instanceof Error
                         ? error.message
@@ -165,6 +172,7 @@ export function BuildComparisonDialog({
         return () => controller.abort()
     }, [open, selectedBuilds])
 
+    // 構成ごとの選択済みパーツをスロットキーから引く表
     const selectedPartsByBuildKey = useMemo(() => new Map(
         selectedBuilds.map((build) => {
             const selectedParts: SelectedParts = {}
@@ -172,6 +180,7 @@ export function BuildComparisonDialog({
             for (const snapshot of build.parts) {
                 const part = partsById.get(snapshot.partId)
 
+                // 取得済みのパーツだけを選択済みとして扱う
                 if (part) {
                     selectedParts[snapshot.slotKey] = part
                 }
@@ -180,16 +189,20 @@ export function BuildComparisonDialog({
             return [build.key, selectedParts]
         }),
     ), [partsById, selectedBuilds])
+    // 比較表に表示するスロットキー一覧
     const slotKeys = Array.from(new Set(selectedBuilds.flatMap((build) =>
         build.parts.map((part) => part.slotKey),
     )))
+    // カテゴリーキーから表示名を引く表
     const categoriesByKey = new Map(categories.map((category) => [
         category.key,
         category.displayName,
     ]))
 
+    // 比較対象の選択を切り替える
     function toggleBuild(key: string, checked: boolean | "indeterminate") {
         setSelectedKeys((current) => {
+            // チェックが外れた場合は選択から除く
             if (checked !== true) {
                 return current.filter((currentKey) => currentKey !== key)
             }
@@ -200,7 +213,9 @@ export function BuildComparisonDialog({
         })
     }
 
+    // ダイアログの開閉を切り替える
     function changeOpen(nextOpen: boolean) {
+        // 開くときに比較対象を2〜4件へ整える
         if (nextOpen) {
             // 削除済みのキーを外し、比較対象が足りない場合だけ先頭2件を初期選択する
             setSelectedKeys((current) => {
@@ -223,6 +238,7 @@ export function BuildComparisonDialog({
         title: builds.length < 2
             ? "比較には2件以上の構成が必要です"
             : "複数構成を比較",
+        // 比較ダイアログを開く
         onOpen: () => changeOpen(true),
     }
 

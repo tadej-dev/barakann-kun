@@ -3,15 +3,18 @@ import {describe, expect, it} from "vitest"
 import {buildCompatibilitySummary} from "@/features/simulator/compatibilitySummary"
 import type {CompatibilityCounterpart} from "@/features/simulator/partCompatibility"
 
+// スロットのカテゴリーキーを表示名へ変換する対応表
 const categoryDisplayNames = {
     frame: "フレーム",
     cassette: "カセットスプロケット",
     disc_rotor: "ディスクローター",
 }
 
+// 比較結果を状態ごとの行へまとめる表示内容を保証
 describe("buildCompatibilitySummary", () => {
-    // 非互換・未確認・互換の順に行をまとめ、非互換には合わない値を併記する。
+    // 非互換・未確認・互換の順に行をまとめ、非互換には合わない値を併記
     it("状態ごとの行にまとめ、非互換には両側の値を併記する", () => {
+        // 互換・非互換の比較結果
         const counterparts: CompatibilityCounterpart[] = [
             {
                 slotKey: "frame",
@@ -41,6 +44,7 @@ describe("buildCompatibilitySummary", () => {
             },
         ]
 
+        // 状態ごとにまとめたサマリー行
         const lines = buildCompatibilitySummary(counterparts, categoryDisplayNames)
 
         expect(lines.map((line) => line.label)).toEqual(["非互換", "互換"])
@@ -50,8 +54,9 @@ describe("buildCompatibilitySummary", () => {
         expect(lines[1]?.items[0]?.text).toBe("ホイール径")
     })
 
-    // 前後のローターのように同じ文になる項目は1つにまとめる。
+    // 前後のローターのように同じ文になる項目は1つにまとめる
     it("同じ文になる互換項目は1つにまとめる", () => {
+        // 前後いずれかのローター比較結果を作る
         const createRotor = (slotKey: string): CompatibilityCounterpart => ({
             slotKey,
             partName: "Rotor",
@@ -66,6 +71,7 @@ describe("buildCompatibilitySummary", () => {
             }],
         })
 
+        // 状態ごとにまとめたサマリー行
         const lines = buildCompatibilitySummary(
             [createRotor("disc_rotor:front"), createRotor("disc_rotor:rear")],
             categoryDisplayNames,
@@ -75,8 +81,9 @@ describe("buildCompatibilitySummary", () => {
         expect(lines[0]?.items.map((item) => item.text)).toEqual(["ローター取付方式"])
     })
 
-    // 片側の値が未登録の未確認は、相手だけを行内に出し、値は詳細に回す。
+    // 片側の値が未登録の未確認は、相手だけを行内に出し、値は詳細に回す
     it("未確認は相手を添え、詳細に未登録側を示す", () => {
+        // 状態ごとにまとめたサマリー行
         const lines = buildCompatibilitySummary([{
             slotKey: "frame",
             partName: "Frame A",

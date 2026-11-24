@@ -6,14 +6,19 @@ export function getPartDisplayName(
     part: Pick<Part, "name" | "modelName" | "brandName">,
 ): string {
     // modelNameを優先し、ブランド名が重複する場合だけ先頭の表記を取り除く。
+    // 表示に使う製品名
     const productName = part.modelName?.trim() || part.name.trim()
+    // 前後空白を除いたブランド名
     const brandName = part.brandName.trim()
 
+    // ブランド名が無ければ製品名だけを返す
     if (!brandName) {
         return productName
     }
 
+    // 製品名の先頭から切り出したブランド名相当の文字列
     const namePrefix = productName.slice(0, brandName.length)
+    // ブランド名の直後1文字（区切り判定用）
     const separator = productName.slice(
         brandName.length,
         brandName.length + 1,
@@ -36,10 +41,12 @@ export function findBlockedSlotItem(
     categoryKey: string,
 ): PartIncludedItem | null {
     for (const part of Object.values(selectedParts)) {
+        // 選択済みパーツの同梱品から探した該当カテゴリーの品
         const item = (part.includedItems ?? []).find(
             (candidate) => candidate.categoryKey === categoryKey,
         )
 
+        // 同梱品が見つかったら項目を返す
         if (item) {
             return item
         }
@@ -54,7 +61,9 @@ export function hasPartVariantColumn(
 ): boolean {
     // 1件でもバリエーションまたは規格値があれば列を残し、情報の見落としを防ぐ。
     return parts.some((part) => {
+        // バリエーション名が登録されているか
         const hasVariantName = Boolean(part.variantName?.trim())
+        // 規格値が1つでも登録されているか
         const hasSpecifications = Object.values(
             part.specifications ?? {},
         ).some((value) => value.trim() !== "")
@@ -71,6 +80,7 @@ export function getPartModelKey(
         "brandName" | "modelName" | "name" | "modelYear" | "edition"
     >,
 ): string {
+    // 表示名に使う製品名
     const modelName = part.modelName?.trim() || part.name.trim()
 
     return [
@@ -85,7 +95,9 @@ export function getPartModelKey(
 function getVariantNumbers(
     part: Pick<Part, "name" | "variantName">,
 ): number[] {
+    // 数値を取り出す元の文字列
     const source = part.variantName?.trim() || part.name
+    // バリアント名から取り出した数値文字列
     const matches = source.match(/\d+(?:\.\d+)?/g) ?? []
 
     return matches.map(Number)
@@ -93,15 +105,16 @@ function getVariantNumbers(
 
 // バリアントを表示順（数値昇順→名前順）に並べるための比較関数。
 export function comparePartVariants(a: Part, b: Part): number {
-    const aNumbers = getVariantNumbers(a)
-    const bNumbers = getVariantNumbers(b)
-    const length = Math.max(aNumbers.length, bNumbers.length)
+    const aNumbers = getVariantNumbers(a) // 比較元の数値一覧
+    const bNumbers = getVariantNumbers(b) // 比較先の数値一覧
+    const length = Math.max(aNumbers.length, bNumbers.length) // 比較する数値の最大個数
 
     for (let index = 0; index < length; index += 1) {
         // 数値が無いバリアントは末尾へ寄せるため -1 を既定値にする。
         const aValue = aNumbers[index] ?? -1
         const bValue = bNumbers[index] ?? -1
 
+        // 数値が異なる位置で比較結果を確定
         if (aValue !== bValue) {
             return aValue - bValue
         }
@@ -118,10 +131,10 @@ export function comparePartVariants(a: Part, b: Part): number {
 export function getPartVariantLabel(
     part: Pick<Part, "name" | "modelName" | "brandName" | "variantName" | "edition">,
 ): string {
-    const baseName = getPartDisplayName(part)
-    const variantLabel = part.variantName?.trim()
-    const editionLabel = part.edition?.trim()
-    const suffixes = [editionLabel, variantLabel].filter(Boolean)
+    const baseName = getPartDisplayName(part) // ブランド名を除いた製品名
+    const variantLabel = part.variantName?.trim() // バリエーション名（未登録はundefined）
+    const editionLabel = part.edition?.trim() // 世代・仕様名（未登録はundefined）
+    const suffixes = [editionLabel, variantLabel].filter(Boolean) // 製品名の後ろへ付ける仕様名
 
     return suffixes.length > 0
         ? `${baseName}（${suffixes.join(" / ")}）`

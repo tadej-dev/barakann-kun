@@ -10,11 +10,12 @@ import {
     type ComparisonBuild,
 } from "@/components/simulator/BuildComparisonDialog"
 
-// 比較対象のパーツ取得をモックする
+// 比較対象のパーツ取得をモック
 vi.mock("@/api/parts", () => ({
     fetchPartsByIds: vi.fn(),
 }))
 
+// パーツ取得処理のモック
 const mockedFetchPartsByIds = vi.mocked(fetchPartsByIds)
 
 // テストごとに描画したDOMを破棄し、次のテストへ持ち越さない
@@ -26,6 +27,7 @@ beforeEach(() => {
     mockedFetchPartsByIds.mockResolvedValue([])
 })
 
+// 比較表の列に使うテスト用カテゴリー
 const categories: Category[] = [
     {id: 1, key: "frame", displayName: "フレーム"},
 ]
@@ -60,13 +62,15 @@ function createBuild(
 
 // 見出し行のセルを、構成の並び順で取り出す
 function rowCells(label: string) {
+    // 見出しラベルに対応する行
     const row = screen.getByText(label).closest("tr")
 
     return row ? within(row).getAllByRole("cell").map((cell) => cell.textContent) : []
 }
 
+// 比較ダイアログの選択・取得・表示・エラーを保証
 describe("BuildComparisonDialog", () => {
-    // 比較には2件以上の構成が要るため、足りないときは押せない。
+    // 比較には2件以上の構成が要るため、足りないときは押せない
     it("構成が2件未満のときは比較ボタンを押せない", () => {
         render(
             <BuildComparisonDialog
@@ -75,6 +79,7 @@ describe("BuildComparisonDialog", () => {
             />,
         )
 
+        // 比較ボタン
         const button = screen.getByRole("button", {name: "比較"})
 
         expect(button.hasAttribute("disabled")).toBe(true)
@@ -83,8 +88,9 @@ describe("BuildComparisonDialog", () => {
         )
     })
 
-    // 2件以上あればダイアログを開き、先頭2件を選択済みにする。
+    // 2件以上あればダイアログを開き、先頭2件を選択済みにする
     it("ダイアログを開くと構成の選択肢を選択済みで表示する", async () => {
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(<BuildComparisonDialog builds={builds} categories={categories} />)
 
@@ -92,17 +98,19 @@ describe("BuildComparisonDialog", () => {
 
         expect(await screen.findByText("構成を比較")).toBeTruthy()
 
+        // 構成ごとの選択チェックボックス
         const checkboxes = screen.getAllByRole("checkbox")
 
         expect(checkboxes).toHaveLength(2)
-        // 開いた時点で先頭2件が選ばれている。
+        // 開いた時点で先頭2件が選ばれている
         for (const checkbox of checkboxes) {
             expect(checkbox.getAttribute("aria-checked")).toBe("true")
         }
     })
 
-    // 開くと、選択中の構成が使うパーツをまとめて取得する。
+    // 開くと、選択中の構成が使うパーツをまとめて取得
     it("開くと選択中の構成のパーツをまとめて取得する", async () => {
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(<BuildComparisonDialog builds={builds} categories={categories} />)
 
@@ -111,12 +119,13 @@ describe("BuildComparisonDialog", () => {
         await waitFor(() => {
             expect(mockedFetchPartsByIds).toHaveBeenCalledTimes(1)
         })
-        // 2件の構成それぞれのパーツを取りに行く。
+        // 2件の構成が使うパーツを取りに行く
         expect(mockedFetchPartsByIds.mock.calls[0]?.[0]).toEqual([1, 2])
     })
 
-    // 取得したパーツと、構成ごとの金額・重量・診断を各列に反映する。
+    // 取得したパーツと、構成ごとの金額・重量・診断を各列に反映
     it("取得したパーツと構成ごとの値を比較表に反映する", async () => {
+        // 比較対象の2件の構成と、取得するパーツ
         mockedFetchPartsByIds.mockResolvedValue([
             createPart(1, "Madone"),
             createPart(2, "Émonda"),
@@ -129,10 +138,10 @@ describe("BuildComparisonDialog", () => {
 
         fireEvent.click(screen.getByRole("button", {name: "比較"}))
 
-        // パーツ名は各列のパーツから引く。
+        // パーツ名は各列のパーツから引く
         expect(await screen.findByText("Trek Madone")).toBeTruthy()
         expect(screen.getByText("Trek Émonda")).toBeTruthy()
-        // 金額と重量は、構成ごとの値がその列に出る。
+        // 金額と重量は、構成ごとの値が比較表の列に出る
         expect(rowCells("合計金額")).toEqual([
             expect.stringContaining("500,000"),
             expect.stringContaining("600,000"),
@@ -141,20 +150,22 @@ describe("BuildComparisonDialog", () => {
             expect.stringContaining("1,133 g"),
             expect.stringContaining("1,200 g"),
         ])
-        // 構成診断は、パーツが揃っていないことを示す。
+        // 構成診断は、パーツが揃っていないことを示す
         expect(rowCells("構成診断")[0]).toContain("未選択")
     })
 
-    // 選択が2件未満になると、比較できないことを伝える。
+    // 選択が2件未満になると、比較できないことを伝える
     it("選択が2件未満のときは比較できないと伝える", async () => {
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(<BuildComparisonDialog builds={builds} categories={categories} />)
 
         fireEvent.click(screen.getByRole("button", {name: "比較"}))
 
+        // 構成ごとの選択チェックボックス
         const checkboxes = await screen.findAllByRole("checkbox")
 
-        // 片方を外すとメッセージが出て、選び直すと消える。
+        // 片方を外すとメッセージが出て、選び直すと消える
         fireEvent.click(checkboxes[0])
 
         expect(
@@ -170,9 +181,10 @@ describe("BuildComparisonDialog", () => {
         })
     })
 
-    // 取得中に選択を0件まで減らすと、読み込み表示が残らない。
+    // 取得中に選択を0件まで減らすと、読み込み表示が残らない
     it("取得中に選択を減らすと読み込み表示が消える", async () => {
         mockedFetchPartsByIds.mockImplementation(() => new Promise(() => {}))
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(<BuildComparisonDialog builds={builds} categories={categories} />)
 
@@ -181,6 +193,7 @@ describe("BuildComparisonDialog", () => {
         expect(await screen.findByText("比較データを読み込んでいます…"))
             .toBeTruthy()
 
+        // 構成ごとの選択チェックボックス
         const checkboxes = screen.getAllByRole("checkbox")
 
         // 2件とも外して選択を0件にする
@@ -193,7 +206,7 @@ describe("BuildComparisonDialog", () => {
         })
     })
 
-    // 取得を中断しても、読み込み表示もエラーも残らない。
+    // 取得を中断しても、読み込み表示もエラーも残らない
     it("取得を中断すると読み込み表示とエラーが残らない", async () => {
         mockedFetchPartsByIds.mockImplementation((_ids, signal) =>
             new Promise((_resolve, reject) => {
@@ -201,6 +214,7 @@ describe("BuildComparisonDialog", () => {
                     reject(new DOMException("aborted", "AbortError"))
                 })
             }))
+        // 取得を中断できる2件の構成
         const builds = [
             createBuild("a", "通勤用", 1),
             createBuild("b", "レース用", 2),
@@ -212,6 +226,7 @@ describe("BuildComparisonDialog", () => {
         expect(await screen.findByText("比較データを読み込んでいます…"))
             .toBeTruthy()
 
+        // 構成ごとの選択チェックボックス
         const checkboxes = screen.getAllByRole("checkbox")
 
         fireEvent.click(checkboxes[0]!)
@@ -224,8 +239,9 @@ describe("BuildComparisonDialog", () => {
         expect(screen.queryByRole("alert")).toBeNull()
     })
 
-    // 比較できるのは4件までで、5件目からは選べない。
+    // 比較できるのは4件までで、5件目からは選べない
     it("構成は4件までしか選べない", async () => {
+        // 選択上限を超える5件の構成
         const builds = [
             createBuild("a", "構成1", 1),
             createBuild("b", "構成2", 2),
@@ -237,9 +253,10 @@ describe("BuildComparisonDialog", () => {
 
         fireEvent.click(screen.getByRole("button", {name: "比較"}))
 
+        // 構成ごとの選択チェックボックス
         const checkboxes = await screen.findAllByRole("checkbox")
 
-        // 3件目を足すと、その構成のパーツも取り直す。
+        // 3件目を足すと、追加した構成のパーツも取り直す
         fireEvent.click(checkboxes[2])
 
         await waitFor(() => {
@@ -249,7 +266,7 @@ describe("BuildComparisonDialog", () => {
             )
         })
 
-        // 4件目を足すと上限に達する。
+        // 4件目で選択上限に到達
         fireEvent.click(checkboxes[3])
 
         await waitFor(() => {
@@ -257,10 +274,11 @@ describe("BuildComparisonDialog", () => {
         })
     })
 
-    // 取得に失敗したときは、理由を添えて知らせる。
+    // 取得に失敗したときは、理由を添えて知らせる
     it("パーツの取得に失敗したときはエラーを表示する", async () => {
-        // 例外の理由が、そのまま利用者へ伝わることを確かめる。
+        // 例外の理由が加工されず利用者へ伝わることを確かめる
         mockedFetchPartsByIds.mockRejectedValueOnce(new Error("502 Bad Gateway"))
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(<BuildComparisonDialog builds={builds} categories={categories} />)
 
@@ -271,8 +289,9 @@ describe("BuildComparisonDialog", () => {
         )
     })
 
-    // 呼び出し側のボタンでも、同じ条件で開ける。
+    // 呼び出し側のボタンでも、同じ条件で開ける
     it("呼び出し側のボタンに状態を渡して開ける", async () => {
+        // 比較対象の2件の構成
         const builds = [createBuild("a", "通勤用", 1), createBuild("b", "レース用", 2)]
         render(
             <BuildComparisonDialog
@@ -291,6 +310,7 @@ describe("BuildComparisonDialog", () => {
             />,
         )
 
+        // 呼び出し側の比較開始ボタン
         const button = screen.getByRole("button", {name: "比較を開く"})
 
         expect(button.getAttribute("title")).toBe("複数構成を比較")

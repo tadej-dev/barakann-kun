@@ -113,13 +113,13 @@ export function simulatorReducer(
             }
 
         case "selectPart": {
-            // 現在構成の選択済みパーツ
-            const currentSelectedParts = getActiveSelectedParts(state)
-            const targetSlotKeys = action.slotKeys ?? [state.activeSlot.key]
-            const removeSlotKeys = new Set(action.removeSlotKeys ?? [])
+            const currentSelectedParts = getActiveSelectedParts(state) // 現在構成の選択済みパーツ
+            const targetSlotKeys = action.slotKeys ?? [state.activeSlot.key] // 新しいパーツを登録するスロットキー
+            const removeSlotKeys = new Set(action.removeSlotKeys ?? []) // 選択時に解除するスロットキー
 
             // ほかの選択済みパーツが選択先カテゴリーを占有している場合は変更しない
             // 交換可能な付属コックピットの占有は除き、規格判定側で可否を決める。
+            // 他の選択済みパーツが対象カテゴリーを占有しているか
             const isTargetCategoryBlocked = Object.entries(
                 currentSelectedParts,
             ).some(([slotKey, part]) =>
@@ -133,6 +133,7 @@ export function simulatorReducer(
             }
 
             // 選択するパーツが占有するカテゴリーの既存選択を解除
+            // 選択解除を反映する前の選択状態
             const nextSelectedParts = {
                 ...currentSelectedParts,
             }
@@ -145,6 +146,7 @@ export function simulatorReducer(
                 action.part.blockedCategoryKeys ?? []) {
                 // 新しいパーツが占有するカテゴリーの既存パーツを先に解除し、二重選択を防ぐ。
                 for (const slotKey of Object.keys(nextSelectedParts)) {
+                    // 選択中パーツが同じカテゴリーの枠にあれば解除
                     if (
                         getPartSlotCategoryKey(slotKey) === categoryKey
                     ) {

@@ -8,14 +8,15 @@ import {
     updateDisplayName,
 } from "@/features/auth/authApi"
 
-// セッション取得とCSRF付きのログイン・ログアウト・アカウント削除を確認する。
+// セッション取得とCSRF付きのログイン・ログアウト・アカウント削除を確認
 describe("authApi", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
-    // セッションなしはエラーではなく、認証済みfalseとしてUIへ渡す。
+    // セッションなしはエラーではなく、認証済みfalseとしてUIへ渡す
     it("未ログイン状態を取得する", async () => {
+        // 未ログインのセッションを返すモック
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({
             authenticated: false,
             user: null,
@@ -30,7 +31,7 @@ describe("authApi", () => {
         })
     })
 
-    // セッションからはIDと表示名だけを保持し、メールアドレスや画像は受け取っても残さない。
+    // セッションからはIDと表示名だけを保持し、メールアドレスや画像は受け取っても残さない
     it("ログイン済みユーザーを取得する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             authenticated: true,
@@ -53,7 +54,7 @@ describe("authApi", () => {
         })
     })
 
-    // Auth.jsの設定不足は、スタックトレースではなく利用者向けメッセージに変換する。
+    // Auth.jsの設定不足は、スタックトレースではなく利用者向けメッセージに変換
     it("APIの認証設定エラーを画面表示用メッセージへ変換する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             error: {
@@ -71,8 +72,9 @@ describe("authApi", () => {
         )
     })
 
-    // Googleログイン開始前にCSRFを取得し、Auth.jsへ安全な戻り先を渡す。
+    // Googleログイン開始前にCSRFを取得し、Auth.jsへ安全な戻り先を渡す
     it("CSRFトークン付きPOSTでGoogleログインURLを取得する", async () => {
+        // CSRF取得とログインURL取得の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",
@@ -104,8 +106,9 @@ describe("authApi", () => {
         )
     })
 
-    // ログアウトもGETではなくCSRF付きPOSTでセッションを終了する。
+    // ログアウトもGETではなくCSRF付きPOSTでセッションを終了
     it("CSRFトークンを使ってログアウトする", async () => {
+        // CSRF取得とログアウトの応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",
@@ -127,8 +130,9 @@ describe("authApi", () => {
         )
     })
 
-    // アカウント削除は確認ダイアログから呼ばれる破壊的操作としてCSRFを要求する。
+    // アカウント削除は確認ダイアログから呼ばれる破壊的操作としてCSRFを要求
     it("CSRFトークンを使ってアカウントを削除する", async () => {
+        // CSRF取得とアカウント削除の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",
@@ -150,8 +154,9 @@ describe("authApi", () => {
         )
     })
 
-    // 表示名の変更は、CSRFトークンを付けて送り、サーバーが保存した値を返す。
+    // 表示名の変更は、CSRFトークンを付けて送り、サーバーが保存した値を返す
     it("CSRFトークンを使って表示名を変更する", async () => {
+        // CSRF取得と表示名変更の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",
@@ -180,8 +185,9 @@ describe("authApi", () => {
         )
     })
 
-    // 入力エラーは、サーバーのメッセージをそのままダイアログに出せる形で返す。
+    // 入力エラーは、サーバーのメッセージを加工せずダイアログに出せる形で返す
     it("表示名の入力エラーをメッセージとして返す", async () => {
+        // CSRF取得と入力エラーの応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",

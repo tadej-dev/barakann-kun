@@ -5,6 +5,7 @@ import {
     saveConfigOrder,
 } from "@/api/configOrder"
 
+// useConfigOrderが受け取るオプション
 type UseConfigOrderOptions = {
     enabled: boolean
     userId: string | null
@@ -18,26 +19,29 @@ export function useConfigOrder({
     reloadKey = 0,
 }: UseConfigOrderOptions) {
     // order本体と「誰の・どのreloadKeyの結果か」を分けて、古い一覧を表示しない。
-    const [order, setOrder] = useState<string[]>([])
-    const [hasLoaded, setHasLoaded] = useState(false)
-    const [isLoading, setIsLoading] = useState(false)
-    const [isSaving, setIsSaving] = useState(false)
-    const [savingUserId, setSavingUserId] = useState<string | null>(null)
-    const [errorMessage, setErrorMessage] = useState("")
-    const [errorUserId, setErrorUserId] = useState<string | null>(null)
-    const [errorReloadKey, setErrorReloadKey] = useState<number | null>(null)
-    const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
-    const [loadedReloadKey, setLoadedReloadKey] = useState<number | null>(null)
-    const currentUserIdRef = useRef(userId)
-    const saveRequestIdRef = useRef(0)
-    const pendingOrderRef = useRef<string[] | null>(null)
-    const saveQueuePromiseRef = useRef<Promise<string[]> | null>(null)
+    const [order, setOrder] = useState<string[]>([]) // 構成の表示順キー
+    const [hasLoaded, setHasLoaded] = useState(false) // 表示順の初回取得が完了したか
+    const [isLoading, setIsLoading] = useState(false) // 表示順の読み込み中フラグ
+    const [isSaving, setIsSaving] = useState(false) // 表示順の保存中フラグ
+    const [savingUserId, setSavingUserId] = useState<string | null>(null) // 表示順を保存中のユーザーID
+    const [errorMessage, setErrorMessage] = useState("") // 取得・保存のエラーメッセージ
+    const [errorUserId, setErrorUserId] = useState<string | null>(null) // エラーが発生したユーザーID
+    const [errorReloadKey, setErrorReloadKey] = useState<number | null>(null) // エラーが発生した再取得キー
+    const [loadedUserId, setLoadedUserId] = useState<string | null>(null) // 表示順を読み込んだユーザーID
+    const [loadedReloadKey, setLoadedReloadKey] = useState<number | null>(null) // 表示順を読み込んだ再取得キー
+    const currentUserIdRef = useRef(userId) // 非同期処理から最新のユーザーIDを参照するための記録
+    const saveRequestIdRef = useRef(0) // 表示順の保存実行番号（古い応答の破棄用）
+    const pendingOrderRef = useRef<string[] | null>(null) // 次に保存する表示順（保留中はnull）
+    const saveQueuePromiseRef = useRef<Promise<string[]> | null>(null) // 実行中の保存キュー
 
+    // 最新のユーザーIDを非同期処理向けに記録
     useEffect(() => {
         currentUserIdRef.current = userId
     }, [userId])
 
+    // 表示順を取得し、認証ユーザーの結果だけを反映
     const reload = useCallback(async (signal?: AbortSignal) => {
+        // 取得対象のユーザーID
         const requestUserId = userId
 
         // 未ログイン時は前ユーザーの並び順を残さず、次のログイン時に再取得する。
@@ -56,6 +60,7 @@ export function useConfigOrder({
         setIsLoading(true)
 
         try {
+            // サーバーが返した表示順
             const nextOrder = await fetchConfigOrder(signal)
 
             // 取得中にログアウト・ユーザー切り替えが起きたレスポンスは適用しない。
@@ -73,6 +78,7 @@ export function useConfigOrder({
             setLoadedUserId(requestUserId)
             setLoadedReloadKey(reloadKey)
         } catch (error) {
+            // 中止・ユーザー切り替え後の応答を除き、現在のユーザーの失敗だけ表示
             if (
                 !signal?.aborted &&
                 currentUserIdRef.current === requestUserId
@@ -86,6 +92,7 @@ export function useConfigOrder({
                 setErrorReloadKey(reloadKey)
             }
         } finally {
+            // 中止・ユーザー切り替え後の応答を除き、読み込み中表示を解除
             if (
                 !signal?.aborted &&
                 currentUserIdRef.current === requestUserId
@@ -95,7 +102,9 @@ export function useConfigOrder({
         }
     }, [enabled, reloadKey, userId])
 
+    // ログイン後・構成追加後に表示順を取得
     useEffect(() => {
+        // 取得対象のユーザーID
         const requestUserId = userId
 
         // 未ログイン時は取得処理を開始せず、進行中の保存結果も古いユーザーとして扱う。
@@ -104,11 +113,13 @@ export function useConfigOrder({
             return
         }
 
+        // 表示順取得を中断する制御
         const controller = new AbortController()
 
         // ログイン後・保存構成の追加後にD1の表示順を取得
         async function load() {
             try {
+                // サーバーが返した表示順
                 const nextOrder = await fetchConfigOrder(controller.signal)
 
                 // 画面が破棄された、またはユーザーが変わった場合は状態を更新しない。
@@ -126,6 +137,7 @@ export function useConfigOrder({
                 setLoadedUserId(requestUserId)
                 setLoadedReloadKey(reloadKey)
             } catch (error) {
+                // 中止・ユーザー切り替え後の応答を除き、現在のユーザーの失敗だけ表示
                 if (
                     !controller.signal.aborted &&
                     currentUserIdRef.current === requestUserId
@@ -139,6 +151,7 @@ export function useConfigOrder({
                     setErrorReloadKey(reloadKey)
                 }
             } finally {
+                // 中止・ユーザー切り替え後の応答を除き、読み込み完了を反映
                 if (
                     !controller.signal.aborted &&
                     currentUserIdRef.current === requestUserId
@@ -165,6 +178,7 @@ export function useConfigOrder({
             return
         }
 
+        // 保存対象のユーザーID
         const requestUserId = userId
         // UIは先に並び替え、API保存はキューで後追いするためドラッグ操作を遅延させない。
         setOrder(nextOrder)
@@ -175,7 +189,9 @@ export function useConfigOrder({
             return saveQueuePromiseRef.current
         }
 
+        // 保留中の表示順を1件ずつ順に保存
         const processQueue = async () => {
+            // 最後に保存できた表示順
             let lastSavedOrder = nextOrder
 
             while (
@@ -186,6 +202,7 @@ export function useConfigOrder({
                 // 連続ドラッグでは、APIへ送る直前の最新順を一件ずつ処理する。
                 const orderToSave = pendingOrderRef.current
                 pendingOrderRef.current = null
+                // 保存の実行番号
                 const requestId = ++saveRequestIdRef.current
 
                 setIsSaving(true)
@@ -209,6 +226,7 @@ export function useConfigOrder({
                     // 並び順の競合・失敗後に古い順序を再送しないよう、待機中の値を破棄する。
                     pendingOrderRef.current = null
 
+                    // 最後に開始した保存ならエラーを表示して表示順を取り直す
                     if (
                         currentUserIdRef.current === requestUserId &&
                         saveRequestIdRef.current === requestId
@@ -225,6 +243,7 @@ export function useConfigOrder({
 
                     throw error
                 } finally {
+                    // 最後に開始した保存なら保存中表示を解除
                     if (saveRequestIdRef.current === requestId) {
                         setIsSaving(false)
                         setSavingUserId(null)
@@ -241,11 +260,13 @@ export function useConfigOrder({
 
         void queuePromise.then(
             () => {
+                // 保存キューが完了したら参照を消す
                 if (saveQueuePromiseRef.current === queuePromise) {
                     saveQueuePromiseRef.current = null
                 }
             },
             () => {
+                // 保存キューが失敗しても参照を消す
                 if (saveQueuePromiseRef.current === queuePromise) {
                     saveQueuePromiseRef.current = null
                 }
@@ -255,8 +276,10 @@ export function useConfigOrder({
         return queuePromise
     }, [enabled, loadedUserId, reload, reloadKey, userId])
 
+    // 現在のユーザー・再取得キーで読み込んだ表示順か
     const hasCurrentUserData = enabled && Boolean(userId) &&
         loadedUserId === userId && loadedReloadKey === reloadKey
+    // 現在のユーザー・再取得キーで発生したエラーか
     const hasCurrentError = Boolean(errorMessage) &&
         errorUserId === userId &&
         errorReloadKey === reloadKey

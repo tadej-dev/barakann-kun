@@ -10,9 +10,9 @@ import {
     migrateLegacyPartSlotSelections,
 } from "@/features/simulator/partSlots"
 
-// 単一・前後スロットのキー変換と、旧形式データの移行結果を確認する。
+// 単一・前後スロットのキー変換と、旧形式データの移行結果を確認
 describe("partSlots", () => {
-    // 前後分割の対象外は、既存のカテゴリーキーをそのまま選択枠キーにする。
+    // 前後分割の対象外は、既存のカテゴリーキーを選択枠キーにする
     it("単一選択カテゴリーでは従来のカテゴリーキーを維持する", () => {
         expect(createPartSlot("frame")).toEqual({
             key: "frame",
@@ -21,7 +21,7 @@ describe("partSlots", () => {
         })
     })
 
-    // 前後位置を指定したカテゴリーは、UIで独立して操作できる2枠を作る。
+    // 前後位置を指定したカテゴリーは、UIで独立して操作できる2枠を作る
     it("同じカテゴリーに前後の選択枠を作成する", () => {
         expect(createPartSlots("tire", ["front", "rear"])).toEqual([
             {
@@ -37,21 +37,22 @@ describe("partSlots", () => {
         ])
     })
 
-    // API・表示用の選択枠キーから、候補取得に使うカテゴリーキーへ戻す。
+    // API・表示用の選択枠キーから、候補取得に使うカテゴリーキーへ戻す
     it("選択枠キーから元のカテゴリーキーを取得する", () => {
         expect(getPartSlotCategoryKey("tire:front")).toBe("tire")
         expect(getPartSlotCategoryKey("frame")).toBe("frame")
     })
 
-    // 単一枠と前後枠を同じ型で扱い、表示位置を判定できるようにする。
+    // 単一枠と前後枠を同じ型で扱い、表示位置を判定できるようにする
     it("選択枠キーから前後位置を取得する", () => {
         expect(getPartSlotPosition("tire:front")).toBe("front")
         expect(getPartSlotPosition("tire:rear")).toBe("rear")
         expect(getPartSlotPosition("frame")).toBe("single")
     })
 
-    // タイヤ・ブレーキ系の対象カテゴリーだけが前後2枠になることを固定する。
+    // タイヤ・ブレーキ系の対象カテゴリーだけが前後2枠になることを固定
     it("前後選択対象のカテゴリーに2つの選択枠を適用する", () => {
+        // 前後2枠に分かれるカテゴリーキー
         const frontRearCategoryKeys = [
             "brake_caliper",
             "brake_pad",
@@ -74,8 +75,9 @@ describe("partSlots", () => {
         ])
     })
 
-    // v1のカテゴリー単位データを破棄せず、前輪側へ移行して互換性を保つ。
+    // v1のカテゴリー単位データを破棄せず、前輪側へ移行して互換性を保つ
     it("前後導入前の選択を前輪スロットへ引き継ぐ", () => {
+        // 旧形式の選択を移行した結果
         const selections = migrateLegacyPartSlotSelections({
             frame: "frame-part",
             disc_rotor: "legacy-rotor",
@@ -91,7 +93,7 @@ describe("partSlots", () => {
         })
     })
 
-    // 単一枠では余計な位置ラベルを表示せず、前後枠だけ日本語ラベルを返す。
+    // 単一枠では余計な位置ラベルを表示せず、前後枠だけ日本語ラベルを返す
     it("選択位置の表示名を返す", () => {
         expect(getPartSlotPositionLabel("front")).toBe("前輪")
         expect(getPartSlotPositionLabel("rear")).toBe("後輪")

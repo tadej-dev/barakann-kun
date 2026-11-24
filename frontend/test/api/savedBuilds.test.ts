@@ -7,6 +7,7 @@ import {
     updateSavedBuild,
 } from "@/api/savedBuilds"
 
+// 保存構成APIの検証に使うテスト用の構成
 const BUILD = {
     id: "11111111-1111-4111-8111-111111111111",
     name: "通勤車",
@@ -21,6 +22,7 @@ const BUILD = {
     }],
 }
 
+// 任意のJSONとステータスを返すテスト用レスポンス
 function jsonResponse(value: unknown, status = 200) {
     return new Response(JSON.stringify(value), {
         status,
@@ -28,16 +30,18 @@ function jsonResponse(value: unknown, status = 200) {
     })
 }
 
+// CSRFトークンだけを返すテスト用レスポンス
 function csrfResponse() {
     return jsonResponse({csrfToken: "csrf-token"})
 }
 
-// 追加構成APIのCRUD、CSRF・version送信、上限・不正レスポンスの扱いを確認する。
+// 追加構成APIのCRUD、CSRF・version送信、上限・不正レスポンスの扱いを確認
 describe("savedBuilds API", () => {
     afterEach(() => vi.unstubAllGlobals())
 
-    // 一覧取得は、保存構成をカードに描画できる形へ検証して返す。
+    // 一覧取得は、保存構成をカードに描画できる形へ検証して返す
     it("保存構成一覧のレスポンスを検証して返す", async () => {
+        // 構成一覧を返す取得処理のモック
         const fetchMock = vi.fn().mockResolvedValue(jsonResponse([BUILD]))
         vi.stubGlobal("fetch", fetchMock)
 
@@ -48,9 +52,11 @@ describe("savedBuilds API", () => {
         )
     })
 
-    // 名前変更ではCSRFと取得時versionを送り、別端末の更新を検出できるようにする。
+    // 名前変更ではCSRFと取得時versionを送り、別端末の更新を検出できるようにする
     it("名称変更はPATCHでversionとCSRFトークンを送る", async () => {
+        // 名前変更後の構成
         const renamed = {...BUILD, name: "レース用", version: 2}
+        // CSRF取得と名前変更の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(csrfResponse())
             .mockResolvedValueOnce(jsonResponse(renamed))
@@ -72,8 +78,9 @@ describe("savedBuilds API", () => {
         )
     })
 
-    // 1〜20件の構成一覧を受け付ける。
+    // 1〜20件の構成一覧を受け付ける
     it("20件の構成一覧を受け付ける", async () => {
+        // 上限件数まで埋めた構成一覧
         const builds = Array.from({length: 20}, (_, index) => ({
             ...BUILD,
             id: `1111111${index}-1111-4111-8111-11111111111${index % 10}`,
@@ -83,8 +90,9 @@ describe("savedBuilds API", () => {
         await expect(fetchSavedBuilds()).resolves.toHaveLength(20)
     })
 
-    // 上書き・削除も同じversion検証を通し、古い画面からの更新を防ぐ。
+    // 上書き・削除も同じversion検証を通し、古い画面からの更新を防ぐ
     it("上書きと削除にも競合検知用versionを送る", async () => {
+        // CSRF取得・上書き・CSRF取得・削除の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(csrfResponse())
             .mockResolvedValueOnce(jsonResponse({...BUILD, version: 2}))
@@ -118,7 +126,7 @@ describe("savedBuilds API", () => {
         )
     })
 
-    // 上限超過などの業務エラーコードを、一般的なHTTPエラーと区別して返す。
+    // 上限超過などの業務エラーコードを、一般的なHTTPエラーと区別して返す
     it("APIエラーコードを画面側で判定できる形にする", async () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
             error: {
@@ -133,7 +141,7 @@ describe("savedBuilds API", () => {
         })
     })
 
-    // 不正な重量を復元すると合計重量が壊れるため、一覧レスポンス全体を拒否する。
+    // 不正な重量を復元すると合計重量が壊れるため、一覧レスポンス全体を拒否
     it("不正な重量を含む保存構成レスポンスを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse([{
             ...BUILD,

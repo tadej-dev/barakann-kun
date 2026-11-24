@@ -22,10 +22,12 @@ import {
     type AuthState,
 } from "@/features/auth/authContext"
 
+// AuthProviderが受け取るプロパティ
 type AuthProviderProps = {
-    children: ReactNode
+    children: ReactNode // 認証状態を利用する画面
 }
 
+// 初回描画時の認証状態（読み込み中）
 const initialAuthState: AuthState = {
     status: "loading",
     user: null,
@@ -41,14 +43,15 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 // 認証状態をアプリケーション全体へ提供
 export function AuthProvider({children}: AuthProviderProps) {
-    const [authState, setAuthState] = useState(initialAuthState)
-    const [isDeletingAccount, setIsDeletingAccount] = useState(false)
-    const [isLoggingOut, setIsLoggingOut] = useState(false)
-    const sessionRequestIdRef = useRef(0)
+    const [authState, setAuthState] = useState(initialAuthState) // 認証状態（読み込み中から開始）
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false) // アカウント削除の実行中フラグ
+    const [isLoggingOut, setIsLoggingOut] = useState(false) // ログアウトの実行中フラグ
+    const sessionRequestIdRef = useRef(0) // セッション取得の実行番号（古い応答の破棄用）
 
     // セッションAPIの再取得
     const refreshSession = useCallback(async (signal?: AbortSignal) => {
         // 競合するセッション取得のうち、最後に開始したリクエストだけを画面へ反映する。
+        // 今回のセッション取得を識別する番号
         const requestId = ++sessionRequestIdRef.current
 
         setAuthState((current) => ({
@@ -58,8 +61,10 @@ export function AuthProvider({children}: AuthProviderProps) {
         }))
 
         try {
+            // サーバーが返した認証状態
             const session = await fetchAuthSession(signal)
 
+            // 中断後、または新しい取得が始まった後の応答は反映しない
             if (
                 signal?.aborted ||
                 sessionRequestIdRef.current !== requestId
@@ -68,6 +73,7 @@ export function AuthProvider({children}: AuthProviderProps) {
                 return
             }
 
+            // 認証済みの応答だけユーザー情報を保持して状態を更新
             if (session.authenticated) {
                 // 認証済みの場合だけユーザー情報を保持し、未認証状態の残値を消す。
                 setAuthState({
@@ -84,6 +90,7 @@ export function AuthProvider({children}: AuthProviderProps) {
                 })
             }
         } catch (error) {
+            // 古いリクエストの失敗応答はエラー表示へ反映しない
             if (
                 signal?.aborted ||
                 sessionRequestIdRef.current !== requestId
@@ -106,6 +113,7 @@ export function AuthProvider({children}: AuthProviderProps) {
     // CSRF検証後にAuth.jsから返されたGoogleの認証URLへ遷移する
     const login = useCallback(async () => {
         try {
+            // サーバーが発行したGoogle認証URL
             const loginUrl = await startGoogleLogin(getCurrentCallbackUrl())
 
             // URL取得後の遷移はAuth.js/Google側へ任せ、戻り先はAPIが発行した値を使う。
@@ -179,6 +187,7 @@ export function AuthProvider({children}: AuthProviderProps) {
     // 表示名の変更
     // セッションを取り直すと画面全体が読み込み中に戻るため、保存された名前だけを差し替える。
     const updateDisplayName = useCallback(async (displayName: string) => {
+        // サーバーが返した保存済みの表示名
         const savedDisplayName = await updateAuthDisplayName(displayName)
 
         setAuthState((current) => (
@@ -196,6 +205,7 @@ export function AuthProvider({children}: AuthProviderProps) {
 
     // 初回表示時のログイン状態
     useEffect(() => {
+        // 画面を離れたときに取得を中断する制御
         const controller = new AbortController()
 
         // ページを離れた後にセッション応答がstate更新しないよう、取得を中断する。
@@ -204,6 +214,7 @@ export function AuthProvider({children}: AuthProviderProps) {
         return () => controller.abort()
     }, [refreshSession])
 
+    // 認証状態と認証操作をまとめたContextの値
     const contextValue = useMemo<AuthContextValue>(() => ({
         ...authState,
         isDeletingAccount,

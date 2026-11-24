@@ -30,8 +30,7 @@ import type { Part } from "@/types/part"
 
 type CandidatePartsTableRowProps = {
     part: Part
-    // 同一モデルのバリアント（サイズ・年式など）。1件ならセレクタを出さない。
-    variants: Part[]
+    variants: Part[] // 同一モデルのバリアント（サイズ・年式など）。1件ならセレクタを出さない。
     modelKey: string
     onVariantChange: (modelKey: string, partId: number) => void
     isSelected: boolean
@@ -44,18 +43,21 @@ type CandidatePartsTableRowProps = {
     onSelectBoth: (part: Part) => void
 }
 
+// 価格を日本円の整数表記へ変換する書式
 const priceFormatter = new Intl.NumberFormat("ja-JP", {
     style: "currency",
     currency: "JPY",
     maximumFractionDigits: 0,
 })
 
+// 適合状態ごとのバッジ色
 const compatibilityBadgeStyles = {
     compatible: "border-emerald-300 bg-emerald-50 text-emerald-700",
     unknown: "border-amber-300 bg-amber-50 text-amber-700",
     incompatible: "border-red-300 bg-red-50 text-red-700",
 }
 
+// 適合状態ごとの表示名
 const compatibilityLabels = {
     compatible: "互換",
     unknown: "規格未確認",
@@ -70,6 +72,7 @@ const compatibilitySummaryLabelStyles = {
     compatible: "text-emerald-600",
 }
 
+// 互換判定の相手をカテゴリー・前後位置・製品名で表す
 function getCounterpartLabel(
     counterpart: CompatibilityCounterpart,
     categoryDisplayNames: Record<string, string>,
@@ -101,23 +104,20 @@ function CandidatePartsTableRowComponent({
     onSelectBoth,
 }: CandidatePartsTableRowProps) {
     // 行内で使う付属品・規格情報を先に整形し、JSXでは表示条件だけを扱う。
-    const includedItems = part.includedItems ?? []
-    const specifications = Object.entries(part.specifications ?? {})
-    const isSelectionBlocked = compatibility?.selectionBlocked ?? false
-    // フレームは全パーツ互換の基準として扱うため、候補行では互換バッジ・理由を出さない。
-    const isFrame = part.categoryKey === "frame"
-    // 規格未確認(unknown)やフレーム以外はバッジを表示しない
-    const frameCockpitBadge = getFrameCockpitBadge(part)
-    // 重量にフロントフォークを含むフレームは、合計の内訳が分かるように示す。
-    const frameWeightBadge = getFrameWeightBadge(part)
-    // 合計が何の足し算かを重量欄の2行目に示す(例: (755g + 378g))。
-    const weightBreakdown = getWeightBreakdown(part)
+    const includedItems = part.includedItems ?? [] // 行に表示する付属品・構成品
+    const specifications = Object.entries(part.specifications ?? {}) // 行に表示する規格キーと値
+    const isSelectionBlocked = compatibility?.selectionBlocked ?? false // 規格不一致などで行全体の選択を止めるか
+    const isFrame = part.categoryKey === "frame" // フレームは全パーツ互換の基準として扱うため、候補行では互換バッジ・理由を出さない。
+    const frameCockpitBadge = getFrameCockpitBadge(part) // 規格未確認(unknown)やフレーム以外はバッジを表示しない
+    const frameWeightBadge = getFrameWeightBadge(part) // 重量にフロントフォークを含むフレームは、合計の内訳が分かるように示す。
+    const weightBreakdown = getWeightBreakdown(part) // 合計が何の足し算かを重量欄の2行目に示す(例: (755g + 378g))。
 
     // サイズ・バリアントの選択肢（Combobox用）。値はpart id、表示はバリアント名。
     const variantOptions = variants.map((variant) => ({
         value: variant.id,
         label: variant.variantName ?? variant.name,
     }))
+    // 現在選択中のバリエーション
     const activeVariantOption =
         variantOptions.find((option) => option.value === part.id) ?? null
 
@@ -139,8 +139,10 @@ function CandidatePartsTableRowComponent({
 
     // キーボードによるパーツ選択処理
     function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
+        // Enterキーまたはスペースキーが押されたとき
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
+            // 選択不可の行ではパーツを選ばない
             if (!isSelectionBlocked) {
                 onSelect(part)
             }
@@ -168,6 +170,7 @@ function CandidatePartsTableRowComponent({
                 : undefined}
             aria-disabled={isSelectionBlocked}
             onClick={() => {
+                // クリック時も選択不可の行では選ばない
                 if (!isSelectionBlocked) {
                     onSelect(part)
                 }
@@ -312,6 +315,7 @@ function CandidatePartsTableRowComponent({
                                 items={variantOptions}
                                 value={activeVariantOption}
                                 onValueChange={(option) => {
+                                    // バリアントが選ばれたときだけ切り替える
                                     if (option) {
                                         onVariantChange(modelKey, option.value)
                                     }

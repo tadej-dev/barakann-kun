@@ -8,6 +8,7 @@ import {
 import type {SimulatorState} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
+// 状態遷移テスト用のパーツを生成
 function createPart(
     id: number,
     name: string,
@@ -23,10 +24,10 @@ function createPart(
     }
 }
 
-// 構成切り替え・パーツ選択・排他解除が状態遷移として正しく適用されることを確認する。
-// UIから渡された操作だけで状態が組み替わり、Reducerが排他ルールを一元的に守ることを固定する。
+// 構成切り替え・パーツ選択・排他解除が状態遷移として正しく適用されることを確認
+// UIから渡された操作だけで状態が組み替わり、Reducerが排他ルールを一元的に守ることを固定
 describe("simulatorReducer", () => {
-    // 前後選択可能なカテゴリーを開いた直後は、前輪を操作対象にする。
+    // 前後選択可能なカテゴリーを開いた直後は、前輪を操作対象にする
     it("前後カテゴリーは前輪スロットを初期表示する", () => {
         const state = createInitialSimulatorState("tire")
 
@@ -36,7 +37,7 @@ describe("simulatorReducer", () => {
     })
 
     // 固定構成・追加構成のどちらへ切り替えても、前の構成で選んでいたカテゴリーは
-    // 引き継がず、規格の基準となるフレーム選択へ戻す。
+    // 引き継がず、規格の基準となるフレーム選択へ戻す
     it.each([
         [
             "構成",
@@ -46,7 +47,7 @@ describe("simulatorReducer", () => {
             }),
         ],
     ])("%sを切り替えるとフレーム選択へ戻る", (_label, transition) => {
-        // フレーム以外を選んだ状態から切り替えても、開始点はフレームに戻る。
+        // フレーム以外を選んだ状態から切り替えても、開始点はフレームに戻る
         let state = createInitialSimulatorState("frame")
 
         state = simulatorReducer(state, {
@@ -57,8 +58,9 @@ describe("simulatorReducer", () => {
         expect(transition(state).activeSlot).toEqual(createPartSlot("frame"))
     })
 
-    // 構成を切り替えた後の選択は、その構成へ保存する。
+    // 構成を切り替えた後の選択は、選択中の構成へ保存
     it("選択中の構成へパーツ選択を反映する", () => {
+        // 選択するフレームとコンポセット
         const frame = createPart(1, "Frame")
         const groupset = createPart(2, "Groupset")
         let state = createInitialSimulatorState("frame")
@@ -85,8 +87,9 @@ describe("simulatorReducer", () => {
         expect(state.configs["build-1"]).toEqual({frame, groupset})
     })
 
-    // 前後スロットを分けることで、同じカテゴリーでも別商品を保持できる。
+    // 前後スロットを分けることで、同じカテゴリーでも別商品を保持できる
     it("同じカテゴリーの前後に異なるパーツを保持する", () => {
+        // 前輪と後輪のタイヤ
         const frontTire = createPart(1, "Front Tire")
         const rearTire = createPart(2, "Rear Tire")
         let state = createInitialSimulatorState("tire")
@@ -114,8 +117,9 @@ describe("simulatorReducer", () => {
         })
     })
 
-    // 一体型商品の選択で占有されたカテゴリーは、前後の既存選択をまとめて解除する。
+    // 一体型商品の選択で占有されたカテゴリーは、前後の既存選択をまとめて解除
     it("カテゴリーが占有された場合は前後両方の選択を解除する", () => {
+        // 前輪・後輪のタイヤと、タイヤを占有するホイール
         const frontTire = createPart(1, "Front Tire")
         const rearTire = createPart(2, "Rear Tire")
         const tireIncludedPart = createPart(
@@ -153,8 +157,9 @@ describe("simulatorReducer", () => {
         })
     })
 
-    // 占有中でも候補画面へ移動できるようにし、解除案内を表示する余地を残す。
+    // 占有中でも候補画面へ移動できるようにし、解除案内を表示する余地を残す
     it("占有中カテゴリーに解除案内表示のため移動できる", () => {
+        // タイヤを占有するホイール
         const tireIncludedPart = createPart(
             1,
             "Tire Included Part",
@@ -167,6 +172,7 @@ describe("simulatorReducer", () => {
             part: tireIncludedPart,
         })
 
+        // 移動後の状態
         const nextState = simulatorReducer(state, {
             type: "changeSlot",
             slot: createPartSlot("tire", "front"),
@@ -178,8 +184,9 @@ describe("simulatorReducer", () => {
         expect(nextState.configs).toBe(state.configs)
     })
 
-    // コンポセットが含む単品カテゴリーは、前後分を含めて一括で排他解除する。
+    // コンポセットが含む単品カテゴリーは、前後分を含めて一括で排他解除
     it("コンポセット選択時に単品とブレーキの前後選択を解除する", () => {
+        // 単品のディレイラーと前後ブレーキ、コンポセット
         const rearDerailleur = createPart(1, "Rear Derailleur")
         const frontCaliper = createPart(2, "Front Caliper")
         const rearCaliper = createPart(3, "Rear Caliper")
@@ -222,8 +229,9 @@ describe("simulatorReducer", () => {
         })
     })
 
-    // コンポセット占有中の単品カテゴリーでは、Reducerが新しい選択を無視する。
+    // コンポセット占有中の単品カテゴリーでは、Reducerが新しい選択を無視
     it("コンポセットが占有する単品カテゴリーでパーツは選択できない", () => {
+        // コンポセットと単品のディレイラー
         const groupset = createPart(1, "Groupset", [
             "rear_derailleur",
             "disc_rotor",
@@ -240,6 +248,7 @@ describe("simulatorReducer", () => {
             type: "changeSlot",
             slot: createPartSlot("rear_derailleur"),
         })
+        // 選択後の状態
         const nextState = simulatorReducer(state, {
             type: "selectPart",
             part: rearDerailleur,
@@ -249,8 +258,9 @@ describe("simulatorReducer", () => {
         expect(nextState.configs["1"]).toEqual({groupset})
     })
 
-    // 競合解消のために指定されたスロットだけを削除し、他の選択を残す。
+    // 競合解消のために指定されたスロットだけを削除し、他の選択を残す
     it("指定したパーツだけを構成から解除する", () => {
+        // フレームとクランクを占有するコンポセット
         const frame = createPart(1, "Frame")
         const groupset = createPart(2, "Groupset", ["crankset"])
         let state = createInitialSimulatorState("frame")
@@ -275,8 +285,9 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({frame})
     })
 
-    // 構成全体をクリアした後は、次の開始点としてフレームを選択状態にする。
+    // 構成全体をクリアした後は、次の開始点としてフレームを選択状態にする
     it("構成をクリアするとフレーム選択に戻る", () => {
+        // 選択済みのコンポセット
         const groupset = createPart(1, "Groupset")
         let state = createInitialSimulatorState("frame")
 
@@ -297,8 +308,9 @@ describe("simulatorReducer", () => {
         expect(state.configs["1"]).toEqual({})
     })
 
-    // 一括選択指定がある場合は、同一商品を前後スロットへ一度に反映する。
+    // 一括選択指定がある場合は、同一商品を前後スロットへ一度に反映
     it("同じパーツを前後に一括選択する", () => {
+        // 前後に一括選択するタイヤ
         const tire = createPart(1, "Tire")
         let state = createInitialSimulatorState("tire")
 
@@ -314,8 +326,9 @@ describe("simulatorReducer", () => {
         })
     })
 
-    // UIが選んだ競合解除スロットを先に外し、新しい候補を選択する。
+    // UIが選んだ競合解除スロットを先に外し、新しい候補を選択
     it("非互換パーツを解除して選択する", () => {
+        // タイヤとチューブ
         const tire = createPart(1, "Tire")
         const tube = createPart(2, "Tube")
         let state = createInitialSimulatorState("tire")
@@ -339,8 +352,9 @@ describe("simulatorReducer", () => {
         })
     })
 
-    // フレームが占有するカテゴリーの選択済みパーツは、フレーム選択時に解除する。
+    // フレームが占有するカテゴリーの選択済みパーツは、フレーム選択時に解除
     it("フレーム選択時に占有カテゴリーの選択済みパーツを解除する", () => {
+        // ハンドルと、ハンドル・ステムを占有するフレーム
         const handlebar = createPart(1, "Handlebar")
         const frame: Part = {
             ...createPart(2, "Frame", ["handlebar", "stem"]),

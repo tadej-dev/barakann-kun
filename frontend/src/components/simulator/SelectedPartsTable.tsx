@@ -27,12 +27,14 @@ type SelectedPartsTableProps = {
     onSlotChange: (slot: PartSlot) => void
 }
 
+// 価格を日本円の整数表記へ変換する書式
 const priceFormatter = new Intl.NumberFormat("ja-JP", {
     style: "currency",
     currency: "JPY",
     maximumFractionDigits: 0,
 })
 
+// 選択済みパーツの一覧
 export function SelectedPartsTable({
                                        categories,
                                        activeSlotKey,
@@ -40,14 +42,17 @@ export function SelectedPartsTable({
                                        blockedCategoryKeys,
                                        onSlotChange,
                                    }: SelectedPartsTableProps) {
+    // 選択枠を切り替える
     function selectSlot(slot: PartSlot) {
         onSlotChange(slot)
     }
 
+    // Enterキーとスペースキーで行を選択
     function handleRowKeyDown(
         event: KeyboardEvent<HTMLTableRowElement>,
         slot: PartSlot,
     ) {
+        // Enterキーまたはスペースキーが押されたとき
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
             selectSlot(slot)
@@ -83,10 +88,13 @@ export function SelectedPartsTable({
                         // flatMapで前後スロットを同じ一覧へ並べ、行クリックを選択対象へ結び付ける。
                         return getPartSlots(category.key).map((slot) => {
                             const part = selectedParts[slot.key]
+                            // 前輪・後輪などスロット位置の表示名
                             const positionLabel = getPartSlotPositionLabel(
                                 slot.position,
                             )
+                            // 現在選択中の枠か
                             const isActive = slot.key === activeSlotKey
+                            // 他パーツがカテゴリーを占有しているか
                             const isBlocked = blockedCategoryKeys.has(
                                 category.key,
                             )
@@ -94,6 +102,7 @@ export function SelectedPartsTable({
                             const blockedItem = isBlocked
                                 ? findBlockedSlotItem(selectedParts, category.key)
                                 : null
+                            // 付属品の数量×単重(g)
                             const blockedItemWeight = blockedItem
                                 ? blockedItem.quantity * blockedItem.weight
                                 : 0

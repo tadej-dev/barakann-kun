@@ -34,6 +34,7 @@ export function ConfigListDialogs({controller}: ConfigListDialogsProps) {
         <Dialog
             open={dialog !== null}
             onOpenChange={(open) => {
+                // 保存中でなければ閉じる操作を受け付ける
                 if (!open && !isOperating) {
                     closeDialog()
                 }
@@ -59,6 +60,7 @@ export function ConfigListDialogs({controller}: ConfigListDialogsProps) {
                                 onChange={(event) =>
                                     changeDialogName(event.target.value)}
                                 onKeyDown={(event) => {
+                                    // 構成名が有効な状態でEnterキーが押されたとき
                                     if (event.key === "Enter" && isNameValid) {
                                         event.preventDefault()
                                         void submitDialog()

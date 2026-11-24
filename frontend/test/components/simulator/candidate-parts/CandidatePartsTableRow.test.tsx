@@ -43,7 +43,7 @@ type RowOptions = {
     onSelectBoth?: (part: Part) => void
 }
 
-// 行は tr のため、表の中に入れて描画する
+// 行は tr のため、表の中に入れて描画
 function renderRow(part: Part, options: RowOptions = {}) {
     return render(
         <table>
@@ -67,10 +67,11 @@ function renderRow(part: Part, options: RowOptions = {}) {
     )
 }
 
+// 候補行の規格表示・重量内訳・互換バッジ・選択操作を保証
 describe("CandidatePartsTableRow", () => {
-    // 規格キーと値が、画面では日本語ラベルで表示されることを確認する。
+    // 規格キーと値が、画面では日本語ラベルで表示されることを確認
     it("規格一覧を日本語ラベルで表示する", () => {
-        // 規格一覧は「バリエーション」列の中に表示する。
+        // 規格一覧は「バリエーション」列の中に表示
         renderRow(createPart({
             specifications: {
                 cockpit_replaceable: "true",
@@ -78,16 +79,16 @@ describe("CandidatePartsTableRow", () => {
             },
         }), {showVariantColumn: true})
 
-        // ラベルで要素を引き、値が日本語で出ていることを確認する。
+        // ラベルで要素を引き、値が日本語で出ていることを確認
         expect(
             screen.getByText(/コックピット交換可否/).textContent,
         ).toContain("交換可")
         expect(screen.getByText(/BB規格/).textContent).toContain("BB30A")
-        // 生の規格値がそのまま出ていないこと。
+        // 生の規格値が画面に出ていないこと
         expect(screen.queryByText(/bb30a/)).toBeNull()
     })
 
-    // フレームの重量は、合計と内訳、そしてフォークを含むことを示す2行で表す。
+    // フレームの重量は、合計と内訳、そしてフォークを含むことを示す2行で表す
     it("フレームの重量欄に合計・内訳・フォーク込みバッジを表示する", () => {
         renderRow(createPart({
             categoryKey: "frame",
@@ -104,7 +105,7 @@ describe("CandidatePartsTableRow", () => {
         expect(screen.getByText("フォーク込み")).toBeTruthy()
     })
 
-    // 出典が非公式・別条件の重量は、参考値であることを併記する。
+    // 出典が非公式・別条件の重量は、参考値であることを併記
     it("参考値の重量にはフォーク込み・参考値と表示する", () => {
         renderRow(createPart({
             categoryKey: "frame",
@@ -120,7 +121,7 @@ describe("CandidatePartsTableRow", () => {
         expect(screen.getByText("フォーク込み・参考値")).toBeTruthy()
     })
 
-    // 取り付けできない候補はバッジで示し、比較相手がいなければ理由も併記する。
+    // 取り付けできない候補はバッジで示し、比較相手がいなければ理由も併記
     it("非互換の候補にバッジと理由を表示する", () => {
         renderRow(createPart(), {
             compatibility: createBlockedResult("コックピット規格が一致しません"),
@@ -130,7 +131,7 @@ describe("CandidatePartsTableRow", () => {
         expect(screen.getByText("コックピット規格が一致しません")).toBeTruthy()
     })
 
-    // フレームは全パーツ互換の基準のため、候補行では互換バッジを出さない。
+    // フレームは全パーツ互換の基準のため、候補行では互換バッジを出さない
     it("フレームの行には互換バッジを表示しない", () => {
         renderRow(createPart({categoryKey: "frame", weight: 900}), {
             compatibility: createBlockedResult("規格が一致しません"),
@@ -139,15 +140,16 @@ describe("CandidatePartsTableRow", () => {
         expect(screen.queryByText("非互換")).toBeNull()
     })
 
-    // 選択中の行は aria-selected で状態を伝える。
+    // 選択中の行は aria-selected で状態を伝える
     it("選択中の行は aria-selected を立てる", () => {
         renderRow(createPart(), {isSelected: true})
 
         expect(screen.getByRole("row").getAttribute("aria-selected")).toBe("true")
     })
 
-    // 行のクリックで、そのパーツを選択する。
+    // 行のクリックで、クリックしたパーツを選択
     it("行のクリックでパーツを選択する", () => {
+        // 行選択の通知先モック
         const onSelect = vi.fn()
         renderRow(createPart(), {onSelect})
 
@@ -156,8 +158,9 @@ describe("CandidatePartsTableRow", () => {
         expect(onSelect).toHaveBeenCalledTimes(1)
     })
 
-    // 取り付けできない候補は、クリックしても選択しない。
+    // 取り付けできない候補は、クリックしても選択しない
     it("選択できない行のクリックでは選択しない", () => {
+        // 行選択の通知先モック
         const onSelect = vi.fn()
         renderRow(createPart(), {
             onSelect,
@@ -169,16 +172,18 @@ describe("CandidatePartsTableRow", () => {
         expect(onSelect).not.toHaveBeenCalled()
     })
 
-    // 前後セットで選べるカテゴリは、行とは別に「前後に選択」を出す。
+    // 前後セットで選べるカテゴリは、行とは別に「前後に選択」を出す
     it("前後に選択のボタンで両側の枠へ選択する", () => {
+        // 行選択の通知先モック
         const onSelect = vi.fn()
+        // 前後選択の通知先モック
         const onSelectBoth = vi.fn()
         renderRow(createPart(), {canSelectBoth: true, onSelect, onSelectBoth})
 
         fireEvent.click(screen.getByText("前後に選択"))
 
         expect(onSelectBoth).toHaveBeenCalledTimes(1)
-        // 行のクリックへ伝播させない。
+        // 行のクリックへ伝播させない
         expect(onSelect).not.toHaveBeenCalled()
     })
 })

@@ -43,6 +43,7 @@ export function SimulatorPage() {
     })
 
     useEffect(() => {
+        // キャンセル通知が無ければURLを書き換えない
         if (!isGoogleLoginCancelled) {
             return
         }
@@ -58,20 +59,20 @@ export function SimulatorPage() {
     }, [isGoogleLoginCancelled])
 
     // ローカル構成の引き継ぎ
-    const [localCollection] = useState(loadLocalConfigCollection)
-    const [migrationPlan, setMigrationPlan] = useState<MigrationPlan | null>(null)
-    const [serverConfigs, setServerConfigs] = useState<SavedBuild[]>([])
-    const [selectedConfigIds, setSelectedConfigIds] = useState<string[]>([])
+    const [localCollection] = useState(loadLocalConfigCollection) // 起動時にブラウザ保存の構成を1回だけ読み込む
+    const [migrationPlan, setMigrationPlan] = useState<MigrationPlan | null>(null) // 構成の移行計画
+    const [serverConfigs, setServerConfigs] = useState<SavedBuild[]>([]) // 移行先アカウントの保存済み構成
+    const [selectedConfigIds, setSelectedConfigIds] = useState<string[]>([]) // 移行対象として選択した構成ID
+    // 移行ダイアログを閉じたユーザーID
     const [dismissedMigrationUserId, setDismissedMigrationUserId] =
         useState<string | null>(null)
-    const [isMigrating, setIsMigrating] = useState(false)
-    const [isDeletingServerConfig, setIsDeletingServerConfig] = useState(false)
-    const [migrationErrorMessage, setMigrationErrorMessage] = useState("")
-    const [savedBuildsReloadKey, setSavedBuildsReloadKey] = useState(0)
-    // 中断用の世代番号
-    const generationRef = useRef(0)
-    const isMountedRef = useRef(true)
-    const authUserId = authStatus === "authenticated"
+    const [isMigrating, setIsMigrating] = useState(false) // 移行の保存処理中か
+    const [isDeletingServerConfig, setIsDeletingServerConfig] = useState(false) // アカウント構成の削除処理中か
+    const [migrationErrorMessage, setMigrationErrorMessage] = useState("") // 移行時のエラーメッセージ
+    const [savedBuildsReloadKey, setSavedBuildsReloadKey] = useState(0) // 構成一覧を再取得するための更新キー
+    const generationRef = useRef(0) // 中断用の世代番号
+    const isMountedRef = useRef(true) // 画面がマウント中か
+    const authUserId = authStatus === "authenticated" // ログイン中のユーザーID(未ログインならnull)
         ? user?.id ?? null
         : null
 
@@ -89,6 +90,7 @@ export function SimulatorPage() {
     // ログアウト時に「閉じた」記録を消し、次のログインで未移行の構成を再判定する。
     // イベントのコールバックで戻すため、Effect内で同期的にsetStateしない。
     useEffect(() => {
+        // ログアウト時に移行状態を初期化
         function resetMigrationState() {
             setDismissedMigrationUserId(null)
             setMigrationPlan(null)
@@ -113,6 +115,7 @@ export function SimulatorPage() {
 
     // ログイン後、ブラウザの構成とアカウントの構成を比べて移行候補を作る
     useEffect(() => {
+        // 未ログインまたは移行ダイアログを閉じたユーザーなら判定しない
         if (!authUserId || dismissedMigrationUserId === authUserId) {
             return
         }
@@ -122,6 +125,7 @@ export function SimulatorPage() {
             return
         }
 
+        // ブラウザに構成が無ければ移行候補を作らない
         if (localCollection.configs.length === 0) {
             return
         }
@@ -131,12 +135,15 @@ export function SimulatorPage() {
 
         void (async () => {
             try {
+                // アカウントに保存済みの構成
                 const fetchedConfigs = await fetchSavedBuilds(controller.signal)
 
+                // 画面破棄後は取得結果を反映しない
                 if (cancelled) {
                     return
                 }
 
+                // 移行候補の判定結果
                 const plan = buildMigrationPlan(
                     localCollection.configs,
                     fetchedConfigs,
@@ -209,21 +216,24 @@ export function SimulatorPage() {
 
     // 選択した構成をアカウントへ保存する
     async function migrateSelectedConfigs() {
+        // 未ログイン・移行計画なし・移行中は保存しない
         if (!authUserId || !migrationPlan || isMigrating) {
             return
         }
 
+        // 選択IDから実際に保存する移行候補を決める
         const targets = selectMigrationTargets(
             migrationPlan,
             selectedConfigIds,
         )
 
-        // 残り枠を超える選択は保存しない(ダイアログ側でも確定を止めている)
+        // 保存対象が無い場合はエラーを表示
         if (targets.length === 0) {
             setMigrationErrorMessage("保存する構成を選んでください。")
             return
         }
 
+        // 選択件数が残り枠を超えている場合は保存しない
         if (targets.length > migrationPlan.remainingSlots) {
             setMigrationErrorMessage(
                 "残り枠を超えています。選択を減らしてください。",
@@ -234,9 +244,12 @@ export function SimulatorPage() {
         setIsMigrating(true)
         setMigrationErrorMessage("")
         const generation = generationRef.current
+        // 画面表示中かつ同じ処理世代かを判定
         const isCurrent = () =>
             isMountedRef.current && generationRef.current === generation
+        // 保存できた構成の件数
         let created = 0
+        // 保存に失敗した構成の件数
         let failed = 0
 
         // ログイン直後に自動作成された空の構成1は、選択した構成で置き換える
@@ -254,6 +267,7 @@ export function SimulatorPage() {
                 return
             }
 
+            // 置き換え後に画面を離れていたら処理を止める
             if (!isCurrent()) {
                 return
             }
@@ -272,17 +286,19 @@ export function SimulatorPage() {
             } catch {
                 failed += 1
 
+                // 保存失敗後に画面を離れていたら処理を止める
                 if (!isCurrent()) {
                     return
                 }
             }
         }
 
+        // 保存後に画面を離れていたら以降の更新を止める
         if (!isCurrent()) {
             return
         }
 
-        // 失敗が残る場合は、再取得が終わるまで保存中扱いにして二重実行を防ぐ
+        // 失敗が無ければ保存中表示を解除
         if (failed === 0) {
             setIsMigrating(false)
         }
@@ -296,9 +312,12 @@ export function SimulatorPage() {
         // 失敗が残る場合は、状態を取り直してダイアログに残し再試行できるようにする
         if (failed > 0) {
             try {
+                // 取得し直したアカウント構成
                 const refreshed = await fetchSavedBuilds()
 
+                // 最新の状態を取得できた場合だけ画面へ反映
                 if (isCurrent()) {
+                    // 再取得後の移行候補
                     const plan = buildMigrationPlan(
                         localCollection.configs,
                         refreshed,
@@ -315,6 +334,7 @@ export function SimulatorPage() {
                     )
                 }
             } catch {
+                // 再取得結果を画面へ反映できる場合だけ続ける
                 if (isCurrent()) {
                     // 状態を確認できないため、選択を空にして二重作成を防ぐ
                     setSelectedConfigIds([])
@@ -345,6 +365,7 @@ export function SimulatorPage() {
 
         setIsDeletingServerConfig(true)
         const generation = generationRef.current
+        // 画面表示中かつ同じ処理世代かを判定
         const isCurrent = () =>
             isMountedRef.current && generationRef.current === generation
 
@@ -353,9 +374,12 @@ export function SimulatorPage() {
         } catch {
             // 競合した場合に備えて最新の構成を取り直し、再試行できるようにする
             try {
+                // 取得し直したアカウント構成
                 const refreshed = await fetchSavedBuilds()
 
+                // 最新の状態を取得できた場合だけ画面へ反映
                 if (isCurrent()) {
+                    // 再取得後の移行候補
                     const plan = buildMigrationPlan(
                         localCollection.configs,
                         refreshed,
@@ -372,6 +396,7 @@ export function SimulatorPage() {
                 // 再取得にも失敗した場合は、元のエラーだけを表示する
             }
 
+            // 削除結果を画面へ反映できる場合だけエラーを表示
             if (isCurrent()) {
                 setMigrationErrorMessage("構成を削除できませんでした。")
                 setIsDeletingServerConfig(false)
@@ -380,6 +405,7 @@ export function SimulatorPage() {
             return
         }
 
+        // 画面を離れていたら以降の更新を止める
         if (!isCurrent()) {
             return
         }
@@ -388,9 +414,11 @@ export function SimulatorPage() {
         setSavedBuildsReloadKey((current) => current + 1)
         setIsDeletingServerConfig(false)
 
+        // 削除後のアカウント構成
         const rest = serverConfigs.filter((config) => config.id !== configId)
 
         setServerConfigs(rest)
+        // 削除後の移行候補
         const plan = buildMigrationPlan(
             localCollection.configs,
             rest,

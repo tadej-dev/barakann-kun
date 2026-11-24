@@ -5,11 +5,12 @@ import {afterEach, describe, expect, it} from "vitest"
 
 import {GuidePage} from "@/pages/GuidePage"
 
-// テストごとに描画したDOMを破棄する
+// テストごとに描画したDOMを破棄
 afterEach(cleanup)
 
+// 使い方ページの見出し・保存先・引き継ぎ説明の表示を保証
 describe("GuidePage", () => {
-    // 利用者向けの見出しと保存先を表示する
+    // 利用者向けの見出しと保存先を表示
     it("見出しと保存先を表示する", () => {
         render(<GuidePage />)
 
@@ -19,7 +20,7 @@ describe("GuidePage", () => {
         expect(screen.getByText("アカウント（サーバー）")).toBeTruthy()
     })
 
-    // 引き継ぎとログアウト時の保存を説明する
+    // 引き継ぎとログアウト時の保存を説明
     it("引き継ぎとログアウト保存を説明する", () => {
         render(<GuidePage />)
 

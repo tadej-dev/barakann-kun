@@ -23,13 +23,16 @@ export function CandidatePartsSelectionDialog({
     onCancel,
 }: CandidatePartsSelectionDialogProps) {
     // selectionがnullの間は閉じ、置換対象がある場合だけ確認操作を受け付ける。
+    // 置き換えで解除する既存パーツがあるか
     const hasReplacement = (selection?.removedPartNames.length ?? 0) > 0
+    // 規格を確認できない理由があるか
     const hasUnknown = (selection?.unknownReasons.length ?? 0) > 0
 
     return (
         <AlertDialog.Root
             open={selection !== null}
             onOpenChange={(open) => {
+                // ダイアログが閉じられたときは保留中の選択を取り消す
                 if (!open) {
                     onCancel()
                 }

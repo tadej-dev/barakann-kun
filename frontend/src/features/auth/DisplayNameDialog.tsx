@@ -14,11 +14,12 @@ import {Input} from "@/components/ui/input"
 // 表示名の上限(サーバーのusers.display_nameの制約と同じ)
 export const MAX_DISPLAY_NAME_LENGTH = 100
 
+// 表示名変更ダイアログが受け取るプロパティ
 type DisplayNameDialogProps = {
-    open: boolean
+    open: boolean // ダイアログを開いているか
     currentName: string // 入力欄の初期値
     onSubmit: (displayName: string) => Promise<void> // 保存処理。失敗時はエラーを投げる
-    onDismiss: () => void
+    onDismiss: () => void // 入力を取り消して閉じる処理
 }
 
 // 表示名の文字数(絵文字なども1文字として数える。サーバーと同じ数え方)
@@ -34,14 +35,15 @@ export function DisplayNameDialog({
     onSubmit,
     onDismiss,
 }: DisplayNameDialogProps) {
-    const [name, setName] = useState(currentName)
-    const [isSaving, setIsSaving] = useState(false)
-    const [errorMessage, setErrorMessage] = useState<string | null>(null)
-    const length = countCharacters(name)
-    const isValid = length >= 1 && length <= MAX_DISPLAY_NAME_LENGTH
+    const [name, setName] = useState(currentName) // 入力中の表示名
+    const [isSaving, setIsSaving] = useState(false) // 保存処理の実行中フラグ
+    const [errorMessage, setErrorMessage] = useState<string | null>(null) // 保存に失敗した理由
+    const length = countCharacters(name) // 入力中の表示名の文字数
+    const isValid = length >= 1 && length <= MAX_DISPLAY_NAME_LENGTH // 1〜100文字の範囲に収まっているか
 
     // 保存に成功したら閉じ、失敗したらダイアログに理由を表示したまま残す
     async function handleSubmit() {
+        // 入力不正または保存中は二重送信しない
         if (!isValid || isSaving) {
             return
         }
@@ -90,6 +92,7 @@ export function DisplayNameDialog({
                         aria-invalid={!isValid}
                         onChange={(event) => setName(event.target.value)}
                         onKeyDown={(event) => {
+                            // Enterキーで入力が有効なときだけ保存を実行
                             if (event.key === "Enter" && isValid) {
                                 event.preventDefault()
                                 void handleSubmit()

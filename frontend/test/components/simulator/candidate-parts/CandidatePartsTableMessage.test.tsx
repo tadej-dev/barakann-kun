@@ -7,11 +7,13 @@ import {CandidatePartsTableMessage} from "@/components/simulator/candidate-parts
 // テストごとに描画したDOMを破棄し、次のテストへ持ち越さない
 afterEach(cleanup)
 
+// メッセージ行の列数と子要素の表示を保証
 describe("CandidatePartsTableMessage", () => {
-    // メッセージ行は、通常の表と同じ列数を使ってレイアウトのずれを防ぐ。
+    // メッセージ行は、通常の表と同じ列数を使ってレイアウトのずれを防ぐ
     it("メッセージを全列にまたがって表示する", () => {
         render(<CandidatePartsTableMessage message="該当するパーツがありません" />)
 
+        // メッセージを表示するセル
         const cell = screen.getByRole("cell")
 
         expect(cell.textContent).toContain("該当するパーツがありません")
@@ -19,7 +21,7 @@ describe("CandidatePartsTableMessage", () => {
         expect(screen.getAllByRole("columnheader")).toHaveLength(5)
     })
 
-    // バリエーション列を出さないときは、見出しごと減らして列数を合わせる。
+    // バリエーション列を出さないときは、見出しごと減らして列数を合わせる
     it("バリエーション列が無いときは見出しも列数も減らす", () => {
         render(
             <CandidatePartsTableMessage
@@ -33,7 +35,7 @@ describe("CandidatePartsTableMessage", () => {
         expect(screen.getByRole("cell").getAttribute("colspan")).toBe("4")
     })
 
-    // 解除ボタンなどの操作は、メッセージの下へ並べて出す。
+    // 解除ボタンなどの操作は、メッセージの下へ並べて出す
     it("子要素の操作をメッセージと一緒に表示する", () => {
         render(
             <CandidatePartsTableMessage message="条件を変えてください">

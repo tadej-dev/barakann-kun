@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/card"
 
 type SummaryCardsProps = {
-    totalPrice: number
-    totalWeight: number
+    totalPrice: number // 構成の合計金額(円)
+    totalWeight: number // 完成重量(g)
     activeConfigName: string // 選択中の構成名（構成選択は左カラムで行う）
 }
 
@@ -38,6 +38,7 @@ type SummaryCard = {
     suffix?: string
 }
 
+// 合計金額・完成重量・構成名のカード
 export function SummaryCards({
                                  totalPrice,
                                  totalWeight,
@@ -117,6 +118,7 @@ export function SummaryCards({
                     )
                 }
 
+                // 数値カードの表示内容
                 const card = cards[cardId]
 
                 return (

@@ -7,6 +7,7 @@ export function useAuth() {
     // Provider外の利用を早期に検出し、認証状態が常にContextから供給されることを保証する。
     const context = useContext(AuthContext)
 
+    // 認証値が無い場合は例外を投げ、Providerの設定漏れを検出
     if (!context) {
         throw new Error("useAuthはAuthProvider内で使用してください")
     }

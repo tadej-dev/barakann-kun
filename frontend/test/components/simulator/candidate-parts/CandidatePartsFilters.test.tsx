@@ -40,12 +40,14 @@ function createFiltersProps(options: FiltersOptions = {}) {
     }
 }
 
+// 指定した検索語・件数で絞り込み欄を描画
 function renderFilters(options: FiltersOptions = {}) {
     return render(<CandidatePartsFilters {...createFiltersProps(options)} />)
 }
 
+// 絞り込み欄の件数・条件・検索語・表示モードを保証
 describe("CandidatePartsFilters", () => {
-    // 絞り込み結果の件数・絞り込みメニュー・検索欄を並べる。
+    // 絞り込み結果の件数・絞り込みメニュー・検索欄を並べる
     it("件数と絞り込みメニューと検索欄を表示する", () => {
         renderFilters({resultCount: 12})
 
@@ -54,22 +56,23 @@ describe("CandidatePartsFilters", () => {
         expect(screen.getByRole("searchbox", {name: "検索"})).toBeTruthy()
     })
 
-    // 絞り込みメニューを開くと、メーカーの選択肢が並ぶ。
+    // 絞り込みメニューを開くと、メーカーの選択肢が並ぶ
     it("絞り込みメニューにメーカーの選択肢を出す", async () => {
         renderFilters({brands: ["Trek", "Giant"]})
 
         fireEvent.click(screen.getByRole("button", {name: "絞り込み"}))
-        // メーカーはサブメニューの中に並ぶ。
+        // メーカーはサブメニューの中に並ぶ
         fireEvent.click(await screen.findByText("メーカー"))
 
         expect(await screen.findByText("Trek")).toBeTruthy()
         expect(screen.getByText("Giant")).toBeTruthy()
     })
 
-    // メーカーを選ぶと、その条件だけを変えて他の条件は保持する。
+    // メーカーを選ぶと、メーカー条件だけを変えて他の条件は保持
     it("メーカーを選ぶと他の絞り込み条件を保持したまま通知する", async () => {
+        // 絞り込み条件の通知先モック
         const onFiltersChange = vi.fn()
-        // 既に別の条件が設定されている状態から選ぶ。
+        // 既に別の条件が設定されている状態から選ぶ
         const filters = {
             ...structuredClone(initialCandidateFilterState),
             viewMode: "compatibleOnly" as const,
@@ -83,14 +86,14 @@ describe("CandidatePartsFilters", () => {
         fireEvent.click(await screen.findByText("Trek"))
 
         expect(onFiltersChange).toHaveBeenCalledTimes(1)
-        // 選んだ条件だけが変わり、他の条件は保持されること。
+        // 選んだ条件だけが変わり、他の条件は保持されること
         expect(onFiltersChange.mock.calls[0]?.[0]).toEqual({
             ...filters,
             brands: ["Trek"],
         })
     })
 
-    // 適用中の条件数を、カテゴリをまたいで合算してバッジで示す。
+    // 適用中の条件数を、カテゴリをまたいで合算してバッジで示す
     it("適用中の絞り込み件数をバッジで示す", () => {
         renderFilters({
             filters: {
@@ -103,15 +106,16 @@ describe("CandidatePartsFilters", () => {
         expect(screen.getByLabelText("適用中2件")).toBeTruthy()
     })
 
-    // 条件が無いときは、バッジ自体を出さない。
+    // 条件が無いときは、バッジ自体を出さない
     it("絞り込み条件が無いときはバッジを表示しない", () => {
         renderFilters()
 
         expect(screen.queryByLabelText(/^適用中/)).toBeNull()
     })
 
-    // 絞り込みを解除すると、条件をすべて空に戻す。
+    // 絞り込みを解除すると、条件をすべて空に戻す
     it("絞り込みを解除すると条件を空に戻す", async () => {
+        // 絞り込み条件の通知先モック
         const onFiltersChange = vi.fn()
         renderFilters({
             brands: ["Trek"],
@@ -131,8 +135,9 @@ describe("CandidatePartsFilters", () => {
         )
     })
 
-    // 表示モードは、比較相手がいるときだけ選べる。
+    // 表示モードは、比較相手がいるときだけ選べる
     it("表示モードを選ぶと絞り込み条件を通知する", async () => {
+        // 絞り込み条件の通知先モック
         const onFiltersChange = vi.fn()
         renderFilters({onFiltersChange})
 
@@ -146,7 +151,7 @@ describe("CandidatePartsFilters", () => {
         })
     })
 
-    // 表示モードは、現在の設定にチェックを付けて示す。
+    // 表示モードは、現在の設定にチェックを付けて示す
     it("表示モードの現在の設定にチェックを付ける", async () => {
         renderFilters({
             filters: {
@@ -164,7 +169,7 @@ describe("CandidatePartsFilters", () => {
         ).toBe("true")
     })
 
-    // 表示モードが使えない画面では、その選択肢を出さない。
+    // 表示モードが使えない画面では、表示モードの選択肢を出さない
     it("表示モードを使わない画面では選択肢を出さない", async () => {
         renderFilters({showViewFilter: false})
 
@@ -174,12 +179,13 @@ describe("CandidatePartsFilters", () => {
         expect(screen.queryByText("表示")).toBeNull()
     })
 
-    // 検索語は入力のたびに親へ渡し、候補の絞り込みに使う。
+    // 検索語は入力のたびに親へ渡し、候補の絞り込みに使う
     it("検索語の入力で親へ通知する", () => {
+        // 検索語の通知先モック
         const onSearchQueryChange = vi.fn()
         renderFilters({onSearchQueryChange})
 
-        // 表示しただけでは通知しない。
+        // 表示しただけでは通知しない
         expect(onSearchQueryChange).not.toHaveBeenCalled()
 
         fireEvent.change(screen.getByRole("searchbox", {name: "検索"}), {
@@ -190,7 +196,7 @@ describe("CandidatePartsFilters", () => {
         expect(onSearchQueryChange).toHaveBeenCalledWith("Madone")
     })
 
-    // 検索欄は親の状態を映す（入力値の取りこぼしを防ぐ）。
+    // 検索欄は親の状態を映す（入力値の取りこぼしを防ぐ）
     it("検索欄に現在の検索語を表示する", () => {
         renderFilters({searchQuery: "Madone"})
 
@@ -199,7 +205,7 @@ describe("CandidatePartsFilters", () => {
         ).toBe("Madone")
     })
 
-    // 親の検索語が変われば、検索欄の表示も追従する。
+    // 親の検索語が変われば、検索欄の表示も追従
     it("親の検索語の変更に追従する", () => {
         const {rerender} = renderFilters({searchQuery: "Madone"})
 
@@ -212,7 +218,7 @@ describe("CandidatePartsFilters", () => {
         ).toBe("Emonda")
     })
 
-    // 前後で別々に選ぶカテゴリでは、どちらの枠を選んでいるかを示す。
+    // 前後で別々に選ぶカテゴリでは、どちらの枠を選んでいるかを示す
     it("前後のスロットでは選択位置を表示する", () => {
         renderFilters({slotPositionLabel: "前輪"})
 
@@ -220,7 +226,7 @@ describe("CandidatePartsFilters", () => {
         expect(screen.getByText("前輪")).toBeTruthy()
     })
 
-    // 単一枠のカテゴリでは、選択位置そのものを出さない。
+    // 単一枠のカテゴリでは、選択位置を出さない
     it("単一枠では選択位置を表示しない", () => {
         renderFilters({slotPositionLabel: null})
 

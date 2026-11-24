@@ -86,6 +86,7 @@ export function useCandidatePartsTable(
         for (const part of parts) {
             const status = getFrameCockpitStatus(part)
 
+            // 未確認以外のコックピット状態だけを候補に含める
             if (status && status !== "unknown") {
                 present.add(status)
             }
@@ -171,6 +172,7 @@ export function useCandidatePartsTable(
             const key = getPartModelKey(part)
             const variants = variantsByModel.get(key)
 
+            // 同じモデルのバリアントが既にあれば追加
             if (variants) {
                 variants.push(part)
             } else {
@@ -201,6 +203,7 @@ export function useCandidatePartsTable(
         return rows.sort((a, b) => {
             const { column, direction } = sortDescriptor
 
+            // メーカー・製品名の列は文字列比較で並び替える
             if (column === "brand" || column === "name") {
                 const aValue = column === "brand"
                     ? a.activePart.brandName ?? ""
