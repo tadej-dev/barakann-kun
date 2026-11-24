@@ -108,6 +108,7 @@ export function CandidatePartsTable({
         selectedPart?.id,
         activeSlot.categoryKey,
     )
+    // バリエーション列を表示するか
     const showVariantColumn = hasPartVariantColumn(parts)
 
     // slotKey から相手カテゴリの表示名を引けるようにする。
@@ -131,7 +132,9 @@ export function CandidatePartsTable({
         selectedParts,
         onSelect,
     )
+    // 前輪・後輪の2枠を扱うカテゴリーか
     const supportsFrontRearSelection = categorySlots.length === 2
+    // 候補が100件以上なら遅延描画を使う
     const enableContentVisibility = candidateRows.length >=
         CONTENT_VISIBILITY_THRESHOLD
 

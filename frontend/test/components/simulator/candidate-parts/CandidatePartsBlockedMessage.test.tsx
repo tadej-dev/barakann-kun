@@ -14,7 +14,7 @@ type BlockedOptions = {
     onRemove?: () => void
 }
 
-// 占有しているカテゴリと、占有元のパーツを渡して描画する
+// 占有しているカテゴリと、占有元のパーツを渡して描画
 function renderBlockedMessage(options: BlockedOptions = {}) {
     return render(
         <CandidatePartsBlockedMessage
@@ -34,8 +34,9 @@ function openConfirmDialog(categoryLabel = "シートポスト") {
     )
 }
 
+// 占有理由メッセージと解除確認の表示・通知を保証
 describe("CandidatePartsBlockedMessage", () => {
-    // なぜ選べないのかと、解除への入口を示す。
+    // なぜ選べないのかと、解除への入口を示す
     it("メッセージと解除の入口を表示する", () => {
         renderBlockedMessage()
 
@@ -47,8 +48,9 @@ describe("CandidatePartsBlockedMessage", () => {
         ).toBeTruthy()
     })
 
-    // 解除は確認してから実行する（開いただけでは何もしない）。
+    // 解除は確認してから実行する（開いただけでは何もしない）
     it("確認ダイアログを開いただけでは解除しない", async () => {
+        // 解除通知のモック
         const onRemove = vi.fn()
         renderBlockedMessage({onRemove})
 
@@ -61,8 +63,9 @@ describe("CandidatePartsBlockedMessage", () => {
         expect(onRemove).not.toHaveBeenCalled()
     })
 
-    // キャンセルしたときも解除しない。
+    // キャンセルしたときも解除しない
     it("キャンセルしたときは解除しない", async () => {
+        // 解除通知のモック
         const onRemove = vi.fn()
         renderBlockedMessage({onRemove})
 
@@ -70,12 +73,13 @@ describe("CandidatePartsBlockedMessage", () => {
         fireEvent.click(await screen.findByText("キャンセル"))
 
         expect(onRemove).not.toHaveBeenCalled()
-        // ダイアログは閉じる。
+        // ダイアログは閉じる
         expect(screen.queryByText("シートポストを解除しますか？")).toBeNull()
     })
 
-    // 確認したときだけ、1回だけ解除する。
+    // 確認したときだけ、1回だけ解除
     it("解除を確認すると1回だけ親へ通知する", async () => {
+        // 解除通知のモック
         const onRemove = vi.fn()
         renderBlockedMessage({onRemove})
 
@@ -86,7 +90,7 @@ describe("CandidatePartsBlockedMessage", () => {
         expect(screen.queryByText("シートポストを解除しますか？")).toBeNull()
     })
 
-    // 複数のカテゴリ・パーツは区切り文字でまとめて示す。
+    // 複数のカテゴリ・パーツは区切り文字でまとめて示す
     it("複数のカテゴリとパーツを区切って示す", async () => {
         renderBlockedMessage({
             blockingCategoryNames: ["シートポスト", "ステム"],
@@ -102,7 +106,7 @@ describe("CandidatePartsBlockedMessage", () => {
         expect(await screen.findByText(/Madone、Émondaを解除すると/)).toBeTruthy()
     })
 
-    // バリエーション列の有無で、メッセージ行の列数を合わせる。
+    // バリエーション列の有無で、メッセージ行の列数を合わせる
     it("バリエーション列に合わせて列数を変える", () => {
         const {unmount} = renderBlockedMessage({showVariantColumn: false})
 

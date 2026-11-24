@@ -21,9 +21,10 @@ vi.mock("@/features/auth/useAuth", () => ({
     }),
 }))
 
-// 自動保存の確定依頼に、指定した結果で応答する
+// 自動保存の確定依頼に、指定した結果で応答
 function respondToFlush(ok: boolean) {
     window.addEventListener(AUTH_LOGOUT_FLUSH_EVENT, (event) => {
+        // 自動保存の確定依頼の内容
         const detail = (event as CustomEvent<LogoutFlushDetail>).detail
 
         detail.handled = true
@@ -34,8 +35,10 @@ function respondToFlush(ok: boolean) {
 // ログアウト保存で取得するAPIを空データで返す
 function stubFetch() {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+        // 取得先のURL
         const url = String(input)
 
+        // 構成表示順の取得では保存済みの順序を返す
         if (url.includes("/api/config-order")) {
             return new Response(JSON.stringify({items: ["config:1"]}), {
                 status: 200,
@@ -43,6 +46,7 @@ function stubFetch() {
             })
         }
 
+        // 構成一覧の取得では保存済みの構成を返す
         if (url.includes("/api/builds")) {
             return new Response(JSON.stringify([{
                 id: "c1",
@@ -64,9 +68,10 @@ function stubFetch() {
     }))
 }
 
+// ログアウト時の自動保存確定とログアウト結果の扱いを保証
 describe("useLogoutWithSave", () => {
     beforeEach(() => {
-        // ログアウトは既定で成功とし、保存先も初期化する
+        // ログアウトは既定で成功とし、保存先も初期化
         logoutMock.mockReset()
         logoutMock.mockResolvedValue(true)
         window.localStorage.clear()
@@ -94,7 +99,7 @@ describe("useLogoutWithSave", () => {
         expect(logoutMock).not.toHaveBeenCalled()
     })
 
-    // 保存できたらログアウトする
+    // 保存できたらログアウト
     it("保存できたらログアウトする", async () => {
         stubFetch()
         respondToFlush(true)
@@ -210,6 +215,7 @@ describe("useLogoutWithSave", () => {
     it("ログアウト中のキャンセル後は再表示しない", async () => {
         stubFetch()
         respondToFlush(true)
+        // ログアウト完了を後から制御するためのresolve関数
         let resolveLogout: (value: boolean) => void = () => {}
         logoutMock.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
             resolveLogout = resolve

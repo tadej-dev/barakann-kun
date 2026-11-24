@@ -5,14 +5,15 @@ import {
     saveConfigOrder,
 } from "@/api/configOrder"
 
-// 表示順APIの取得・保存と、重複した順序の拒否を確認する。
+// 表示順APIの取得・保存と、重複した順序の拒否を確認
 describe("configOrder API", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
-    // アカウントに保存されたキーの順番を、Sortableの初期値として返す。
+    // アカウントに保存されたキーの順番を、Sortableの初期値として返す
     it("ログインユーザーの構成表示順を取得する", async () => {
+        // 保存済みの表示順を返す取得処理のモック
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({
             items: ["config:2", "config:1", "config:3", "config:4"],
         }), {
@@ -32,8 +33,9 @@ describe("configOrder API", () => {
         )
     })
 
-    // 並び替えの保存ではCSRFトークンを先に取得し、同じ順序をPUTする。
+    // 並び替えの保存ではCSRFトークンを先に取得し、同じ順序をPUT
     it("CSRFトークン付きで構成表示順を保存する", async () => {
+        // CSRF取得と表示順保存の応答を順に返すモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(new Response(JSON.stringify({
                 csrfToken: "csrf-token",
@@ -71,7 +73,7 @@ describe("configOrder API", () => {
         )
     })
 
-    // 同じキーが複数ある順序は表示の不定化につながるため受け付けない。
+    // 同じキーが複数ある順序は表示の不定化につながるため受け付けない
     it("重複した表示順レスポンスを拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
             items: ["config:1", "config:1", "config:3", "config:4"],

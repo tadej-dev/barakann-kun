@@ -21,9 +21,10 @@ vi.mock("@/features/auth/useAuth", () => ({
     }),
 }))
 
-// テストごとに描画したDOMを破棄する
+// テストごとに描画したDOMを破棄
 afterEach(cleanup)
 
+// 使い方ページのルート表示を保証
 describe("App", () => {
     // 使い方ページのルートが表示される
     it("/guide で使い方ページを表示する", () => {

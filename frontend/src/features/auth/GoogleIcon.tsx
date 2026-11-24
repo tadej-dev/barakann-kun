@@ -1,5 +1,6 @@
+// ログイン用アイコンが受け取るプロパティ
 type GoogleIconProps = {
-    className?: string
+    className?: string // アイコンの大きさを決めるCSSクラス
 }
 
 // Googleのブランドカラーを使ったログインボタン用アイコン

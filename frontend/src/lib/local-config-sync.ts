@@ -49,7 +49,7 @@ function getStorage(): Storage | null {
 // 構成の内容を、並び順に依存しない「一致判定用キー」にする
 // 名前とパーツ構成を1つの文字列にまとめ、同じ構成かどうかの比較に使う
 export function createConfigMatchKey(config: StoredConfig): string {
-    // パーツの取得順に依存しないよう、slotKey順に並べてから連結する
+    // パーツの取得順に依存しないよう、slotKey順に並べてから連結
     const parts = config.parts
         .map((part) => `${part.slotKey}:${part.partId}`)
         .sort()
@@ -70,7 +70,7 @@ export function loadLocalOrigin(): string | null {
     return storage.getItem(ORIGIN_STORAGE_KEY)
 }
 
-// ローカル構成の由来アカウントを記録する。nullで消去する。
+// ローカル構成の由来アカウントを記録し、nullで消去
 // 保存できたかを返し、呼び出し元が失敗を判断できるようにする
 export function saveLocalOrigin(accountId: string | null): boolean {
     const storage = getStorage()
@@ -87,7 +87,7 @@ export function saveLocalOrigin(accountId: string | null): boolean {
             return true
         }
 
-        // 由来を記録し、次回ログイン時に同じアカウントか判定する
+        // 由来を記録し、次回ログイン時に同じアカウントか判定
         storage.setItem(ORIGIN_STORAGE_KEY, accountId)
 
         return true
@@ -97,8 +97,8 @@ export function saveLocalOrigin(accountId: string | null): boolean {
     }
 }
 
-// ローカルの構成を、このアカウントへ移行してよいか判定する
-// 由来が無い(未ログインで作った)か、同じアカウントのときだけ移行する
+// ローカルの構成を、ログイン中のアカウントへ移行してよいか判定
+// 由来が無い(未ログインで作った)か、同じアカウントのときだけ移行
 export function canMigrateForAccount(
     origin: string | null,
     accountId: string,
@@ -106,21 +106,21 @@ export function canMigrateForAccount(
     return origin === null || origin === accountId
 }
 
-// ローカル構成から、移行候補と重複・上限超過を判定する
+// ローカル構成から、移行候補と重複・上限超過を判定
 export function buildMigrationPlan(
     localConfigs: StoredConfig[], // ローカル構成
     serverConfigs: SavedBuild[], // アカウント構成
     maxConfigs: number, // 上限
 ): MigrationPlan {
-    // ログイン直後は空の「構成1」が1件だけ自動作成されている。
-    // これを残したまま移行すると件数が増えてしまうため、置き換え対象として扱う。
+    // ログイン直後は空の「構成1」が1件だけ自動作成されている
+    // 空の構成を残したまま移行すると件数が増えてしまうため、置き換え対象として扱う
     const replaceInitialConfig = serverConfigs.length === 1 &&
         serverConfigs[0]?.name === "構成1" &&
         serverConfigs[0].parts.length === 0
         ? {id: serverConfigs[0].id, version: serverConfigs[0].version}
         : null
 
-    // 置き換える場合は、アカウント側に構成が無いものとして残り枠と重複を判定する
+    // 置き換える場合は、アカウント側に構成が無いものとして残り枠と重複を判定
     const effectiveServerConfigs = replaceInitialConfig ? [] : serverConfigs
 
     // アカウント側の構成を「一致判定用キー」に変え、名前＋パーツの比較に使う
@@ -222,7 +222,7 @@ export function saveServerSnapshotToLocal(
     snapshot: SavedConfigSnapshot,
 ): boolean {
     // 容量超過などで保存できなかった場合は、中途半端に由来だけ記録しない
-    // 失敗時に戻せるよう、以前の由来を退避する
+    // 失敗時に戻せるよう、以前の由来を退避しておく
     const previousOrigin = loadLocalOrigin()
 
     // 由来を先に記録し、構成の保存に失敗したら元へ戻す

@@ -14,12 +14,12 @@ export type CockpitStatus = "included" | "dedicated" | "open" | "standard"
 
 // 候補パーツの絞り込み状態。UIと適用ロジックで同じ型を共有する。
 export type CandidateFilterState = {
-    brands: string[]
-    viewMode: CandidateViewMode
-    cockpits: CockpitStatus[]
-    modelYears: number[]
-    integratedHandlebarOnly: boolean
-    specs: Record<string, string[]>
+    brands: string[] // 選択中のブランド
+    viewMode: CandidateViewMode // 表示モード（全件・非互換除外・適合のみ）
+    cockpits: CockpitStatus[] // 選択中のコックピット状態
+    modelYears: number[] // 選択中のモデルイヤー
+    integratedHandlebarOnly: boolean // ステム一体型ハンドルだけを表示するか
+    specs: Record<string, string[]> // 規格キー別に選択した値
 }
 
 // 初期状態（絞り込みなし）。
@@ -53,15 +53,17 @@ export const SPEC_FILTER_KEYS: readonly string[] = [
     "min_tire_width_mm",
 ]
 
+// 規格フィルターの選択肢（APIの値と日本語表示名）
 export type SpecFilterOption = {
-    value: string
-    label: string
+    value: string // APIが返す規格値
+    label: string // 画面に表示する日本語名
 }
 
+// 規格キーごとの絞り込み条件
 export type SpecFilter = {
-    key: string
-    label: string
-    options: SpecFilterOption[]
+    key: string // 規格キー
+    label: string // 規格の日本語表示名
+    options: SpecFilterOption[] // 選択できる値の一覧
 }
 
 // 候補パーツに実在する規格から、複数選択フィルターを自動生成する。
@@ -71,7 +73,9 @@ export function buildSpecFilters(parts: Part[]): SpecFilter[] {
 
     for (const part of parts) {
         for (const [key, raw] of Object.entries(part.specifications ?? {})) {
+            // カンマ区切りを分割した規格値
             const values = raw.split(",").map((value) => value.trim()).filter(Boolean)
+            // 規格キーに対応する値の集合
             const bucket = valuesByKey.get(key) ?? new Set<string>()
 
             values.forEach((value) => bucket.add(value))
@@ -169,8 +173,10 @@ export function filterCandidateParts(
 
         // コックピット状態（複数選択はいずれか一致。フレーム以外は null を返す）
         if (filters.cockpits.length > 0) {
+            // 候補のコックピット状態（フレーム以外はnull）
             const cockpitStatus = getFrameCockpitStatus(part)
 
+            // 状態が取れない・未確認・不一致なら候補から除外
             if (
                 !cockpitStatus ||
                 cockpitStatus === "unknown" ||
@@ -200,8 +206,10 @@ export function filterCandidateParts(
         // 表示モード
         // フレームは全パーツ互換の基準として扱うため、互換フィルターの対象外にする。
         const isFrame = part.categoryKey === "frame"
+        // 候補の適合判定結果の状態
         const status = compatibilityByPartId.get(part.id)?.status
 
+        // 非互換を除外する表示では非互換の候補を外す
         if (
             !isFrame &&
             filters.viewMode === "excludeIncompatible" &&
@@ -210,6 +218,7 @@ export function filterCandidateParts(
             return false
         }
 
+        // 適合のみの表示では適合以外の候補を外す
         if (
             !isFrame &&
             filters.viewMode === "compatibleOnly" &&
@@ -220,14 +229,18 @@ export function filterCandidateParts(
 
         // 規格値: 複数選択はいずれか一致、カンマ区切りの値は集合交差で判定する。
         for (const [key, selected] of activeSpecFilters) {
+            // 候補の規格値（未登録はundefined）
             const raw = part.specifications?.[key]
 
+            // 規格値が未登録なら一致しないため除外
             if (!raw) {
                 return false
             }
 
+            // カンマ区切りを分割した規格値
             const values = raw.split(",").map((value) => value.trim())
 
+            // 選択した規格値のどれとも一致しなければ除外
             if (!selected.some((value) => values.includes(value))) {
                 return false
             }

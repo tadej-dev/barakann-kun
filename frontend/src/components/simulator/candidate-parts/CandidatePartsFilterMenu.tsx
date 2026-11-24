@@ -74,6 +74,7 @@ export function CandidatePartsFilterMenu({
         const nextValues = toggleSelection(current, value, checked)
         const nextSpecs = {...filters.specs}
 
+        // 選択中の規格値が残っている場合は条件へ残す
         if (nextValues.length > 0) {
             nextSpecs[key] = nextValues
         } else {

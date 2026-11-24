@@ -13,6 +13,7 @@ function createPart(partId = 10) {
     return {slotKey: "frame", partId, price: 1000, weight: 2000}
 }
 
+// ローカル構成の作成・更新・削除・並び順・保存失敗を保証
 describe("useLocalConfigCollection", () => {
     beforeEach(() => {
         window.localStorage.clear()
@@ -23,7 +24,7 @@ describe("useLocalConfigCollection", () => {
         window.localStorage.clear()
     })
 
-    // 構成が1件も無ければ、既定の構成を用意する。
+    // 構成が1件も無ければ、既定の構成を用意
     it("初回は既定の構成を1件用意する", () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -35,7 +36,7 @@ describe("useLocalConfigCollection", () => {
         expect(loadLocalConfigCollection().configs).toHaveLength(1)
     })
 
-    // 保存済みの構成を読み込む。
+    // 保存済みの構成を読み込む
     it("保存済みの構成を読み込む", () => {
         saveLocalConfigCollection(
             [{
@@ -56,14 +57,16 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds[0]?.parts).toEqual([createPart()])
     })
 
-    // 構成を追加すると、一覧と保存領域の両方へ反映する。
+    // 構成を追加すると、一覧と保存領域の両方へ反映
     it("構成を追加して保存する", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
 
+        // 作成した構成のID
         let createdId = ""
 
         await act(async () => {
+            // 作成した構成
             const created = await result.current.builds.create(
                 "通勤用",
                 [createPart()],
@@ -79,10 +82,11 @@ describe("useLocalConfigCollection", () => {
         expect(loadLocalConfigCollection().configs).toHaveLength(2)
     })
 
-    // 名前変更と更新は保存領域も書き換える。
+    // 名前変更と更新は保存領域も書き換える
     it("構成の名前とパーツを更新する", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
+        // 名前変更する構成
         const config = result.current.builds.builds[0]!
 
         await act(async () => {
@@ -103,7 +107,7 @@ describe("useLocalConfigCollection", () => {
         })
     })
 
-    // ログアウトなどで有効になったときは、保存済みの内容を読み直す。
+    // ログアウトなどで有効になったときは、保存済みの内容を読み直す
     it("有効になったときに保存済みの内容を読み直す", async () => {
         const {result, rerender} = renderHook(
             ({enabled}: {enabled: boolean}) =>
@@ -123,7 +127,7 @@ describe("useLocalConfigCollection", () => {
         })
     })
 
-    // 最後の1件も削除できる（画面側が「構成1」を作り直す）。
+    // 最後の1件も削除できる（画面側が「構成1」を作り直す）
     it("最後の1件も削除できる", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -135,7 +139,7 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds).toHaveLength(0)
     })
 
-    // 2件以上あれば、最初の構成も削除できる。
+    // 2件以上あれば、最初の構成も削除できる
     it("2件以上あれば最初の構成も削除できる", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -144,6 +148,7 @@ describe("useLocalConfigCollection", () => {
             await result.current.builds.create("2件目", [])
         })
 
+        // 先頭の構成
         const first = result.current.builds.builds[0]!
 
         await act(async () => {
@@ -154,7 +159,7 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.builds.builds[0]?.name).toBe("2件目")
     })
 
-    // 削除した構成は並び順からも消える。
+    // 削除した構成は並び順からも消える
     it("構成を削除すると並び順からも消える", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -163,6 +168,7 @@ describe("useLocalConfigCollection", () => {
             await result.current.builds.create("削除対象", [])
         })
 
+        // 削除する構成
         const target = result.current.builds.builds.find((config) =>
             config.name === "削除対象")!
 
@@ -175,11 +181,12 @@ describe("useLocalConfigCollection", () => {
             key.includes(target.id))).toBe(false)
     })
 
-    // 並び順を保存する。
+    // 並び順を保存
     it("並び順を保存する", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
 
+        // 既定の構成ID
         const defaultId = result.current.builds.builds[0]!.id
 
         await act(async () => {
@@ -190,7 +197,7 @@ describe("useLocalConfigCollection", () => {
         expect(loadLocalConfigCollection().order).toEqual([`config:${defaultId}`])
     })
 
-    // 上限(20件)を超えて作成できない。
+    // 上限(20件)を超えて作成できない
     it("上限を超えて作成できない", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -208,10 +215,11 @@ describe("useLocalConfigCollection", () => {
         })
     })
 
-    // 保存できないときはエラーを残す。
+    // 保存できないときはエラーを残す
     it("保存に失敗したときはエラーを残す", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
+        // 元のlocalStorageの定義
         const original = Object.getOwnPropertyDescriptor(window, "localStorage")
 
         Object.defineProperty(window, "localStorage", {
@@ -236,12 +244,13 @@ describe("useLocalConfigCollection", () => {
             expect(result.current.builds.errorMessage).toContain("保存できませんでした")
         })
 
+        // 置き換えたlocalStorageを元へ戻す
         if (original) {
             Object.defineProperty(window, "localStorage", original)
         }
     })
 
-    // ログイン時はローカルの内容を扱わない。
+    // ログイン時はローカルの内容を扱わない
     it("ログイン時はローカルの内容を返さない", () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: false}))
@@ -250,7 +259,7 @@ describe("useLocalConfigCollection", () => {
         expect(result.current.order.order).toEqual([])
     })
 
-    // 別タブの変更を一覧へ反映する。
+    // 別タブの変更を一覧へ反映
     it("別タブの変更を一覧へ反映する", async () => {
         const {result} = renderHook(() =>
             useLocalConfigCollection({enabled: true}))
@@ -267,6 +276,7 @@ describe("useLocalConfigCollection", () => {
                     order: ["config:config-b"],
                 }),
             )
+            // 別タブの保存を知らせるstorageイベント
             const event = new Event("storage") as Event & {key: string}
             event.key = "barakann-config-collection-v2"
             window.dispatchEvent(event)

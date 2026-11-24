@@ -6,11 +6,10 @@ import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 import {AuthProvider} from "@/features/auth/AuthProvider"
 import {useAuth} from "@/features/auth/useAuth"
 
-// 認証APIを差し替え、ログアウトの成否だけを検証する
+// 認証APIを差し替え、ログアウトの成否だけを検証
 const {logoutApi} = vi.hoisted(() => ({logoutApi: vi.fn()}))
 
 // 各テストで使うAPIの最小限の実装
-
 vi.mock("@/features/auth/authApi", () => ({
     deleteAccount: vi.fn(),
     fetchAuthSession: vi.fn(async () => ({
@@ -42,6 +41,7 @@ function Probe() {
     )
 }
 
+// ログアウトの成否が呼び出し元へ返ることを保証
 describe("AuthProvider", () => {
     beforeEach(() => {
         // 前のテストの呼び出し履歴を消す

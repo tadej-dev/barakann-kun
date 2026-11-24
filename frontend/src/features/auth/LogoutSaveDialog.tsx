@@ -13,6 +13,7 @@ import type {
     LogoutSaveStatus,
 } from "@/features/auth/useLogoutWithSave"
 
+// ログアウト保存ダイアログが受け取るプロパティ
 type LogoutSaveDialogProps = {
     status: LogoutSaveStatus // ステータス（保存・失敗）
     failureKind: LogoutFailureKind // 失敗の種類
@@ -36,10 +37,9 @@ export function LogoutSaveDialog({
         return null
     }
 
-    const isSaving = status === "saving"
-    const isSucceeded = status === "succeeded"
-    // ログアウトだけ失敗した場合は、構成が保存済みかどうかで文言を変える
-    const isLogoutFailure = failureKind === "logout" ||
+    const isSaving = status === "saving" // 構成の保存中か
+    const isSucceeded = status === "succeeded" // 保存とログアウトが完了したか
+    const isLogoutFailure = failureKind === "logout" || // ログアウトだけ失敗した場合は、構成が保存済みかどうかで文言を変える
         failureKind === "skip-logout"
 
     return (

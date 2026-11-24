@@ -15,7 +15,7 @@ vi.mock("@/features/auth/useAuth", () => ({
     useAuth: vi.fn(),
 }))
 
-// アカウントメニューはbase-uiのポップアップで、テストではクリックで開いて項目を選べる。
+// useAuthの戻り値をテストごとに差し替えるモック
 const mockedUseAuth = vi.mocked(useAuth)
 
 // 認証Contextの値を、必要な項目だけ差し替えて作る
@@ -37,6 +37,7 @@ function createAuthValue(
     }
 }
 
+// 指定した認証状態でヘッダーを描画
 function renderHeader(value: AuthContextValue = createAuthValue()) {
     mockedUseAuth.mockReturnValue(value)
 
@@ -53,6 +54,7 @@ beforeEach(() => {
     mockedUseAuth.mockReturnValue(createAuthValue())
 })
 
+// 認証状態に応じたヘッダーの表示とアカウント操作を保証
 describe("Header", () => {
     // 未ログインでも、三本線メニューからサイト内ページを開ける
     it("未ログインでもメニューからサイト内ページを開ける", async () => {
@@ -87,7 +89,7 @@ describe("Header", () => {
             .toBeTruthy()
     })
 
-    // 認証確認が終わるまでは、ログインボタンを一瞬出さない。
+    // 認証確認が終わるまでは、ログインボタンを一瞬出さない
     it("認証状態の確認中は待機表示だけを出す", () => {
         renderHeader(createAuthValue({status: "loading"}))
 
@@ -95,21 +97,22 @@ describe("Header", () => {
         expect(screen.queryByText("Googleでログイン")).toBeNull()
     })
 
-    // 未ログインでは、ログインへ進むボタンを出す。
+    // 未ログインでは、ログインへ進むボタンを出す
     it("未ログインのときはログインボタンを表示する", () => {
         renderHeader()
 
         expect(screen.getByText("Googleでログイン")).toBeTruthy()
-        // 待機表示とは排他にする。
+        // 待機表示とは排他にする
         expect(screen.queryByText("認証状態を確認中…")).toBeNull()
     })
 
-    // ログイン操作は、認証の入口へつなぐ。
+    // ログイン操作は、認証の入口へつなぐ
     it("ログインボタンのクリックでログインを開始する", () => {
+        // ログイン開始処理のモック
         const login = vi.fn()
         renderHeader(createAuthValue({login}))
 
-        // 表示しただけでは呼ばない。
+        // 表示しただけでは呼ばない
         expect(login).not.toHaveBeenCalled()
 
         fireEvent.click(screen.getByText("Googleでログイン"))
@@ -117,7 +120,7 @@ describe("Header", () => {
         expect(login).toHaveBeenCalledTimes(1)
     })
 
-    // 認証エラーでも、再試行できるようログイン導線と理由を残す。
+    // 認証エラーでも、再試行できるようログイン導線と理由を残す
     it("認証エラーのときはログイン導線とエラーを表示する", () => {
         renderHeader(createAuthValue({
             status: "error",
@@ -128,30 +131,31 @@ describe("Header", () => {
             "セッションの取得に失敗しました",
         )
         expect(screen.getByText("Googleでログイン")).toBeTruthy()
-        // 待機表示は出さない。
+        // 待機表示は出さない
         expect(screen.queryByText("認証状態を確認中…")).toBeNull()
     })
 
-    // ログイン済みでは、表示名とアカウントのメニューへ切り替える。
+    // ログイン済みでは、表示名とアカウントのメニューへ切り替える
     it("ログイン済みのときは表示名とアカウントメニューを表示する", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
             user: {id: "user-1", displayName: "テスト 太郎"},
         }))
 
+        // アカウントメニューを開くボタン
         const menuButton = screen.getByRole("button", {
             name: "アカウントメニューを開く",
         })
 
-        // 表示名と、その頭文字（アバターのフォールバック）を出す。
+        // 表示名と、表示名の頭文字（アバターのフォールバック）を出す
         expect(within(menuButton).getByText("テ太")).toBeTruthy()
         expect(screen.getByText("テスト 太郎")).toBeTruthy()
-        // ログイン導線とは排他にする。
+        // ログイン導線とは排他にする
         expect(screen.queryByText("Googleでログイン")).toBeNull()
         expect(screen.queryByText("認証状態を確認中…")).toBeNull()
     })
 
-    // 半角英字の名前は、頭文字を大文字にそろえる。
+    // 半角英字の名前は、頭文字を大文字にそろえる
     it("英字の表示名は大文字の頭文字にする", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -165,7 +169,7 @@ describe("Header", () => {
         ).toBeTruthy()
     })
 
-    // 頭文字は2文字までにそろえる（3語名でも増やさない）。
+    // 頭文字は2文字までにそろえる（3語名でも増やさない）
     it("3語の表示名でも頭文字は2文字までにする", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -179,7 +183,7 @@ describe("Header", () => {
         ).toBeTruthy()
     })
 
-    // 表示名が空でも、アバターのフォールバックを出す。
+    // 表示名が空でも、アバターのフォールバックを出す
     it("表示名が空のときは既定の頭文字を表示する", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -193,7 +197,7 @@ describe("Header", () => {
         ).toBeTruthy()
     })
 
-    // 処理中はメニューの操作を止め、二重送信を防ぐ。
+    // 処理中はメニューの操作を止め、二重送信を防ぐ
     it("ログアウト中はメニューの項目をすべて操作できない", async () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -205,7 +209,7 @@ describe("Header", () => {
             screen.getByRole("button", {name: "アカウントメニューを開く"}),
         )
 
-        // 処理中はラベルも変わり、3項目とも操作できない。
+        // 処理中はラベルも変わり、3項目とも操作できない
         for (const label of ["表示名を変更", "ログアウト中…", "アカウントを削除"]) {
             expect(
                 (await screen.findByText(label)).closest("[role='menuitem']")
@@ -214,7 +218,7 @@ describe("Header", () => {
         }
     })
 
-    // 削除処理中も、他の操作を止める。
+    // 削除処理中も、他の操作を止める
     it("削除処理中はメニューの項目を操作できない", async () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -232,14 +236,17 @@ describe("Header", () => {
         ).toBe("true")
     })
 
-    // アカウントメニューを開き、ログアウトを実行できる。
+    // アカウントメニューを開き、ログアウトを実行できる
     it("アカウントメニューからログアウトできる", async () => {
+        // ログアウト処理のモック
         const logout = vi.fn(async () => true)
 
         // ログアウト前の保存で取得するAPIを空データで返す
         vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            // 取得先のURL
             const url = String(input)
 
+            // 構成表示順の取得では保存済みの順序を返す
             if (url.includes("/api/config-order")) {
                 return new Response(JSON.stringify({items: ["config:1"]}), {
                     status: 200,
@@ -247,6 +254,7 @@ describe("Header", () => {
                 })
             }
 
+            // 構成一覧の取得では空配列を返す
             if (url.includes("/api/builds")) {
                 return new Response(JSON.stringify([]), {
                     status: 200,
@@ -275,7 +283,7 @@ describe("Header", () => {
         vi.unstubAllGlobals()
     })
 
-    // ログイン済みでも操作に失敗したときは、理由を添えて知らせる。
+    // ログイン済みでも操作に失敗したときは、理由を添えて知らせる
     it("ログイン済みでエラーがあるときは理由を添えて表示する", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -291,7 +299,7 @@ describe("Header", () => {
         ).toBeTruthy()
     })
 
-    // エラーが無いときは、警告の領域そのものを出さない。
+    // エラーが無いときは、警告の領域全体を出さない
     it("エラーが無いときは警告を表示しない", () => {
         renderHeader(createAuthValue({
             status: "authenticated",
@@ -301,16 +309,16 @@ describe("Header", () => {
         expect(screen.queryByRole("alert")).toBeNull()
     })
 
-    // 認証済みでも利用者が取れない場合は、アカウントの表示を出さない。
+    // 認証済みでも利用者が取れない場合は、アカウントの表示を出さない
     it("認証済みでも利用者が無いときはアカウント表示を出さない", () => {
         renderHeader(createAuthValue({status: "authenticated", user: null}))
 
         expect(
             screen.queryByRole("button", {name: "アカウントメニューを開く"}),
         ).toBeNull()
-        // 未ログイン向けの導線も出さない（状態は認証済みのため）。
+        // 未ログイン向けの導線も出さない（状態は認証済みのため）
         expect(screen.queryByText("Googleでログイン")).toBeNull()
-        // 待機表示にも戻さない。
+        // 待機表示にも戻さない
         expect(screen.queryByText("認証状態を確認中…")).toBeNull()
     })
 })

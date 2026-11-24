@@ -7,8 +7,9 @@ import {SummaryCards} from "@/components/simulator/SummaryCards"
 // テストごとに描画したDOMを破棄し、次のテストへ持ち越さない
 afterEach(cleanup)
 
+// 合計金額・完成重量・選択中構成名の表示を保証
 describe("SummaryCards", () => {
-    // 金額と重量は、どちらのカードの値か分かる形で桁区切り付きで表示する。
+    // 金額と重量は、どちらのカードの値か分かる形で桁区切り付きで表示
     it("金額と重量を桁区切り付きで表示する", () => {
         render(
             <SummaryCards
@@ -18,7 +19,7 @@ describe("SummaryCards", () => {
             />,
         )
 
-        // 値は必ず該当するカードの中に出る（金額と重量の取り違えを検出する）。
+        // 値は必ず該当するカードの中に出る（金額と重量の取り違えを検出する）
         expect(
             screen.getByText("合計金額").closest('[data-slot="card"]')?.textContent,
         ).toContain("1,234,567")
@@ -27,7 +28,7 @@ describe("SummaryCards", () => {
         ).toContain("7,450")
     })
 
-    // 金額・重量がどの構成の値か分かるよう、構成名も並べる。
+    // 金額・重量がどの構成の値か分かるよう、構成名も並べる
     it("選択中の構成名を表示する", () => {
         render(
             <SummaryCards

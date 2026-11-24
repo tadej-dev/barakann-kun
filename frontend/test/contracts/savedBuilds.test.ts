@@ -3,12 +3,13 @@ import {afterEach, describe, expect, it, vi} from "vitest"
 import {fetchSavedBuilds} from "@/api/savedBuilds"
 import fixture from "../fixtures/saved-build-list.json"
 
+// 保存構成APIの応答形式をフロントのパーサが受け付けることを保証
 describe("保存構成の契約テスト", () => {
     afterEach(() => {
         vi.unstubAllGlobals()
     })
 
-    // APIの応答形式をフロントのパーサが受け付け、値を変えずに返す。
+    // APIの応答形式をフロントのパーサが受け付け、値を変えずに返す
     it("共有フィクスチャをパースできる", async () => {
         vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
             new Response(JSON.stringify(fixture), {
@@ -20,8 +21,9 @@ describe("保存構成の契約テスト", () => {
         await expect(fetchSavedBuilds()).resolves.toEqual(fixture)
     })
 
-    // 契約から外れた応答(必須項目の欠落)は拒否する。
+    // 契約から外れた応答(必須項目の欠落)は拒否
     it("必須項目が欠けた応答を拒否する", async () => {
+        // 必須項目を1つ削除した壊れた応答
         const broken = JSON.parse(JSON.stringify(fixture)) as {
             parts: {price: unknown}[]
         }[]

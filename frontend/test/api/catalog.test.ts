@@ -3,6 +3,7 @@ import {afterEach, describe, expect, it, vi} from "vitest"
 import {fetchCategories} from "@/api/categories"
 import {fetchParts, fetchPartsByIds} from "@/api/parts"
 
+// 任意のJSONとステータスを返すテスト用レスポンス
 function jsonResponse(value: unknown, status = 200) {
     return new Response(JSON.stringify(value), {
         status,
@@ -10,7 +11,7 @@ function jsonResponse(value: unknown, status = 200) {
     })
 }
 
-// レスポンス検証の条件だけをテスト側で変えられるよう、最小のパーツを用意する。
+// レスポンス検証の条件だけをテスト側で変えられるよう、最小のパーツを用意
 const PART = {
     id: 1,
     name: "Frame",
@@ -26,12 +27,13 @@ const PART = {
     specifications: {},
 }
 
-// カタログAPIが不正なJSON・数値を受け取った場合に、画面へ流さず拒否することを確認する。
+// カタログAPIが不正なJSON・数値を受け取った場合に、画面へ流さず拒否することを確認
 describe("catalog API", () => {
     afterEach(() => vi.unstubAllGlobals())
 
-    // 正常なカテゴリー配列は、そのままUIで利用できる型へ変換される。
+    // 正常なカテゴリー配列は、値の形を変えずにUIで利用できる型へ変換される
     it("カテゴリー一覧を検証して返す", async () => {
+        // カテゴリー一覧を返す取得処理のモック
         const fetchMock = vi.fn(async () => jsonResponse([{
             id: 1,
             key: "frame",
@@ -46,7 +48,7 @@ describe("catalog API", () => {
         }])
     })
 
-    // 成功ステータスでも、配列以外のJSONやJSONでない本文は壊れたカタログとして拒否する。
+    // 成功ステータスでも、配列以外のJSONやJSONでない本文は壊れたカタログとして拒否
     it.each([
         ["配列以外のJSON", () => jsonResponse({items: []})],
         ["JSONでない本文", () => new Response("not-json")],
@@ -58,7 +60,7 @@ describe("catalog API", () => {
         )
     })
 
-    // 重量・価格などの数値がNaNなら、合計計算へ進めずレスポンスを拒否する。
+    // 重量・価格などの数値がNaNなら、合計計算へ進めずレスポンスを拒否
     it("パーツ一覧の不正な数値を拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
             ...PART,
@@ -70,7 +72,7 @@ describe("catalog API", () => {
         )
     })
 
-    // 付属品の重量は完成重量の加算に使うため、そのまま受け取る。
+    // 付属品の重量は完成重量の加算に使うため、加工せず受け取る
     it("付属品の重量を検証して返す", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
             ...PART,
@@ -96,7 +98,7 @@ describe("catalog API", () => {
         }])
     })
 
-    // 重量が負数なら、合計計算へ進めずレスポンスを拒否する。
+    // 重量が負数なら、合計計算へ進めずレスポンスを拒否
     it("付属品の不正な重量を拒否する", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([{
             ...PART,
@@ -113,8 +115,9 @@ describe("catalog API", () => {
         )
     })
 
-    // 保存構成の復元で使うID検索が、期待するクエリとレスポンス検証を行う。
+    // 保存構成の復元で使うID検索が、期待するクエリとレスポンス検証を行う
     it("ID指定のパーツ一覧を検証する", async () => {
+        // 指定IDのパーツ一覧を返す取得処理のモック
         const fetchMock = vi.fn(async () => jsonResponse([PART]))
         vi.stubGlobal("fetch", fetchMock)
 
@@ -127,8 +130,9 @@ describe("catalog API", () => {
         )
     })
 
-    // 比較対象が増えてもバックエンドの1リクエスト100件上限を超えないよう分割する。
+    // 比較対象が増えてもバックエンドの1リクエスト100件上限を超えないよう分割
     it("100件を超えるIDはAPI上限に合わせて分割取得する", async () => {
+        // 分割後の2回目を空配列で返す取得処理のモック
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(jsonResponse([PART]))
             .mockResolvedValueOnce(jsonResponse([]))

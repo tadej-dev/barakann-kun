@@ -21,6 +21,7 @@ export function useCandidatePartsSelection(
     selectedParts: SelectedParts,
     onSelect: SelectPart,
 ) {
+    // 置換確認中のパーツと解除対象スロット
     const [pendingSelection, setPendingSelection] = useState<{
         part: Part
         slotKeys: string[]
@@ -30,15 +31,18 @@ export function useCandidatePartsSelection(
     } | null>(null)
     // フレーム選択で自動解除した内容を短時間だけ伝えるメッセージ。
     const [replacementNotice, setReplacementNotice] = useState<string | null>(null)
+    // 置換メッセージを消すタイマー
     const replacementNoticeTimerRef =
         useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+    // 選択中カテゴリーの前後スロット
     const categorySlots = useMemo(
         () => getPartSlots(activeSlot.categoryKey),
         [activeSlot.categoryKey],
     )
 
-    // 解除内容を数秒だけ表示し、連続操作時は最新の内容へ差し替える。
+    // 解除内容を5秒だけ表示し、連続操作時は最新の内容へ差し替える
     const showReplacementNotice = useCallback((removedPartNames: string[]) => {
+        // 前回のタイマーが残っていれば先に止める
         if (replacementNoticeTimerRef.current) {
             clearTimeout(replacementNoticeTimerRef.current)
         }
@@ -56,17 +60,18 @@ export function useCandidatePartsSelection(
 
     // アンマウント時に保留中のタイマーを片付ける。
     useEffect(() => () => {
+        // 画面破棄時に置換メッセージのタイマーを解放
         if (replacementNoticeTimerRef.current) {
             clearTimeout(replacementNoticeTimerRef.current)
         }
     }, [])
 
-    const requestSelection = useCallback((part: Part, selectBoth = false) => {
-        const packageUnit = getPartPackageUnit(part)
-        // 前後一括ボタン、またはペア販売情報がある場合は同じパーツを両スロットへ候補にする。
-        const targetSlots = selectBoth || packageUnit === "pair"
+    const requestSelection = useCallback((part: Part, selectBoth = false) => { // パーツ選択の互換判定と置換確認を行う
+        const packageUnit = getPartPackageUnit(part) // パーツの販売単位(単品・前後ペア)
+        const targetSlots = selectBoth || packageUnit === "pair" // 前後一括・ペア販売なら両スロットへ同じパーツを候補
             ? categorySlots
             : [activeSlot]
+        // 選択先スロットごとの適合判定
         const compatibilityResults = targetSlots.map((slot) =>
             evaluatePartCompatibility(part, slot, selectedParts),
         )
@@ -76,9 +81,11 @@ export function useCandidatePartsSelection(
             return
         }
 
+        // 規格競合で解除するスロット
         const conflictSlotKeys = compatibilityResults.flatMap(
             (result) => result?.conflictingSlotKeys ?? [],
         )
+        // 規格を確認できない理由の重複なし一覧
         const unknownReasons = Array.from(
             new Set(
                 compatibilityResults.flatMap((result) =>
@@ -86,6 +93,7 @@ export function useCandidatePartsSelection(
                 ),
             ),
         )
+        // 前後一括選択で上書きされる既存パーツのスロット
         const overwrittenSlotKeys = selectBoth || packageUnit === "pair"
             ? targetSlots
                 .map((slot) => slot.key)
@@ -99,6 +107,7 @@ export function useCandidatePartsSelection(
             ...conflictSlotKeys,
             ...overwrittenSlotKeys,
         ]))
+        // 解除する既存パーツの表示名
         const removedPartNames = Array.from(new Set(
             removeSlotKeys
                 .map((slotKey) => {
@@ -122,6 +131,7 @@ export function useCandidatePartsSelection(
             return
         }
 
+        // 競合も規格未確認も無い場合は確認なしで選択
         if (removeSlotKeys.length === 0 && unknownReasons.length === 0) {
             // 既存選択との競合も規格未確認もない候補は確認なしで即時反映する
             onSelect(part, targetSlots.map((slot) => slot.key))
@@ -148,8 +158,10 @@ export function useCandidatePartsSelection(
         requestSelection(part, true)
     }, [requestSelection])
 
+    // 保留中の選択を確定してダイアログを閉じる
     const confirmPendingSelection = useCallback(() => {
         // 置換確認を開いた後に選択状態が変わっても、保留中の操作だけを確定する。
+        // 確認対象が無ければ何もしない
         if (!pendingSelection) {
             return
         }
@@ -163,6 +175,7 @@ export function useCandidatePartsSelection(
     }, [onSelect, pendingSelection])
 
     return {
+        // 保留中の選択を破棄
         cancelPendingSelection: useCallback(
             () => setPendingSelection(null),
             [],

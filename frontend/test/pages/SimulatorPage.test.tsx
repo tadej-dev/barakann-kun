@@ -8,7 +8,7 @@ import {saveLocalOrigin} from "@/lib/local-config-sync"
 import {saveLocalConfigCollection} from "@/lib/simulator-storage"
 import {SimulatorPage} from "@/pages/SimulatorPage"
 
-// 画面の表示に必要な依存だけを差し替え、移行の配線を検証する
+// 画面の表示に必要な依存だけを差し替え、移行の配線を検証
 vi.mock("@/features/auth/useAuth", () => ({
     useAuth: () => ({
         errorMessage: "",
@@ -23,6 +23,7 @@ vi.mock("@/api/categories", () => ({
 }))
 
 vi.mock("@/api/savedBuilds", async (importOriginal) => {
+    // 元のAPI実装
     const actual = await importOriginal<typeof import("@/api/savedBuilds")>()
 
     return {
@@ -33,7 +34,7 @@ vi.mock("@/api/savedBuilds", async (importOriginal) => {
     }
 })
 
-// Simulatorへ渡されたpropsを記録し、ページの配線を検証する
+// Simulatorへ渡されたpropsを記録し、ページの配線を検証
 const {simulatorProps} = vi.hoisted(() => ({
     simulatorProps: {} as {
         autoSaveEnabled?: boolean
@@ -52,10 +53,12 @@ vi.mock("@/components/simulator/Simulator", () => ({
     },
 }))
 
+// 保存構成一覧の取得モック
 const mockedFetchSavedBuilds = vi.mocked(fetchSavedBuilds)
+// 構成作成のモック
 const mockedCreateSavedBuild = vi.mocked(createSavedBuild)
 
-// ローカル構成を保存する
+// ローカル構成を保存
 function seedLocalConfigs(configs: {
     id: string
     name: string
@@ -79,6 +82,7 @@ function createServerBuild(index: number) {
     }
 }
 
+// ログイン時のローカル構成移行の表示・保存・自動保存制御を保証
 describe("SimulatorPage の構成引き継ぎ", () => {
     beforeEach(() => {
         window.localStorage.clear()
@@ -113,6 +117,7 @@ describe("SimulatorPage の構成引き継ぎ", () => {
 
     // すべて一致している場合は、移行ダイアログを出さない
     it("すべて一致なら移行ダイアログを出さない", async () => {
+        // 重複判定に使うパーツ構成
         const parts = [{slotKey: "frame", partId: 1, price: 100, weight: 1000}]
 
         saveLocalOrigin("user-1")
@@ -133,6 +138,7 @@ describe("SimulatorPage の構成引き継ぎ", () => {
 
     // 一部だけ一致している場合は、未移行の構成を移行できるようダイアログを出す
     it("一部だけ一致している場合は移行ダイアログを出す", async () => {
+        // 重複判定に使うパーツ構成
         const parts = [{slotKey: "frame", partId: 1, price: 100, weight: 1000}]
 
         saveLocalOrigin("user-1")
@@ -190,6 +196,7 @@ describe("SimulatorPage の構成引き継ぎ", () => {
         // 移行ダイアログの表示中は自動保存を止める
         expect(simulatorProps.autoSaveEnabled).toBe(false)
 
+        // 移行候補のチェックボックス
         const checkboxes = container.querySelectorAll('[data-slot="checkbox"]')
 
         // 既定の構成1を外し、上限超過の構成2を選ぶ
@@ -208,7 +215,7 @@ describe("SimulatorPage の構成引き継ぎ", () => {
             [{slotKey: "frame", partId: 2}],
         )
 
-        // 保存できたらダイアログを閉じ、一覧を再取得する
+        // 保存できたらダイアログを閉じ、一覧を再取得
         await waitFor(() => {
             expect(screen.queryByText("構成をアカウントへ保存")).toBeNull()
         })

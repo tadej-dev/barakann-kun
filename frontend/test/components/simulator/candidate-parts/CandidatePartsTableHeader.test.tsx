@@ -16,7 +16,7 @@ type HeaderOptions = {
     onSort?: (column: CandidatePartsSortKey) => void
 }
 
-// ヘッダーは表の一部のため、表の中に入れて描画する
+// ヘッダーは表の一部のため、表の中に入れて描画
 function renderHeader(
     sortDescriptor: CandidatePartsSortDescriptor,
     options: HeaderOptions = {},
@@ -37,19 +37,20 @@ function sortIconClass(button: HTMLElement) {
     return button.querySelector("svg")?.getAttribute("class") ?? ""
 }
 
+// 候補テーブルの列見出しと並び替え操作を保証
 describe("CandidatePartsTableHeader", () => {
-    // 列見出しは表の列と一致させる。
+    // 列見出しは表の列と一致させる
     it("列見出しを表示する", () => {
         renderHeader({column: "brand", direction: "ascending"})
 
         for (const label of ["メーカー", "製品名", "重量", "価格"]) {
             expect(screen.getByText(label)).toBeTruthy()
         }
-        // バリエーション列は表示が有効なときだけ出す。
+        // バリエーション列は表示が有効なときだけ出す
         expect(screen.queryByText("バリエーション")).toBeNull()
     })
 
-    // バリエーション列を表示する設定では、見出しも追加する。
+    // バリエーション列を表示する設定では、見出しも追加
     it("バリエーション列を表示する設定では見出しを出す", () => {
         renderHeader({column: "brand", direction: "ascending"}, {
             showVariantColumn: true,
@@ -58,11 +59,11 @@ describe("CandidatePartsTableHeader", () => {
         expect(screen.getByText("バリエーション")).toBeTruthy()
     })
 
-    // 並び順は、現在の列と昇順・降順が分かるアイコンで示す。
+    // 並び順は、現在の列と昇順・降順が分かるアイコンで示す
     it("並び順に応じたアイコンを表示する", () => {
         renderHeader({column: "brand", direction: "ascending"})
 
-        // 並び替え中の列だけ矢印、それ以外は未選択のアイコン。
+        // 並び替え中の列だけ矢印、他の列は未選択のアイコン
         expect(
             sortIconClass(screen.getByRole("button", {name: "メーカー"})),
         ).toContain("arrow-up")
@@ -71,7 +72,7 @@ describe("CandidatePartsTableHeader", () => {
         ).toContain("chevrons-up-down")
     })
 
-    // 降順のときは下向きの矢印にする。
+    // 降順のときは下向きの矢印にする
     it("降順のときは下向きのアイコンを表示する", () => {
         renderHeader({column: "weight", direction: "descending"})
 
@@ -80,8 +81,9 @@ describe("CandidatePartsTableHeader", () => {
         ).toContain("arrow-down")
     })
 
-    // 見出しはボタンとして押せるようにし、その列の並び替えを要求する。
+    // 見出しはボタンとして押せるようにし、押した列の並び替えを要求
     it("列見出しのクリックで並び替えを要求する", () => {
+        // 並び替え要求の通知先モック
         const onSort = vi.fn()
         renderHeader({column: "brand", direction: "ascending"}, {onSort})
 

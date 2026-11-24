@@ -12,18 +12,21 @@ import type {ConfigStates} from "@/features/simulator/simulatorTypes"
 import type {StoredConfig} from "@/features/saved-builds/configRules"
 import type {Part} from "@/types/part"
 
-const STORAGE_KEY = "barakann-simulator-configs-v4"
-const COLLECTION_STORAGE_KEY = "barakann-config-collection-v2"
-const LEGACY_V3_KEY = "barakann-simulator-configs-v3"
-const LEGACY_COLLECTION_KEY = "barakann-config-collection-v1"
+const STORAGE_KEY = "barakann-simulator-configs-v4" // 選択状態の保存キー
+const COLLECTION_STORAGE_KEY = "barakann-config-collection-v2" // 構成一覧と並び順の保存キー
+const LEGACY_V3_KEY = "barakann-simulator-configs-v3" // 旧形式の選択状態の保存キー
+const LEGACY_COLLECTION_KEY = "barakann-config-collection-v1" // 旧形式の構成一覧の保存キー
 
+// テスト用のlocalStorage代替
 function createLocalStorage() {
+    // 保存キーと値の対応
     const values = new Map<string, string>()
 
     return {
         clear: () => values.clear(),
         getItem: (key: string) => values.get(key) ?? null,
         key: (index: number) => Array.from(values.keys())[index] ?? null,
+        // 保存済みキーの件数
         get length() {
             return values.size
         },
@@ -34,6 +37,7 @@ function createLocalStorage() {
 
 // Storageイベントを監視するテスト用のwindow
 function createWindowStub(localStorage: Storage) {
+    // Storageイベントの配送先
     const target = new EventTarget()
 
     return {
@@ -44,12 +48,15 @@ function createWindowStub(localStorage: Storage) {
     }
 }
 
+// storageイベントをwindowへ配送
 function dispatchStorageEvent(key: string | null) {
+    // 保存キーを持つstorageイベント
     const event = new Event("storage") as Event & {key: string | null}
     event.key = key
     window.dispatchEvent(event)
 }
 
+// 保存テスト用のパーツを生成
 function createPart(id: number): Part {
     return {
         id,
@@ -70,6 +77,7 @@ function createConfig(id: string, name = `構成${id}`): StoredConfig {
     }
 }
 
+// 構成の保存・復元・旧形式移行・変更通知・失敗時を保証
 describe("simulator-storage", () => {
     beforeEach(() => {
         Object.defineProperty(globalThis, "window", {
@@ -82,9 +90,11 @@ describe("simulator-storage", () => {
         Reflect.deleteProperty(globalThis, "window")
     })
 
-    // 構成の選択をIDごとに保存し、復元できる。
+    // 構成の選択をIDごとに保存し、復元できる
     it("構成ごとの選択を保存して復元する", () => {
+        // 保存するパーツ
         const part = createPart(20)
+        // 構成IDごとの選択状態
         const configs: ConfigStates = {
             "config-a": {frame: part},
             "config-b": {},
@@ -102,7 +112,7 @@ describe("simulator-storage", () => {
         })
     })
 
-    // 構成一覧と並び順を保存して復元する。
+    // 構成一覧と並び順を保存して復元
     it("構成一覧と並び順を保存して復元する", () => {
         expect(saveLocalConfigCollection(
             [createConfig("config-a", "通勤用")],
@@ -117,7 +127,7 @@ describe("simulator-storage", () => {
         })
     })
 
-    // 壊れた構成は読み飛ばす。
+    // 壊れた構成は読み飛ばす
     it("壊れた構成は読み飛ばす", () => {
         window.localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify({
             configs: [
@@ -132,7 +142,7 @@ describe("simulator-storage", () => {
             .toEqual(["a"])
     })
 
-    // 旧形式(固定枠と追加構成)から1系統へ引き継ぐ。
+    // 旧形式(固定枠と追加構成)から1系統へ引き継ぐ
     it("旧形式の構成を1系統へ引き継ぐ", () => {
         window.localStorage.setItem(LEGACY_V3_KEY, JSON.stringify({
             activeConfigId: "1",
@@ -147,6 +157,7 @@ describe("simulator-storage", () => {
             order: ["config:1", "build:old-build"],
         }))
 
+        // 読み込んだ構成一覧
         const collection = loadLocalConfigCollection()
 
         expect(collection.configs.map((config) => config.id)).toEqual([
@@ -157,7 +168,7 @@ describe("simulator-storage", () => {
         expect(collection.order).toEqual(["config:1", "config:old-build"])
     })
 
-    // キー分割前のv3に埋め込まれた追加構成も引き継ぎ、旧パーツIDを読み替える。
+    // キー分割前のv3に埋め込まれた追加構成も引き継ぎ、旧パーツIDを読み替える
     it("v3内蔵の追加構成を引き継ぎ、旧パーツIDを読み替える", () => {
         window.localStorage.setItem(LEGACY_V3_KEY, JSON.stringify({
             activeConfigId: "1",
@@ -170,7 +181,9 @@ describe("simulator-storage", () => {
             order: ["config:1", "build:old-build"],
         }))
 
+        // 読み込んだ構成一覧
         const collection = loadLocalConfigCollection()
+        // 引き継いだ追加構成
         const migrated = collection.configs.find((config) =>
             config.id === "old-build")
 
@@ -178,7 +191,7 @@ describe("simulator-storage", () => {
         expect(collection.order).toContain("config:old-build")
     })
 
-    // 保存に失敗したときはfalseを返す。
+    // 保存に失敗したときはfalseを返す
     it("保存に失敗したときはfalseを返す", () => {
         Object.defineProperty(window, "localStorage", {
             configurable: true,
@@ -199,9 +212,11 @@ describe("simulator-storage", () => {
         expect(saveLocalConfigCollection([createConfig("a")], [])).toBe(false)
     })
 
-    // 別タブの保存を検知して通知する。
+    // 別タブの保存を検知して通知
     it("別タブの保存を検知して通知する", () => {
+        // 変更通知の購読関数
         const listener = vi.fn()
+        // 購読の解除関数
         const unsubscribe = subscribeToLocalConfigChanges(listener)
 
         window.localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify({
@@ -217,8 +232,9 @@ describe("simulator-storage", () => {
         expect(listener).toHaveBeenCalledTimes(1)
     })
 
-    // 関係ないキーの更新では通知しない。
+    // 関係ないキーの更新では通知しない
     it("関係ないキーの更新では通知しない", () => {
+        // 変更通知の購読関数
         const listener = vi.fn()
         subscribeToLocalConfigChanges(listener)
 
@@ -227,7 +243,7 @@ describe("simulator-storage", () => {
         expect(listener).not.toHaveBeenCalled()
     })
 
-    // 全消去で、構成一覧も選択状態も消える。
+    // 全消去で、構成一覧も選択状態も消える
     it("全消去で保存内容を消す", () => {
         saveSimulatorState({activeConfigId: "a", configs: {"a": {}}})
         saveLocalConfigCollection([createConfig("a")], ["config:a"])
@@ -238,7 +254,7 @@ describe("simulator-storage", () => {
         expect(loadLocalConfigCollection()).toEqual({configs: [], order: []})
     })
 
-    // Storageへアクセスできない環境でも例外を画面へ伝播しない。
+    // Storageへアクセスできない環境でも例外を画面へ伝播しない
     it("Storageへアクセスできない環境でも例外を画面へ伝播しない", () => {
         Object.defineProperty(window, "localStorage", {
             configurable: true,

@@ -17,33 +17,37 @@ import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import type {SelectedParts} from "@/features/simulator/simulatorTypes"
 import type {Part} from "@/types/part"
 
+// フレームのコックピット状態を画面から使えるよう再公開
 export {getFrameCockpitStatus}
+// 規格ごとの判定結果の型を再公開
 export type {CompatibilityDetail}
 
 // 適合判定の相手となった選択済みパーツと、その結果。
 // 「どのパーツに対して非互換なのか」をUIで示すために保持する。
 export type CompatibilityCounterpart = {
-    slotKey: string
-    partName: string
-    status: CompatibilityStatus
-    reasons: string[]
+    slotKey: string // 相手パーツのスロットキー
+    partName: string // 相手パーツの表示名
+    status: CompatibilityStatus // 相手との判定結果
+    reasons: string[] // 判定理由の文章
     details: CompatibilityDetail[] // 規格ごとの判定結果(表示で状態別にまとめるために使う)
 }
 
+// 候補パーツ1件の適合判定結果
 export type CompatibilityResult = {
-    status: CompatibilityStatus
-    reasons: string[]
-    counterparts: CompatibilityCounterpart[]
-    conflictingSlotKeys: string[]
-    selectionBlocked: boolean
+    status: CompatibilityStatus // 総合の判定結果
+    reasons: string[] // 判定理由の文章
+    counterparts: CompatibilityCounterpart[] // 比較した相手パーツと結果
+    conflictingSlotKeys: string[] // 解除が必要な選択枠
+    selectionBlocked: boolean // フレームとの不一致で選択自体を止めるか
 }
 
 // フレームの行に出すバッジ。コックピットの状態と、重量に含む範囲を表す。
 export type FrameBadge = {
-    label: string
-    className: string
+    label: string // バッジの文言
+    className: string // バッジの配色クラス
 }
 
+// コックピット状態別のバッジ（配色クラスと代替文言）
 const FRAME_COCKPIT_BADGES: Record<
     Exclude<FrameCockpitStatus, "unknown">,
     { className: string; fallback: string }
@@ -66,7 +70,9 @@ const FRAME_COCKPIT_BADGES: Record<
     },
 }
 
+// フレーム行に出すコックピット状態のバッジ
 export function getFrameCockpitBadge(part: Part): FrameBadge | null {
+    // フレームのコックピット状態
     const status = getFrameCockpitStatus(part)
 
     // 規格未確認(unknown)やフレーム以外はバッジを表示しない。
@@ -74,9 +80,9 @@ export function getFrameCockpitBadge(part: Part): FrameBadge | null {
         return null
     }
 
-    const badge = FRAME_COCKPIT_BADGES[status]
-    const cockpitInterface = part.specifications?.cockpit_interface
-    const interfaceLabel = cockpitInterface
+    const badge = FRAME_COCKPIT_BADGES[status] // コックピット状態に対応するバッジ定義
+    const cockpitInterface = part.specifications?.cockpit_interface // フレームのコックピット規格
+    const interfaceLabel = cockpitInterface // コックピット規格の日本語表示名
         ? getSpecificationValueLabel("cockpit_interface", cockpitInterface)
         : null
 
@@ -91,6 +97,7 @@ export function getFrameCockpitBadge(part: Part): FrameBadge | null {
 // フレームの重量がフロントフォークを含むことを示すバッジ。
 // フレームはフォークとセットで売られるため、重量を比べる前に範囲が分かるようにする。
 export function getFrameWeightBadge(part: Part): FrameBadge | null {
+    // フレーム以外には重量範囲バッジを出さない
     if (part.categoryKey !== "frame") {
         return null
     }
@@ -114,6 +121,7 @@ export function getFrameWeightBadge(part: Part): FrameBadge | null {
     }
 }
 
+// 規格キーの日本語表示名
 const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
     bb_standard: "BB規格",
@@ -149,6 +157,7 @@ const SPECIFICATION_LABELS: Record<string, string> = {
 
 // API内部キーを候補表で読める日本語へ変換する。
 
+// 規格値の日本語表示名（APIキー→表示名）
 const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     "12x100": "12x100mm（スルーアクスル）",
     "6_bolt": "6ボルト",
@@ -251,6 +260,7 @@ const SPECIFICATION_VALUE_LABELS: Record<string, string> = {
     xelius_drs: "Lapierre Xelius DRS専用",
 }
 
+// 判定対象のカテゴリーキー（旧データはスロットキーから補完）
 function getCategoryKey(part: Part, slotKey: string) {
     // APIにcategoryKeyがない旧データでも、スロットキーから判定対象を補完する。
     return part.categoryKey ?? getPartSlotCategoryKey(slotKey)
@@ -261,21 +271,25 @@ const BOOLEAN_SPECIFICATION_LABELS: Record<string, Record<string, string>> = {
     cockpit_replaceable: {true: "交換可", false: "交換不可"},
 }
 
+// 規格キーの日本語表示名（未知のキーはAPIキーを返す）
 export function getSpecificationLabel(key: string) {
     // 未知の規格キーも捨てず、APIキーをフォールバック表示する。
     return SPECIFICATION_LABELS[key] ?? key
 }
 
+// 規格値の日本語表示名（カンマ区切りと単位に対応）
 export function getSpecificationValueLabel(key: string, value: string) {
     // 単一値もカンマ区切りも同じ経路で日本語化し、mm系とg系だけ単位を補う。
     const label = (single: string) => {
         // 真偽値の規格は「true」ではなく日本語で示す
         const booleanLabel = BOOLEAN_SPECIFICATION_LABELS[key]?.[single]
 
+        // 真偽値の規格なら日本語の表示名を返す
         if (booleanLabel) {
             return booleanLabel
         }
 
+        // キーの接尾辞から決まる単位
         const unit = key.endsWith("_mm") ? "mm" : key.endsWith("_g") ? "g" : ""
 
         return SPECIFICATION_VALUE_LABELS[single] ?? `${single}${unit}`
@@ -287,13 +301,17 @@ export function getSpecificationValueLabel(key: string, value: string) {
 // 重量の内訳(フレーム＋フロントフォーク)。画面で「1,133g」の下に「(755g + 378g)」と示すために使う。
 // 内訳が未登録のフレームでは null を返し、合計だけを表示する。
 export function getWeightBreakdown(part: Part): string | null {
+    // フォーク込みの重量でなければ内訳を出さない
     if (part.specifications?.weight_scope !== "frame_and_fork") {
         return null
     }
 
+    // フレーム単体の重量
     const frameWeight = part.specifications?.frame_weight_g
+    // フロントフォーク単体の重量
     const forkWeight = part.specifications?.fork_weight_g
 
+    // 内訳が未登録なら合計だけを表示
     if (!frameWeight || !forkWeight) {
         return null
     }
@@ -302,18 +320,22 @@ export function getWeightBreakdown(part: Part): string | null {
     return `${frameWeight}g + ${forkWeight}g`
 }
 
+// パーツの販売単位（未登録は単品）
 export function getPartPackageUnit(part: Part) {
     // 販売単位が欠損した旧データは単品として扱う。
     return part.specifications?.package_unit ?? "single"
 }
 
+// 選択済みパーツの価格と重量を合計
 export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
     // 前後スロットに同じペア商品が入っていても、価格・重量を一度だけ加算する。
     const countedPairIds = new Set<number>()
 
     return Object.values(selectedParts).reduce(
         (totals, part) => {
+            // ペア商品は前後のスロットで二重に加算しない
             if (getPartPackageUnit(part) === "pair") {
+                // 集計済みのペア商品なら加算しない
                 if (countedPairIds.has(part.id)) {
                     return totals
                 }
@@ -340,22 +362,22 @@ export function sumIncludedItemsWeight(part: Part): number {
         .reduce((total, item) => total + item.quantity * item.weight, 0)
 }
 
+// 候補パーツを選択状態と比較し、判定結果をまとめる
 export function evaluatePartCompatibility(
     candidate: Part,
     targetSlot: PartSlot,
     selectedParts: SelectedParts,
 ): CompatibilityResult | null {
-    // 候補パーツを現在の選択状態と比較し、理由・解除対象・選択可否をまとめて返す。
-    const reasons: string[] = []
-    // 比較した相手パーツと結果を蓄積し、非互換の原因をUIで特定できるようにする。
-    const counterparts: CompatibilityCounterpart[] = []
-    const conflictingSlotKeys = new Set<string>()
-    let hasRelevantSelection = false
-    let hasUnknown = false
-    let hasCompatible = false
-    let selectionBlocked = false
-    const allowedPosition = candidate.specifications?.allowed_position
+    const reasons: string[] = [] // 候補パーツを現在の選択状態と比較し、理由・解除対象・選択可否をまとめて返す。
+    const counterparts: CompatibilityCounterpart[] = [] // 比較した相手パーツと結果を蓄積し、非互換の原因をUIで特定できるようにする。
+    const conflictingSlotKeys = new Set<string>() // 解除対象として集める選択枠
+    let hasRelevantSelection = false // 比較対象の規格を持つ相手がいたか
+    let hasUnknown = false // 未確認の判定が含まれるか
+    let hasCompatible = false // 互換の判定が含まれるか
+    let selectionBlocked = false // フレームとの不一致で選択を止めるか
+    const allowedPosition = candidate.specifications?.allowed_position // 候補の対応位置（前輪・後輪専用）
 
+    // 前輪・後輪専用品を反対側へ登録できないよう止める
     if (
         allowedPosition &&
         targetSlot.position !== "single" &&
@@ -377,10 +399,13 @@ export function evaluatePartCompatibility(
             continue
         }
 
+        // 候補のカテゴリーキー
         const candidateCategory = candidate.categoryKey ?? targetSlot.categoryKey
+        // 選択済みパーツのカテゴリーキー
         const selectedCategory = getCategoryKey(selectedPart, selectedSlotKey)
 
         // ペア間の規格判定は候補選択と保存APIで共通のコアへ委ねる。
+        // 候補と選択済みパーツ1件の判定結果
         const result = compareParts(
             candidate,
             candidateCategory,
@@ -388,6 +413,7 @@ export function evaluatePartCompatibility(
             selectedCategory,
         )
 
+        // 比較対象の規格が無ければ判定を続けない
         if (!result) {
             continue
         }
@@ -403,6 +429,7 @@ export function evaluatePartCompatibility(
             details: result.details ?? [],
         })
 
+        // 非互換ならフレームは選択を止め、他のパーツは解除対象にする
         if (result.status === "incompatible") {
             // フレームは基準パーツ。基準(フレーム)と合わない候補は選択を止める。
             // それ以外の競合は、該当する選択済みパーツを解除対象にする。
@@ -411,6 +438,7 @@ export function evaluatePartCompatibility(
             } else {
                 conflictingSlotKeys.add(selectedSlotKey)
             }
+        // 未確認の相手がいれば未確認として扱う
         } else if (result.status === "unknown") {
             hasUnknown = true
         } else {
@@ -418,6 +446,7 @@ export function evaluatePartCompatibility(
         }
     }
 
+    // 選択を止める不一致や解除対象があれば非互換
     if (selectionBlocked || conflictingSlotKeys.size > 0) {
         // 保護対象の不一致や解除が必要な競合は、候補行を非互換として表示する。
         return {
@@ -429,6 +458,7 @@ export function evaluatePartCompatibility(
         }
     }
 
+    // 比較対象が無ければ適合バッジを付けない
     if (!hasRelevantSelection) {
         // 比較対象の規格がない候補には、誤って適合バッジを付けない。
         return null
@@ -443,10 +473,11 @@ export function evaluatePartCompatibility(
     }
 }
 
+// 選択済み構成から検出した規格の問題
 export type SelectedPartsCompatibilityIssue = {
-    status: "unknown" | "incompatible"
-    reasons: string[]
-    slotKeys: string[]
+    status: "unknown" | "incompatible" // 問題の種類（未確認・非互換）
+    reasons: string[] // 判定理由の文章
+    slotKeys: string[] // 問題のあるスロットキー
 }
 
 // 選択済み構成を候補選択時と同じ規格ルールで再評価

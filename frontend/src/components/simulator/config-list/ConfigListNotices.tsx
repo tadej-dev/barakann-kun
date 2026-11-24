@@ -40,10 +40,12 @@ export function ConfigListNotices({
                             size="xs"
                             variant="outline"
                             onClick={() => {
+                                // 一覧の取得・保存エラーがある場合だけ再取得
                                 if (configsErrorMessage) {
                                     onReloadConfigs()
                                 }
 
+                                // 表示順の取得・保存エラーがある場合だけ再取得
                                 if (configOrderErrorMessage) {
                                     onReloadConfigOrder()
                                 }

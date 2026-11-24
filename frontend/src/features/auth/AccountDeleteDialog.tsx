@@ -10,12 +10,13 @@ import {
     CardTitle,
 } from "@/components/ui/card"
 
+// アカウント削除ダイアログが受け取るプロパティ
 type AccountDeleteDialogProps = {
-    open: boolean
-    isDeleting: boolean
-    errorMessage: string | null
-    onConfirm: () => void
-    onDismiss: () => void
+    open: boolean // ダイアログを開いているか
+    isDeleting: boolean // 削除APIの実行中フラグ
+    errorMessage: string | null // 削除に失敗した理由
+    onConfirm: () => void // 削除を実行する処理
+    onDismiss: () => void // 削除を取り消して閉じる処理
 }
 
 // アカウント削除前に、関連データも削除されることを明示する確認UI

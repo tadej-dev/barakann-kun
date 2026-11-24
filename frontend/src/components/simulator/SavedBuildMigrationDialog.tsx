@@ -9,7 +9,7 @@ import type {MigrationCandidate} from "@/lib/local-config-sync"
 type SavedBuildMigrationDialogProps = {
     open: boolean // 表示可否
     candidates: MigrationCandidate[] // 候補
-    remainingSlots: number // 残り枠
+    remainingSlots: number // 保存できる残り枠(0〜20件)
     replacesInitialConfig: boolean // 初期構成の置き換え
     counts: {duplicate: number; new: number; overLimit: number} // 判定件数
     serverConfigs: {id: string; name: string; parts: number}[] // アカウント構成
@@ -46,8 +46,9 @@ export function SavedBuildMigrationDialog({
         return null
     }
 
-    // 確定可否
+    // 選択件数が保存できる残り枠を超えているか
     const isOverCapacity = selectedIds.length > remainingSlots
+    // 選択済み構成があり、残り枠内で保存中でないときだけ確定できる
     const canConfirm = selectedIds.length > 0 &&
         !isOverCapacity &&
         !isSubmitting

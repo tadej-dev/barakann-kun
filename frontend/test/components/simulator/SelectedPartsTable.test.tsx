@@ -10,6 +10,7 @@ import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
 // テストごとに描画したDOMを破棄し、次のテストへ持ち越さない
 afterEach(cleanup)
 
+// 選択表に並べるテスト用カテゴリー
 const categories: Category[] = [
     {id: 1, key: "frame", displayName: "フレーム"},
     {id: 14, key: "tire", displayName: "タイヤ"},
@@ -36,6 +37,7 @@ type TableOptions = {
     onSlotChange?: (slot: PartSlot) => void
 }
 
+// 選択済みパーツを指定して選択表を描画
 function renderTable(
     selectedParts: Record<string, Part>,
     options: TableOptions = {},
@@ -51,8 +53,9 @@ function renderTable(
     )
 }
 
+// 選択済み・未選択・占有カテゴリの表示と枠切り替えを保証
 describe("SelectedPartsTable", () => {
-    // 選択済みのパーツと、まだ選んでいない枠を同じ表に並べる。
+    // 選択済みのパーツと、まだ選んでいない枠を同じ表に並べる
     it("選択済みのパーツと未選択の枠を表示する", () => {
         renderTable({
             frame: createPart({
@@ -67,24 +70,26 @@ describe("SelectedPartsTable", () => {
 
         expect(screen.getByText("フレーム")).toBeTruthy()
         expect(screen.getByText("Madone")).toBeTruthy()
-        // タイヤ（前後）とシートポストは未選択のまま枠だけを表示する。
+        // タイヤ（前後）とシートポストは未選択のまま枠だけを表示
         expect(screen.getAllByText("未選択")).toHaveLength(3)
     })
 
-    // 選択中の枠は、指定した行だけを強調する。
+    // 選択中の枠は、指定した行だけを強調
     it("選択中の枠だけを選択状態にする", () => {
         renderTable({}, {activeSlotKey: "tire:rear"})
 
+        // 選択状態の行
         const selectedRows = screen.getAllByRole("row", {selected: true})
 
         expect(selectedRows).toHaveLength(1)
-        // 指定した枠（後輪）の行だけが選択状態になる。
+        // 指定した枠（後輪）の行だけが選択状態になる
         expect(within(selectedRows[0]).getByText("タイヤ")).toBeTruthy()
         expect(within(selectedRows[0]).getByText("後輪")).toBeTruthy()
     })
 
-    // 行のクリックで、その枠を選択対象にする。
+    // 行のクリックで、クリックした枠を選択対象にする
     it("行のクリックで選択枠を切り替える", () => {
+        // 枠変更の通知先モック
         const onSlotChange = vi.fn()
         renderTable({}, {onSlotChange})
 
@@ -97,14 +102,16 @@ describe("SelectedPartsTable", () => {
         })
     })
 
-    // キーボードでも枠を選べるようにする。
+    // キーボードでも枠を選べるようにする
     it("EnterとSpaceキーで選択枠を切り替える", () => {
+        // 枠変更の通知先モック
         const onSlotChange = vi.fn()
         renderTable({}, {onSlotChange})
 
+        // キーボード操作の対象行
         const row = screen.getByText("フレーム").closest("tr") as HTMLElement
 
-        // キーボードで辿れる行にし、規定の動作（スクロールなど）は止める。
+        // キーボードで辿れる行にし、規定の動作（スクロールなど）は止める
         expect(row.tabIndex).toBe(0)
         expect(fireEvent.keyDown(row, {key: "Enter"})).toBe(false)
         expect(fireEvent.keyDown(row, {key: " "})).toBe(false)
@@ -117,7 +124,7 @@ describe("SelectedPartsTable", () => {
         })
     })
 
-    // 他のパーツが枠を占有しているカテゴリは、占有元の付属品を示す。
+    // 他のパーツが枠を占有しているカテゴリは、占有元の付属品を示す
     it("占有しているカテゴリは付属品として示す", () => {
         renderTable({
             frame: createPart({
@@ -135,11 +142,12 @@ describe("SelectedPartsTable", () => {
             }),
         }, {blockedCategoryKeys: ["seatpost"]})
 
+        // 占有カテゴリの行
         const row = screen.getByText("シートポスト").closest("tr") as HTMLElement
 
         expect(within(row).getByText("専用シートポスト")).toBeTruthy()
         expect(within(row).getByText("付属品")).toBeTruthy()
-        // 単品定価は合計に含めないため、参考値として示す。
+        // 単品定価は合計に含めないため、参考値として示す
         expect(within(row).getByText(/30,000/)).toBeTruthy()
     })
 })

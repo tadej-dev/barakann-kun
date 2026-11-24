@@ -5,6 +5,7 @@ import {afterEach, describe, expect, it, vi} from "vitest"
 
 import {LogoutSaveDialog} from "@/features/auth/LogoutSaveDialog"
 
+// ログアウト保存ダイアログの状態別表示と操作を保証
 describe("LogoutSaveDialog", () => {
     afterEach(() => {
         // 描画したダイアログを片付ける
@@ -13,6 +14,7 @@ describe("LogoutSaveDialog", () => {
 
     // 保存中はキャンセルだけを出し、二重操作を防ぐ
     it("保存中はキャンセルだけを表示する", () => {
+        // キャンセル通知のモック
         const onCancel = vi.fn()
 
         render(
@@ -37,6 +39,7 @@ describe("LogoutSaveDialog", () => {
 
     // 成功時は結果を表示し、閉じるボタンで閉じる
     it("成功時は閉じるボタンを表示する", () => {
+        // キャンセル通知のモック
         const onCancel = vi.fn()
 
         render(
@@ -60,9 +63,9 @@ describe("LogoutSaveDialog", () => {
 
     // 失敗時は再試行・保存せずログアウト・キャンセルを出す
     it("失敗時は3つの選択肢を表示する", () => {
-        const onRetry = vi.fn()
-        const onSkip = vi.fn()
-        const onCancel = vi.fn()
+        const onRetry = vi.fn() // 再試行通知のモック
+        const onSkip = vi.fn() // 保存せずログアウトする通知のモック
+        const onCancel = vi.fn() // キャンセル通知のモック
 
         render(
             <LogoutSaveDialog

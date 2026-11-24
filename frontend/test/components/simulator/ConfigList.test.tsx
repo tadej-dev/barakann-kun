@@ -36,7 +36,7 @@ function createConfig(id: string, name: string): SavedBuild {
     }
 }
 
-// 未ログイン時の構成データ。保存系は呼ばれないため空の実装で足りる。
+// 未ログイン時の構成データ。保存系は呼ばれないため空の実装で足りる
 function createGuestCollection(
     options: {
         configs?: SavedBuild[]
@@ -45,7 +45,9 @@ function createGuestCollection(
         removeConfig?: () => Promise<void>
     } = {},
 ): ConfigCollection {
+    // 呼び出しだけを確認する空の非同期処理
     const noop = () => Promise.resolve()
+    // テストで使う構成一覧
     const configs = options.configs ?? [createConfig("config-1", "構成1")]
 
     return {
@@ -76,6 +78,7 @@ function createGuestCollection(
     } as unknown as ConfigCollection
 }
 
+// 未ログイン時の構成一覧を描画
 function renderConfigList(
     options: {
         configs?: SavedBuild[]
@@ -107,8 +110,9 @@ function renderConfigList(
     )
 }
 
+// 未ログイン時の構成一覧の表示と操作を保証
 describe("ConfigList（未ログイン時）", () => {
-    // 構成をカード形式で表示し、使用数を出す。
+    // 構成をカード形式で表示し、使用数を出す
     it("構成と使用数を表示する", () => {
         renderConfigList({
             configs: [
@@ -124,7 +128,7 @@ describe("ConfigList（未ログイン時）", () => {
             .toHaveLength(2)
     })
 
-    // 追加は押せて、一括削除は対象を選ぶまで押せない。
+    // 追加は押せて、一括削除は対象を選ぶまで押せない
     it("追加を押せて、一括削除は選択まで押せない", () => {
         renderConfigList()
 
@@ -137,7 +141,7 @@ describe("ConfigList（未ログイン時）", () => {
         ).toBe(true)
     })
 
-    // 構成が1件でも削除できる（すべて削除すると「構成1」が作り直される）。
+    // 構成が1件でも削除できる（すべて削除すると「構成1」が作り直される）
     it("構成が1件でも削除を出す", async () => {
         renderConfigList()
 
@@ -150,7 +154,7 @@ describe("ConfigList（未ログイン時）", () => {
         expect(screen.getByText("削除")).toBeTruthy()
     })
 
-    // 構成が2件以上あるときは削除メニューを出す。
+    // 構成が2件以上あるときは削除メニューを出す
     it("構成が2件以上あるときは削除を出す", async () => {
         renderConfigList({
             configs: [
@@ -166,8 +170,9 @@ describe("ConfigList（未ログイン時）", () => {
         expect(await screen.findByText("削除")).toBeTruthy()
     })
 
-    // カードの選択で、その構成の読み込みを親へ依頼する。
+    // カードの選択で、選んだ構成の読み込みを親へ依頼
     it("構成のカードを選ぶと親へ通知する", () => {
+        // 構成選択の通知先モック
         const onConfigSelect = vi.fn()
         renderConfigList({
             configs: [createConfig("config-1", "構成1")],
@@ -179,7 +184,7 @@ describe("ConfigList（未ログイン時）", () => {
         expect(onConfigSelect).toHaveBeenCalledTimes(1)
     })
 
-    // 一括削除の確認には、選択した構成名をすべて出す。
+    // 一括削除の確認には、選択した構成名をすべて出す
     it("一括削除の確認に選択した構成名をすべて出す", async () => {
         renderConfigList({
             configs: [
@@ -194,6 +199,7 @@ describe("ConfigList（未ログイン時）", () => {
         fireEvent.click(screen.getByRole("checkbox", {name: "レース用を削除対象に選択"}))
         fireEvent.click(screen.getByRole("button", {name: /一括削除/}))
 
+        // 一括削除の確認文
         const description = (await screen.findByText(/を削除します/)).textContent ?? ""
 
         expect(description).toContain("構成1")
@@ -201,11 +207,11 @@ describe("ConfigList（未ログイン時）", () => {
         expect(description).toContain("レース用")
     })
 
-    // すべて削除すると「構成1」を作り直して初期表示する。
+    // すべて削除すると「構成1」を作り直して初期表示
     it("すべて削除すると構成1を作り直す", async () => {
-        const created = createConfig("new-config", "構成1")
-        const createSpy = vi.fn(async () => created)
-        const onConfigChange = vi.fn()
+        const created = createConfig("new-config", "構成1") // 作り直した構成
+        const createSpy = vi.fn(async () => created) // 構成作成処理のモック
+        const onConfigChange = vi.fn() // 構成変更の通知先モック
 
         renderConfigList({
             configs: [createConfig("config-1", "構成1")],
@@ -226,7 +232,7 @@ describe("ConfigList（未ログイン時）", () => {
         expect(onConfigChange).toHaveBeenCalledWith("new-config")
     })
 
-    // 名前変更ダイアログを開ける。
+    // 名前変更ダイアログを開ける
     it("名前変更ダイアログを開く", async () => {
         renderConfigList()
 

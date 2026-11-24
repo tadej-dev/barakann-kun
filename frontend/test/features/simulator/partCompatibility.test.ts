@@ -11,6 +11,7 @@ import {
 import {createPartSlot} from "@/features/simulator/partSlots"
 import type {Part, PartIncludedItem} from "@/types/part"
 
+// 規格判定テスト用のパーツを生成
 function createPart(
     id: number,
     name: string,
@@ -32,28 +33,28 @@ function createPart(
     }
 }
 
-// 規格が一致する場合・不明な場合・明確に不一致な場合の判定を確認する。
-// 判定そのものは共有コア(compareParts)が担い、ここではUI向けの選択可否・競合返却を固定する。
+// 規格が一致する場合・不明な場合・明確に不一致な場合の判定を確認
+// 判定処理は共有コア(compareParts)が担い、ここではUI向けの選択可否・競合返却を固定
 describe("evaluatePartCompatibility", () => {
-    // 辞書にないmm系の規格値も、単位を補って表示できるようにする。
+    // 辞書にないmm系の規格値も、単位を補って表示できるようにする
     it("mm系の規格値には単位を補って表示する", () => {
         expect(getSpecificationValueLabel(
             "rotor_diameter_mm",
             "160",
         )).toBe("160mm")
-        // 小数を含むクランプ径でも同じ規則で表示する。
+        // 小数を含むクランプ径でも同じ規則で表示
         expect(getSpecificationValueLabel(
             "handlebar_clamp_mm",
             "31.8",
         )).toBe("31.8mm")
-        // 重量も同じ規則で単位を補い、重量の内訳を読めるようにする。
+        // 重量も同じ規則で単位を補い、重量の内訳を読めるようにする
         expect(getSpecificationValueLabel(
             "frame_weight_g",
             "755",
         )).toBe("755g")
     })
 
-    // 真偽値で持つ規格は、英語のまま出さず日本語で示す。
+    // 真偽値で持つ規格は、英語のまま出さず日本語で示す
     it("真偽値の規格は日本語で表示する", () => {
         expect(getSpecificationValueLabel(
             "cockpit_replaceable",
@@ -65,20 +66,20 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("交換不可")
     })
 
-    // 値ラベルを登録した規格値と、未登録の値のフォールバックを固定する。
+    // 値ラベルを登録した規格値と、未登録の値のフォールバックを固定
     it("規格値のラベルと未登録時の表示を固定する", () => {
         expect(getSpecificationValueLabel(
             "bb_standard",
             "bb30a",
         )).toBe("BB30A")
-        // 未登録の値は、キーの単位規則だけを適用してそのまま表示する。
+        // 未登録の値は、キーの単位規則だけを適用して表示
         expect(getSpecificationValueLabel(
             "bb_standard",
             "unknown_value",
         )).toBe("unknown_value")
     })
 
-    // 複数対応の規格値は、各値を日本語ラベルで並べて表示する。
+    // 複数対応の規格値は、各値を日本語ラベルで並べて表示
     it("複数対応の規格値を並べて表示する", () => {
         expect(getSpecificationValueLabel(
             "freehub_body",
@@ -86,8 +87,9 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("Shimano HG／SRAM XDR／Campagnolo N3W")
     })
 
-    // フレームの最大タイヤ幅を超えるタイヤは、フレームを維持したまま選べない。
+    // フレームの最大タイヤ幅を超えるタイヤは、フレームを維持したまま選べない
     it("フレームの最大タイヤ幅を超えるタイヤは選択できない", () => {
+        // 最大タイヤ幅30mmのフレームと幅32mmのタイヤ
         const frame = createPart(1, "Frame", "frame", {max_tire_width_mm: "30"})
         const tire = createPart(2, "Tire", "tire", {tire_width_mm: "32"})
 
@@ -101,8 +103,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 最大幅以内のタイヤは適合として扱う。
+    // 最大幅以内のタイヤは適合として扱う
     it("フレームの最大タイヤ幅以内のタイヤは適合する", () => {
+        // 最大タイヤ幅30mmのフレームと幅28mmのタイヤ
         const frame = createPart(1, "Frame", "frame", {max_tire_width_mm: "30"})
         const tire = createPart(2, "Tire", "tire", {tire_width_mm: "28"})
 
@@ -115,8 +118,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // フレームのブレーキマウントと合わないキャリパーは選択できない。
+    // フレームのブレーキマウントと合わないキャリパーは選択できない
     it("ブレーキマウントが異なるキャリパーは選択できない", () => {
+        // フラットマウントのフレームとポストマウントのキャリパー
         const frame = createPart(1, "Frame", "frame", {brake_mount: "flat_mount"})
         const caliper = createPart(2, "Caliper", "brake_caliper", {brake_mount: "post_mount"})
 
@@ -130,8 +134,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 段数が一致していても変速方式が異なれば、どちらの理由も残して非互換にする。
+    // 段数が一致していても変速方式が異なれば、どちらの理由も残して非互換にする
     it("レバーとディレイラーは段数と変速方式の両方を判定する", () => {
+        // 機械式レバーと電動ディレイラー（段数は12で一致）
         const lever = createPart(1, "Lever", "shift_brake_lever", {
             drivetrain_speed: "12",
             shift_system: "mechanical",
@@ -154,8 +159,9 @@ describe("evaluatePartCompatibility", () => {
         ])
     })
 
-    // カセットとチェーンの段数が異なれば非互換にする。
+    // カセットとチェーンの段数が異なれば非互換にする
     it("段数が異なるカセットとチェーンは非互換にする", () => {
+        // 12速カセットと11速チェーン
         const cassette = createPart(1, "Cassette", "cassette", {drivetrain_speed: "12"})
         const chain = createPart(2, "Chain", "chain", {drivetrain_speed: "11"})
 
@@ -169,8 +175,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["cassette"])
     })
 
-    // コンポセットのクランク軸規格とBBを比較する。
+    // コンポセットのクランク軸規格とBBを比較
     it("コンポセットとクランク軸規格が異なるBBは非互換にする", () => {
+        // クランク軸が異なるコンポセットとBB
         const groupset = createPart(1, "Groupset", "groupset", {crank_spindle: "hollowtech_ii"})
         const bottomBracket = createPart(2, "BB", "bottom_bracket", {crank_spindle: "dub"})
 
@@ -184,8 +191,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["groupset"])
     })
 
-    // コンポセットのフリーボディに対応するホイールは適合する。
+    // コンポセットのフリーボディに対応するホイールは適合
     it("コンポセットのフリーボディに対応するホイールは適合する", () => {
+        // SRAM XDR対応のコンポセットと複数対応ホイール
         const groupset = createPart(1, "Groupset", "groupset", {freehub_body: "sram_xdr"})
         const wheel = createPart(2, "Wheel", "wheel", {freehub_body: "shimano_hg,sram_xdr"})
 
@@ -198,8 +206,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする。
+    // チューブ側の最小・最大幅にタイヤ幅が収まる場合は選択可能にする
     it("タイヤ幅がチューブの対応範囲内なら適合する", () => {
+        // 幅28mmのタイヤと対応範囲25〜32mmのチューブ
         const tire = createPart(1, "Tire", "tire", {
             wheel_diameter: "700C",
             tire_width_mm: "28",
@@ -219,8 +228,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // 対応範囲外なら競合するタイヤのスロットも結果へ返す。
+    // 対応範囲外なら競合するタイヤのスロットも結果へ返す
     it("タイヤ幅がチューブの対応範囲外なら競合として扱う", () => {
+        // 幅35mmのタイヤと対応範囲20〜28mmのチューブ
         const tire = createPart(1, "Tire", "tire", {
             wheel_diameter: "700C",
             tire_width_mm: "35",
@@ -241,8 +251,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["tire:front"])
     })
 
-    // 必要な規格が片側にない場合は、誤って選択を禁止せず未確認とする。
+    // 必要な規格が片側にない場合は、誤って選択を禁止せず未確認と判定
     it("規格不足は非互換ではなく未確認にする", () => {
+        // 規格未登録のキャリパーと形状規格ありのパッド
         const caliper = createPart(1, "Caliper", "brake_caliper", {})
         const pad = createPart(2, "Pad", "brake_pad", {
             pad_family: "shimano_road_flat_mount",
@@ -257,8 +268,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("unknown")
     })
 
-    // 前後位置制約に反する候補は、選択操作自体を止める。
+    // 前後位置制約に反する候補は、選択操作自体を止める
     it("前輪専用タイヤは後輪で非互換にする", () => {
+        // 前輪専用のタイヤ
         const tire = createPart(1, "Front Tire", "tire", {
             allowed_position: "front",
         })
@@ -273,8 +285,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // フレームを外して解決するのではなく、候補だけを選択不可にする。
+    // フレームを外して解決するのではなく、候補だけを選択不可にする
     it("フレームと規格が異なる候補はフレームを解除せず選択不可にする", () => {
+        // 専用コックピットのフレームと標準ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
             cockpit_connection: "integrated_only",
@@ -294,8 +307,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual([])
     })
 
-    // フレームは基準パーツ。径が異なるシートポストは解除対象にし、フレームは選択可能にする。
+    // フレームは基準パーツ。径が異なるシートポストは解除対象にし、フレームは選択可能にする
     it("径が異なるシートポストが選択済みでもフレームは選択可能にする", () => {
+        // シートポスト径27.2mmのフレームと31.6mmのシートポスト
         const frame = createPart(1, "Frame", "frame", {
             seatpost_diameter_mm: "27.2",
         })
@@ -314,8 +328,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["seatpost"])
     })
 
-    // フレーム規格が未登録でも自由に適合とはせず、確認が必要な状態を表示する。
+    // フレーム規格が未登録でも自由に適合とはせず、確認が必要な状態を表示
     it("コックピット規格がないフレームは未確認として扱う", () => {
+        // コックピット規格が未登録のフレームとハンドル
         const frame = createPart(1, "Frame", "frame", {})
         const handlebar = createPart(2, "Handlebar", "handlebar", {})
 
@@ -329,8 +344,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 専用フォーク(either接続・ステム非占有)では、通常ハンドルをスルーせずフォーク規格と比較する。
+    // 専用フォーク(either接続・ステム非占有)では、通常ハンドルをスルーせずフォーク規格と比較
     it("専用フォークと規格外の通常ハンドルは選択不可にする", () => {
+        // 専用フォークのフレームとクランプ径31.8mmのハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "cannondale_delta",
             cockpit_connection: "either",
@@ -349,8 +365,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 専用フォークに適合する専用規格のハンドルは選択できる。
+    // 専用フォークに適合する専用規格のハンドルは選択できる
     it("専用フォークと適合する専用ハンドルは選択できる", () => {
+        // 専用フォークと専用規格のハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "cannondale_delta",
             cockpit_connection: "either",
@@ -369,8 +386,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 標準フレームと通常ハンドルの間にはステムが入るため、直接の規格比較をしない。
+    // 標準フレームと通常ハンドルの間にはステムが入るため、直接の規格比較をしない
     it("標準フレームと通常ハンドルは直接比較しない", () => {
+        // 標準コックピットのフレームとクランプ径31.8mmのハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "standard_1_1_8",
         })
@@ -387,8 +405,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result).toBeNull()
     })
 
-    // 丸型コラムのオープン規格は、標準1-1/8の一体型ハンドルも装着できる。
+    // 丸型コラムのオープン規格は、標準1-1/8の一体型ハンドルも装着できる
     it("丸型オープン規格は標準一体型ハンドルを適合にする", () => {
+        // 丸型オープン規格のフレームと標準一体型ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "fsa_acr",
             cockpit_connection: "either",
@@ -406,8 +425,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // D字コラムのオープン規格は標準コックピットを装着できない。
+    // D字コラムのオープン規格は標準コックピットを装着できない
     it("D字オープン規格は標準一体型ハンドルを非互換にする", () => {
+        // D字オープン規格のフレームと標準一体型ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "pinarello_ticr",
             cockpit_connection: "integrated_only",
@@ -425,8 +445,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("incompatible")
     })
 
-    // D字コラムのオープン規格でも、規格一致の専用コックピットは装着できる。
+    // D字コラムのオープン規格でも、規格一致の専用コックピットは装着できる
     it("D字オープン規格は規格一致の専用ハンドルを適合にする", () => {
+        // D字オープン規格のフレームと規格一致の専用ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "pinarello_ticr",
             cockpit_connection: "integrated_only",
@@ -444,8 +465,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // 標準ステムは、丸型オープン規格では適合し、D字オープン規格では非互換になる。
+    // 標準ステムは、丸型オープン規格では適合し、D字オープン規格では非互換になる
     it("標準ステムの可否を丸型とD字のオープン規格で分ける", () => {
+        // 丸型とD字のフレーム、標準ステム
         const roundFrame = createPart(1, "Frame", "frame", {
             cockpit_interface: "fsa_acr",
             cockpit_connection: "either",
@@ -473,8 +495,9 @@ describe("evaluatePartCompatibility", () => {
         expect(dShapedResult?.status).toBe("incompatible")
     })
 
-    // コラム規格から上端径を引ける場合、ステムのコラムクランプ径と比較する。
+    // コラム規格から上端径を引ける場合、ステムのコラムクランプ径と比較
     it("コラム径が一致するフレームとステムは適合にする", () => {
+        // テーパーコラムのフレームとコラムクランプ28.6mmのステム
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "standard_1_1_8",
             steerer_standard: "tapered_1_1_8_1_5",
@@ -494,8 +517,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 1-1/4インチのコラムに1-1/8インチ用ステムは取り付けられない。
+    // 1-1/4インチのコラムに1-1/8インチ用ステムは取り付けられない
     it("コラム径が異なるステムは選択不可にする", () => {
+        // 1-1/4インチコラムのフレームと28.6mm用ステム
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "standard_1_1_8",
             steerer_standard: "straight_1_1_4",
@@ -515,8 +539,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 専用形状(Delta/ICS/OverDrive Aero)は径の比較をしない。
+    // 専用形状(Delta/ICS/OverDrive Aero)は径の比較をしない
     it("専用形状のコラムはコラム径で判定しない", () => {
+        // 専用形状コラムのフレームと専用ステム
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "bmc_ics",
             steerer_standard: "bmc_ics",
@@ -534,8 +559,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // システムタグが交差すれば、規格名が異なっても装着できる(例: DCR車とEXS)。
+    // システムタグが交差すれば、規格名が異なっても装着できる(例: DCR車とEXS)
     it("コックピットシステムが交差するフレームとハンドルは適合にする", () => {
+        // 複数システム対応のハンドルと3種のフレーム
         const dedaFrame = createPart(1, "Frame", "frame", {
             cockpit_interface: "pinarello_ticr",
             cockpit_system: "deda_dcr",
@@ -566,8 +592,9 @@ describe("evaluatePartCompatibility", () => {
         }
     })
 
-    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを選べない。
+    // 交換不可の付属コックピットは、システムが一致しても別ハンドルを選べない
     it("交換不可の付属コックピットは別ハンドルを選択不可にする", () => {
+        // 交換不可の付属コックピットを持つフレームと社外ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
             cockpit_system: "canyon_cp0018",
@@ -587,8 +614,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 交換可の付属コックピットは、システムが一致するハンドルへ交換できる。
+    // 交換可の付属コックピットは、システムが一致するハンドルへ交換できる
     it("交換可の付属コックピットは適合するハンドルへ交換できる", () => {
+        // 交換可の付属コックピットを持つフレームと社外ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "pinarello_ticr",
             cockpit_system: "deda_dcr",
@@ -610,8 +638,9 @@ describe("evaluatePartCompatibility", () => {
     })
 
     // フレームは基準パーツ。選択済みハンドルと規格が合わない場合は
-    // フレーム側を選択不可にせず、解除対象にして選び直せるようにする。
+    // フレーム側を選択不可にせず、解除対象にして選び直せるようにする
     it("フレーム候補は選択済みハンドルと合わない場合に解除対象にする", () => {
+        // 専用コックピットのフレーム候補と選択済みハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
             cockpit_connection: "integrated_only",
@@ -631,8 +660,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["handlebar"])
     })
 
-    // 専用ステムが付属する場合も、通常ハンドルは付属ステムのクランプ径で判定する。
+    // 専用ステムが付属する場合も、通常ハンドルは付属ステムのクランプ径で判定
     it("専用ステム付属フレームと通常ハンドルはクランプ径で適合判定する", () => {
+        // 専用ステム付きフレームとクランプ径31.8mmのハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "focus_cis",
             cockpit_connection: "stem",
@@ -652,8 +682,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(false)
     })
 
-    // 一体型専用フレームは、通常ハンドルの規格値が欠けていても選択を許可しない。
+    // 一体型専用フレームは、通常ハンドルの規格値が欠けていても選択を許可しない
     it("一体型専用フレームでは通常ハンドルを選択不可にする", () => {
+        // 一体型専用フレームとクランプ径31.8mmのハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "colnago_cc01",
             cockpit_connection: "integrated_only",
@@ -672,8 +703,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 通常ハンドルはフレーム規格ではなく、接続相手となるステムのクランプ径で判定する。
+    // 通常ハンドルはフレーム規格ではなく、接続相手となるステムのクランプ径で判定
     it("通常ハンドルとステムはクランプ径で適合判定する", () => {
+        // クランプ径31.8mmのステムと35mmのハンドル
         const stem = createPart(1, "Stem", "stem", {
             handlebar_clamp_mm: "31.8",
         })
@@ -691,8 +723,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["stem"])
     })
 
-    // 付属コックピット枠を持つフレームでは、別売ハンドルを追加できない。
+    // 付属コックピット枠を持つフレームでは、別売ハンドルを追加できない
     it("コックピット付属フレームでは別のハンドルを選択不可にする", () => {
+        // コックピットが付属するフレームと別売ハンドル
         const frame = createPart(1, "Frame", "frame", {})
         frame.blockedCategoryKeys = ["handlebar", "stem"]
         const handlebar = createPart(2, "Handlebar", "handlebar", {})
@@ -707,8 +740,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.selectionBlocked).toBe(true)
     })
 
-    // 一体型ハンドルを選ぶときは、既存ステムを黙って解除せず確認対象にする。
+    // 一体型ハンドルを選ぶときは、既存ステムを黙って解除せず確認対象にする
     it("一体型ハンドルと既存ステムの同時選択を確認対象にする", () => {
+        // ステムと、ステムを占有する一体型ハンドル
         const stem = createPart(1, "Stem", "stem", {})
         const handlebar = createPart(2, "Integrated Handlebar", "handlebar", {}, ["stem"])
 
@@ -723,8 +757,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["stem"])
     })
 
-    // キャリパーとパッドの規格が違えば、相互に対応しない候補として扱う。
+    // キャリパーとパッドの規格が違えば、相互に対応しない候補として扱う
     it("キャリパーとパッドの形状が異なる場合は競合として扱う", () => {
+        // 形状規格が異なるキャリパーとパッド
         const caliper = createPart(1, "Caliper", "brake_caliper", {
             pad_family: "shimano_road_flat_mount",
         })
@@ -742,8 +777,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.conflictingSlotKeys).toEqual(["brake_caliper:front"])
     })
 
-    // ホイール側へ追加した取付規格を使い、6ボルトローターとの不一致を検出する。
+    // ホイール側へ追加した取付規格を使い、6ボルトローターとの不一致を検出
     it("ホイールとローターの取付方式が異なる場合は競合として扱う", () => {
+        // センターロックのホイールと6ボルトローター
         const wheel = createPart(1, "Wheel", "wheel", {
             rotor_mount: "center_lock",
         })
@@ -761,8 +797,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.reasons).toContain("ローター取付方式が一致しません")
     })
 
-    // 650Bホイールに700Cタイヤは装着できないため非互換にする。
+    // 650Bホイールに700Cタイヤは装着できないため非互換にする
     it("ホイール径が異なるタイヤは競合として扱う", () => {
+        // 650Bホイールと700Cタイヤ
         const wheel = createPart(1, "Wheel", "wheel", {
             wheel_diameter: "650B",
         })
@@ -780,8 +817,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("incompatible")
     })
 
-    // 非互換の原因となった相手パーツを結果へ含め、UIで相手を特定できるようにする。
+    // 非互換の原因となった相手パーツを結果へ含め、UIで相手を特定できるようにする
     it("非互換の相手パーツを結果へ含める", () => {
+        // 専用コックピットのフレームと通常ハンドル
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
             cockpit_connection: "integrated_only",
@@ -801,8 +839,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.counterparts[0]?.slotKey).toBe("frame")
     })
 
-    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを適合とする。
+    // 複数フリーボディ対応のホイールは、対応集合に含まれるカセットを適合と判定
     it("複数フリーボディ対応のホイールは集合内のカセットを適合とする", () => {
+        // Shimano HG・SRAM XDR対応ホイールとXDRカセット
         const wheel = createPart(1, "Wheel", "wheel", {
             freehub_body: "shimano_hg,sram_xdr",
         })
@@ -819,8 +858,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("compatible")
     })
 
-    // 対応集合に含まれないカセットは非互換とする。
+    // 対応集合に含まれないカセットは非互換と判定
     it("複数フリーボディ対応のホイールでも集合外のカセットは非互換にする", () => {
+        // Shimano HG・SRAM XDR対応ホイールとCampagnoloカセット
         const wheel = createPart(1, "Wheel", "wheel", {
             freehub_body: "shimano_hg,sram_xdr",
         })
@@ -837,8 +877,9 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("incompatible")
     })
 
-    // 同じペア商品を前後スロットに置いても、価格・重量を二重計上しない。
+    // 同じペア商品を前後スロットに置いても、価格・重量を二重計上しない
     it("前後セット商品の合計は1回だけ加算する", () => {
+        // 前後セット販売のタイヤ
         const pair = createPart(1, "Pair", "tire", {
             package_unit: "pair",
         })
@@ -849,8 +890,9 @@ describe("evaluatePartCompatibility", () => {
         })).toEqual({price: 1000, weight: 100})
     })
 
-    // 占有枠の付属品は数量込みの重量を加算し、価格は加算しない。
+    // 占有枠の付属品は数量込みの重量を加算し、価格は加算しない
     it("カテゴリー付き付属品の重量を合計に加算する", () => {
+        // ハンドルとシートポストが付属するフレーム
         const frame: Part = {
             ...createPart(1, "Frame", "frame", {}),
             weight: 780,
@@ -874,8 +916,9 @@ describe("evaluatePartCompatibility", () => {
             .toEqual({price: 1000, weight: 780 + 320 + 200})
     })
 
-    // コンポセットの構成品は重量・価格がセット本体に含まれるため、合計へ加算しない。
+    // コンポセットの構成品は重量・価格がセット本体に含まれるため、合計へ加算しない
     it("セット構成品の重量と参考価格は合計に加算しない", () => {
+        // 構成品を含むコンポセット
         const groupset: Part = {
             ...createPart(1, "Groupset", "groupset", {}),
             weight: 2500,
@@ -893,8 +936,9 @@ describe("evaluatePartCompatibility", () => {
             .toEqual({price: 1000, weight: 2500})
     })
 
-    // カテゴリーなし付属品（クリート等）は完成重量へ加算しない。
+    // カテゴリーなし付属品（クリート等）は完成重量へ加算しない
     it("カテゴリーなし付属品の重量は合計に加算しない", () => {
+        // クリート付属のペダル
         const pedal: Part = {
             ...createPart(1, "Pedal", "pedal", {}),
             includedItems: [{
@@ -909,8 +953,9 @@ describe("evaluatePartCompatibility", () => {
             .toEqual({price: 1000, weight: 100})
     })
 
-    // 前後セット商品の付属品も、親商品と一緒に1回だけ加算する。
+    // 前後セット商品の付属品も、親商品と一緒に1回だけ加算
     it("前後セット商品の付属品は二重計上しない", () => {
+        // チューブ付属の前後セットタイヤ
         const pair: Part = {
             ...createPart(1, "Pair", "tire", {package_unit: "pair"}),
             includedItems: [{
@@ -928,10 +973,11 @@ describe("evaluatePartCompatibility", () => {
     })
 })
 
-// フレームのコックピットバッジを確認する。
+// フレームのコックピットバッジを確認
 describe("getFrameCockpitBadge", () => {
-    // 付属は規格名を併記し、標準付属か専用付属かを区別する。
+    // 付属は規格名を併記し、標準付属か専用付属かを区別
     it("付属は規格名を併記したバッジを返す", () => {
+        // 専用規格と標準規格の付属コックピットを持つフレーム
         const proprietaryFrame = createPart(1, "Frame", "frame", {
             cockpit_interface: "canyon_cp0018",
             cockpit_connection: "integrated_only",
@@ -950,8 +996,9 @@ describe("getFrameCockpitBadge", () => {
         )
     })
 
-    // ハンドル未占有で専用規格は、規格名そのものを表示する。
+    // ハンドル未占有で専用規格は、規格名だけを表示
     it("専用規格は規格名のバッジを返す", () => {
+        // 専用規格でハンドル未占有のフレーム
         const frame = createPart(1, "Frame", "frame", {
             cockpit_interface: "cervelo_s5_hb19",
             cockpit_connection: "either",
@@ -960,8 +1007,9 @@ describe("getFrameCockpitBadge", () => {
         expect(getFrameCockpitBadge(frame)?.label).toBe("Cervélo S5 HB19専用")
     })
 
-    // サードパーティ製コックピットが装着できる規格は、具体名を表示する。
+    // サードパーティ製コックピットが装着できる規格は、具体名を表示
     it("オープン規格は規格名のバッジを返す", () => {
+        // 丸型とD字のオープン規格フレーム
         const roundSteererFrame = createPart(1, "Frame", "frame", {
             cockpit_interface: "fsa_acr",
             cockpit_connection: "either",
@@ -975,8 +1023,9 @@ describe("getFrameCockpitBadge", () => {
         expect(getFrameCockpitBadge(dShapedFrame)?.label).toBe("Pinarello TiCR対応")
     })
 
-    // 標準規格は 1-1/8 標準コラム。規格が無ければ null。
+    // 標準規格は 1-1/8 標準コラム。規格が無ければ null
     it("標準規格は標準コラム、規格なしは null を返す", () => {
+        // 標準規格のフレームと規格未登録のフレーム
         const standardFrame = createPart(1, "Frame", "frame", {
             cockpit_interface: "standard_1_1_8",
         })
@@ -987,10 +1036,11 @@ describe("getFrameCockpitBadge", () => {
     })
 })
 
-// フレームの重量がフロントフォークを含むことを示すバッジを確認する。
+// フレームの重量がフロントフォークを含むことを示すバッジを確認
 describe("getFrameWeightBadge", () => {
-    // 重量の範囲がフレーム＋フロントフォークのときだけバッジを出す。
+    // 重量の範囲がフレーム＋フロントフォークのときだけバッジを出す
     it("フレーム＋フロントフォークのフレームはバッジを返す", () => {
+        // フレーム＋フォークの重量範囲を持つフレーム
         const frameset = createPart(1, "Frameset", "frame", {
             weight_scope: "frame_and_fork",
         })
@@ -1001,8 +1051,9 @@ describe("getFrameWeightBadge", () => {
         })
     })
 
-    // 非公式・別条件の値は、公式の値と混ざらないよう「参考値」と併記する。
+    // 非公式・別条件の値は、公式の値と混ざらないよう「参考値」と併記
     it("参考値のフレームは参考値つきのバッジを返す", () => {
+        // 参考値の重量を持つフレーム
         const referenceFrameset = createPart(2, "Frameset", "frame", {
             weight_scope: "frame_and_fork",
             weight_source: "reference",
@@ -1014,8 +1065,9 @@ describe("getFrameWeightBadge", () => {
         })
     })
 
-    // 範囲が未登録のフレームと、フレーム以外にはバッジを出さない。
+    // 範囲が未登録のフレームと、フレーム以外にはバッジを出さない
     it("範囲が未登録のフレームとフレーム以外は null を返す", () => {
+        // 範囲未登録のフレームとフレーム以外のパーツ
         const unknownFrame = createPart(1, "Frame", "frame", {})
         const wheel = createPart(2, "Wheel", "wheel", {
             weight_scope: "frame_and_fork",
@@ -1026,10 +1078,11 @@ describe("getFrameWeightBadge", () => {
     })
 })
 
-// 完成重量が何の足し算かを示す内訳を確認する。
+// 完成重量が何の足し算かを示す内訳を確認
 describe("getWeightBreakdown", () => {
-    // フレーム＋フロントフォークの内訳を、単位つきで並べて返す。
+    // フレーム＋フロントフォークの内訳を、単位つきで並べて返す
     it("フレームとフロントフォークの内訳を返す", () => {
+        // フレームとフォークの重量内訳を持つフレーム
         const frameset = createPart(1, "Frameset", "frame", {
             weight_scope: "frame_and_fork",
             frame_weight_g: "755",
@@ -1039,8 +1092,9 @@ describe("getWeightBreakdown", () => {
         expect(getWeightBreakdown(frameset)).toBe("755g + 378g")
     })
 
-    // 内訳が未登録、または重量の範囲が違う場合は null を返す。
+    // 内訳が未登録、または重量の範囲が違う場合は null を返す
     it("内訳が未登録なら null を返す", () => {
+        // 内訳未登録と範囲違いのフレーム
         const missingBreakdown = createPart(1, "Frameset", "frame", {
             weight_scope: "frame_and_fork",
         })

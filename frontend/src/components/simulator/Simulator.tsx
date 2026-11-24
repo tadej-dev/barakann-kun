@@ -31,6 +31,7 @@ export function Simulator({
                               savedBuildsReloadKey = 0,
                               autoSaveEnabled = true,
                           }: SimulatorProps) {
+    // コントローラーへ渡すカテゴリーと自動保存の有効状態
     const controllerProps: UseSimulatorControllerProps = {
         categories,
         autoSaveEnabled,
@@ -47,11 +48,13 @@ export function Simulator({
     // 選択中の構成がまだ読み込まれていなければ、保存内容を取得する
     const activeConfig = collection.orderedConfigs.find((config) =>
         config.id === controller.activeConfigId)
+    // 選択中構成の内容を読み込み済みか
     const isActiveConfigLoaded = controller.isConfigLoaded(
         controller.activeConfigId,
     )
 
     useEffect(() => {
+        // 一覧準備前・構成未取得・読み込み済みなら選択処理を省略
         if (!collection.isConfigListReady || !activeConfig || isActiveConfigLoaded) {
             return
         }
