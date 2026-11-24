@@ -7,7 +7,7 @@
 .dev.vars.*
 !.dev.vars.example
 
-.idea/
+.idea
 .vscode/
 *.iml
 .DS_Store
@@ -22,9 +22,12 @@ node_modules/
 # Local agent settings
 AGENTS.md
 opencode.json
-.opencode/skills/
-.commandcode/
-.claude/
+# ツール設定は .local-tools にまとめ、直下にはシンボリックリンクを置く
+.claude
+.commandcode
+.idea
+.opencode
+.local-tools/
 
 # Local database files and journals
 *.sqlite
