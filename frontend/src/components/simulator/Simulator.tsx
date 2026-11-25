@@ -100,8 +100,7 @@ export function Simulator({
                     </div>
 
                     <SummaryCards
-                        totalPrice={controller.totalPrice}
-                        totalWeight={controller.totalWeight}
+                        totalsBreakdown={controller.totalsBreakdown}
                         activeConfigName={collection.activeConfigName}
                     />
 

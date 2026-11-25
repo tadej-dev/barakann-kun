@@ -6,6 +6,7 @@ import {
     getFrameCockpitBadge,
     getFrameWeightBadge,
     getSpecificationValueLabel,
+    getTotalsBreakdown,
     getWeightBreakdown,
 } from "@/features/simulator/partCompatibility"
 import {createPartSlot} from "@/features/simulator/partSlots"
@@ -963,6 +964,7 @@ describe("evaluatePartCompatibility", () => {
                 quantity: 1,
                 categoryKey: "inner_tube",
                 weight: 50,
+                price: 300,
             }],
         }
 
@@ -970,6 +972,75 @@ describe("evaluatePartCompatibility", () => {
             "tire:front": pair,
             "tire:rear": pair,
         })).toEqual({price: 1000, weight: 100 + 50})
+    })
+
+    // 付属品・ペア商品・セット構成品が混在しても合計が正しい
+    it("付属品・ペア商品・セット構成品をまとめて正しく合計する", () => {
+        // カテゴリー付属品とカテゴリーなし付属品を持つフレーム
+        const frame: Part = {
+            ...createPart(1, "Frame", "frame", {}),
+            price: 1000,
+            weight: 780,
+            includedItems: [
+                {
+                    name: "ハンドル",
+                    quantity: 1,
+                    categoryKey: "handlebar",
+                    weight: 320,
+                },
+                {
+                    name: "シートポスト",
+                    quantity: 1,
+                    categoryKey: "seatpost",
+                    weight: 200,
+                },
+                {
+                    name: "クリート",
+                    quantity: 1,
+                    categoryKey: null,
+                    weight: 60,
+                },
+            ],
+        }
+        // 前後ペア販売でチューブが付属するタイヤ
+        const pair: Part = {
+            ...createPart(2, "Tire pair", "tire", {package_unit: "pair"}),
+            price: 500,
+            weight: 100,
+            includedItems: [{
+                name: "チューブ",
+                quantity: 1,
+                categoryKey: "inner_tube",
+                weight: 50,
+            }],
+        }
+        // 構成品の重量をセット本体に含むグループセット
+        const groupset: Part = {
+            ...createPart(3, "Groupset", "groupset", {}),
+            price: 2000,
+            weight: 2500,
+            includedItems: [{
+                name: "RD",
+                quantity: 1,
+                categoryKey: "rear_derailleur",
+                weight: 262,
+                price: 40000,
+                isSetComponent: true,
+            }],
+        }
+
+        expect(calculateSelectedPartsTotals({
+            frame,
+            "tire:front": pair,
+            "tire:rear": pair,
+            groupset,
+        })).toEqual({
+            // RD構成品の参考価格は合計金額へ加算しない
+            price: 1000 + 500 + 2000,
+            // フレーム本体 + ハンドル + シートポスト + ペア本体 + チューブ + セット本体
+            // カテゴリーなしのクリート60gとセット構成品262gは含めない
+            weight: 780 + 320 + 200 + 100 + 50 + 2500,
+        })
     })
 })
 
@@ -1106,4 +1177,83 @@ describe("getWeightBreakdown", () => {
         expect(getWeightBreakdown(missingBreakdown)).toBeNull()
         expect(getWeightBreakdown(frameOnly)).toBeNull()
     })
+    // 合計の内訳を返し、加算・除外の区分を保つ
+    it("合計の内訳を返す", () => {
+        // 付属品とカテゴリーなし付属品を持つフレーム
+        const frame: Part = {
+            ...createPart(1, "Frame", "frame", {}),
+            price: 1000,
+            weight: 800,
+            includedItems: [
+                {
+                    name: "ハンドル",
+                    quantity: 2,
+                    categoryKey: "handlebar",
+                    weight: 200,
+                    price: 500,
+                },
+                {
+                    name: "クリート",
+                    quantity: 1,
+                    categoryKey: null,
+                    weight: 50,
+                },
+            ],
+        }
+        // 構成品を同梱するグループセット
+        const groupset: Part = {
+            ...createPart(2, "Groupset", "groupset", {}),
+            price: 2000,
+            weight: 2500,
+            includedItems: [{
+                name: "RD",
+                quantity: 1,
+                categoryKey: "rear_derailleur",
+                weight: 200,
+                price: 1000,
+                isSetComponent: true,
+            }],
+        }
+        const breakdown = getTotalsBreakdown({frame, groupset})
+
+        expect(breakdown.basePrice).toBe(3000)
+        expect(breakdown.baseWeight).toBe(3300)
+        expect(breakdown.totalPrice).toBe(3000)
+        expect(breakdown.totalWeight).toBe(3700)
+        expect(breakdown.includedItems).toEqual([{
+            name: "ハンドル",
+            quantity: 2,
+            unitWeight: 200,
+            totalWeight: 400,
+            unitPrice: 500,
+            totalPrice: 1000,
+            sourcePartName: "Frame",
+            categoryKey: "handlebar",
+            isSetComponent: false,
+        }])
+        expect(breakdown.setComponents).toEqual([{
+            name: "RD",
+            quantity: 1,
+            unitWeight: 200,
+            totalWeight: 200,
+            unitPrice: 1000,
+            totalPrice: 1000,
+            sourcePartName: "Groupset",
+            categoryKey: "rear_derailleur",
+            isSetComponent: true,
+        }])
+        expect(breakdown.excludedItems[0]).toMatchObject({
+            name: "クリート",
+            quantity: 1,
+            totalWeight: 50,
+            totalPrice: null,
+            categoryKey: null,
+            isSetComponent: false,
+        })
+        expect(breakdown.referencePrices.map((item) => [
+            item.name,
+            item.totalPrice,
+        ])).toEqual([["ハンドル", 1000], ["RD", 1000]])
+    })
+
 })

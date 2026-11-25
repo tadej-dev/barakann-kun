@@ -326,31 +326,122 @@ export function getPartPackageUnit(part: Part) {
     return part.specifications?.package_unit ?? "single"
 }
 
+// 合計の内訳に表示する付属品1件
+export type TotalsIncludedItem = {
+    name: string // 付属品名
+    quantity: number // 数量
+    unitWeight: number // 1個あたりの重量（g）
+    totalWeight: number // 数量込みの重量（g）
+    unitPrice: number | null // 1個あたりの参考価格（円）
+    totalPrice: number | null // 数量込みの参考価格（円）
+    sourcePartName: string // 付属品を同梱するパーツ名
+    categoryKey: string | null // 装着先のカテゴリー
+    isSetComponent: boolean // セット構成品か
+}
+
+// 合計金額・完成重量の内訳
+export type TotalsBreakdown = {
+    totalPrice: number // 合計金額（円）
+    totalWeight: number // 完成重量（g）
+    basePrice: number // パーツ本体の価格合計（円）
+    baseWeight: number // パーツ本体の重量合計（g）
+    includedItems: TotalsIncludedItem[] // 合計へ重量を加算する付属品
+    setComponents: TotalsIncludedItem[] // セット重量に含まれる構成品
+    excludedItems: TotalsIncludedItem[] // カテゴリーなしで加算しない付属品
+    referencePrices: TotalsIncludedItem[] // 合計へ加算しない参考価格
+}
+
+// 選択済みパーツの合計と内訳を一度に求める
+export function getTotalsBreakdown(
+    selectedParts: SelectedParts,
+): TotalsBreakdown {
+    // 前後スロットに同じペア商品が入っていても、価格・重量を一度だけ加算する
+    const countedPairIds = new Set<number>()
+    // パーツ本体の価格合計（円）
+    let basePrice = 0
+    // パーツ本体の重量合計（g）
+    let baseWeight = 0
+    // 加算対象の付属品重量（g）
+    let includedWeight = 0
+    // 合計へ重量を加算する付属品
+    const includedItems: TotalsIncludedItem[] = []
+    // セット重量に含まれる構成品
+    const setComponents: TotalsIncludedItem[] = []
+    // カテゴリーなしで加算しない付属品
+    const excludedItems: TotalsIncludedItem[] = []
+    // 参考価格として表示する付属品
+    const referencePrices: TotalsIncludedItem[] = []
+
+    for (const part of Object.values(selectedParts)) {
+        // ペア商品は前後のスロットで二重に加算しない
+        if (getPartPackageUnit(part) === "pair") {
+            // 集計済みのペア商品なら加算しない
+            if (countedPairIds.has(part.id)) {
+                continue
+            }
+
+            countedPairIds.add(part.id)
+        }
+
+        basePrice += part.price
+        baseWeight += part.weight
+
+        for (const item of part.includedItems ?? []) {
+            // 数量込みの重量と参考価格
+            const totalWeight = item.quantity * item.weight
+            const totalPrice = item.price != null
+                ? item.quantity * item.price
+                : null
+            // 内訳に表示する1件分
+            const entry: TotalsIncludedItem = {
+                name: item.name,
+                quantity: item.quantity,
+                unitWeight: item.weight,
+                totalWeight,
+                unitPrice: item.price ?? null,
+                totalPrice,
+                sourcePartName: part.name,
+                categoryKey: item.categoryKey,
+                isSetComponent: Boolean(item.isSetComponent),
+            }
+
+            // 装着先があり、セット構成品でない付属品は重量を加算する
+            if (item.categoryKey !== null && !item.isSetComponent) {
+                includedItems.push(entry)
+                includedWeight += totalWeight
+            // セット構成品はセット本体の重量に含まれる
+            } else if (item.isSetComponent) {
+                setComponents.push(entry)
+            } else {
+                // 装着先が決まらない付属品は合計へ加算しない
+                excludedItems.push(entry)
+            }
+
+            // 参考価格は合計金額へ加算せず、内訳にだけ表示する
+            if (totalPrice !== null) {
+                referencePrices.push(entry)
+            }
+        }
+    }
+
+    return {
+        totalPrice: basePrice,
+        totalWeight: baseWeight + includedWeight,
+        basePrice,
+        baseWeight,
+        includedItems,
+        setComponents,
+        excludedItems,
+        referencePrices,
+    }
+}
+
 // 選択済みパーツの価格と重量を合計
 export function calculateSelectedPartsTotals(selectedParts: SelectedParts) {
-    // 前後スロットに同じペア商品が入っていても、価格・重量を一度だけ加算する。
-    const countedPairIds = new Set<number>()
+    // 合計と内訳を同じ計算から返し、表示との食い違いを防ぐ
+    const breakdown = getTotalsBreakdown(selectedParts)
 
-    return Object.values(selectedParts).reduce(
-        (totals, part) => {
-            // ペア商品は前後のスロットで二重に加算しない
-            if (getPartPackageUnit(part) === "pair") {
-                // 集計済みのペア商品なら加算しない
-                if (countedPairIds.has(part.id)) {
-                    return totals
-                }
-
-                countedPairIds.add(part.id)
-            }
-
-            return {
-                price: totals.price + part.price,
-                weight: totals.weight + part.weight +
-                    sumIncludedItemsWeight(part),
-            }
-        },
-        {price: 0, weight: 0},
-    )
+    return {price: breakdown.totalPrice, weight: breakdown.totalWeight}
 }
 
 // カテゴリー付き付属品の重量を数量込みで合計する。価格は加算しない。
