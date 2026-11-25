@@ -180,6 +180,35 @@ test.describe("シミュレーター画面", () => {
         await expect.poll(() => readSummaryNumber(priceCard)).toBe(0)
         await expect.poll(() => readSummaryNumber(weightCard)).toBe(0)
 
+        // ⓘの説明と、合計の内訳ダイアログ
+        const priceInfo = page.getByRole("button", {
+            name: "合計金額の内訳を表示",
+        })
+        await priceInfo.focus()
+        await expect(page.getByText(/パーツ価格＋セット価格/)).toBeVisible()
+        await priceInfo.click()
+        const breakdownDialog = page.getByRole("dialog").filter({
+            hasText: "合計金額の内訳",
+        })
+        await expect(breakdownDialog).toBeVisible()
+        await expect(breakdownDialog.getByText("パーツ本体")).toBeVisible()
+        await breakdownDialog.getByRole("button", {name: "閉じる", exact: true}).click()
+        await expect(breakdownDialog).toBeHidden()
+
+        // 重量のⓘは重量用の内訳を開く
+        await page.getByRole("button", {
+            name: "完成重量の内訳を表示",
+        }).click()
+        const weightDialog = page.getByRole("dialog").filter({
+            hasText: "完成重量の内訳",
+        })
+        await expect(weightDialog).toBeVisible()
+        await expect(weightDialog.getByText("合計金額の内訳")).toHaveCount(0)
+        await weightDialog.getByRole("button", {
+            name: "閉じる",
+            exact: true,
+        }).click()
+
         // 選択済み・候補のパーツ一覧
         await expect(simulatorPage.selectedPartsTable).toBeVisible()
         await expect(simulatorPage.candidatePartsTable).toBeVisible()

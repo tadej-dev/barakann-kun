@@ -12,8 +12,9 @@ import type {SavedBuild} from "@/api/savedBuilds"
 import {useAuth} from "@/features/auth/useAuth"
 import {blocksCategory} from "../../../../shared/part-compatibility-core"
 import {
-    calculateSelectedPartsTotals,
     evaluateSelectedPartsCompatibility,
+    getTotalsBreakdown,
+    type TotalsBreakdown,
 } from "@/features/simulator/partCompatibility"
 import {getPartDisplayName} from "@/features/simulator/partDisplay"
 import {
@@ -67,6 +68,7 @@ export type SimulatorController = {
     slotPositionLabel: string | null // 選択枠の前後表示名（単一枠はnull）
     totalPrice: number // 選択済みパーツの合計価格（円）
     totalWeight: number // 選択済みパーツの合計重量（g）
+    totalsBreakdown: TotalsBreakdown // 合計金額・完成重量の内訳
     changeCategory: (category: string) => void // カテゴリーを切り替える関数
     changeConfig: (configId: ConfigId) => void // 構成を切り替える関数
     restoreConfig: (config: SavedBuild) => Promise<void> // 保存構成を編集状態へ復元する関数
@@ -540,11 +542,13 @@ export function useSimulatorController({
         !partsError
     // エラーがある場合はloadingを解除し、再試行可能なエラー表示を優先する。
 
-    // 選択済みパーツの合計
-    const {price: totalPrice, weight: totalWeight} = useMemo(
-        () => calculateSelectedPartsTotals(selectedParts),
+    // 選択済みパーツの合計と内訳
+    const totalsBreakdown = useMemo(
+        () => getTotalsBreakdown(selectedParts),
         [selectedParts],
     )
+    // 合計カードと内訳ダイアログで同じ値を使う
+    const {totalPrice, totalWeight} = totalsBreakdown
     // 合計値は現在の編集対象だけを元に計算し、固定枠・追加枠を混ぜない。
 
     // 構成変更処理
@@ -691,6 +695,7 @@ export function useSimulatorController({
         slotPositionLabel: getPartSlotPositionLabel(activeSlot.position),
         totalPrice,
         totalWeight,
+        totalsBreakdown,
         changeCategory,
         changeConfig,
         restoreConfig: selectConfig,
