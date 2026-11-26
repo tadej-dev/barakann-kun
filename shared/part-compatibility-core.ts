@@ -37,6 +37,20 @@ type EqualityRule = {
     label: string // 表示名（規格）
     protectedCategory?: string // 維持するカテゴリーのキー
     protectedCategoryLabel?: string // 維持するカテゴリーの表示名
+    toleranceMm?: number // 数値規格で許容する差（mm）
+}
+
+// 上限値を持つ側と実値を持つ側を比べる組み合わせ
+// 歯数や径の容量は一致ではなく「上限以下か」で判定する
+type LimitRule = {
+    categories: readonly [string, string] // 対象カテゴリーの組
+    limitCategory: string // 上限値を持つカテゴリー
+    limitSpecificationKey: string // 上限値の規格キー
+    actualSpecificationKey: string // 実値の規格キー
+    label: string // 表示名（規格）
+    unit: string // 理由に添える値の単位（歯数はT、径はmm）
+    optionalLimit?: boolean // 上限が未登録なら判定しない
+    note?: string // 理由に添える条件（例: アダプター無し）
 }
 
 // 変速段数をそろえる必要がある駆動系のカテゴリー
@@ -123,6 +137,29 @@ export const EQUALITY_RULES: EqualityRule[] = [
     {categories: ["groupset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
     {categories: ["groupset", "wheel"], specificationKey: "freehub_body", label: "フリーボディ"},
     {categories: ["groupset", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
+    // チェーンは対応規格、カセット・リアディレイラー・クランクは受入規格として交差で比較
+    {categories: ["chain", "cassette"], specificationKey: "chain_standard", label: "チェーン規格"},
+    {categories: ["chain", "rear_derailleur"], specificationKey: "chain_standard", label: "チェーン規格"},
+    {categories: ["chain", "crankset"], specificationKey: "chain_standard", label: "チェーン規格"},
+    // クランクとフロントディレイラーはチェーンラインをそろえる
+    {
+        categories: ["crankset", "front_derailleur"],
+        specificationKey: "chainline_mm",
+        label: "チェーンライン",
+        // 実装上の差は調整で吸収できるため、1mmまでを適合として扱う
+        toleranceMm: 1.0,
+    },
+    // レバーとキャリパーはブレーキの駆動方式と油種をそろえる
+    {
+        categories: ["shift_brake_lever", "brake_caliper"],
+        specificationKey: "brake_actuation",
+        label: "ブレーキ方式",
+    },
+    {
+        categories: ["shift_brake_lever", "brake_caliper"],
+        specificationKey: "brake_fluid",
+        label: "ブレーキフルード",
+    },
     ...createPairwiseRules(
         DRIVETRAIN_SPEED_CATEGORIES,
         "drivetrain_speed",
@@ -138,6 +175,47 @@ export const EQUALITY_RULES: EqualityRule[] = [
         "chainring_count",
         "チェーンリング枚数",
     ),
+]
+
+// 上限値を持つ側が、実値を持つ側の容量以上かを比較する組み合わせ
+// 実値が上限を超える場合は、その組み合わせを非互換として扱う
+const LIMIT_RULES: LimitRule[] = [
+    {
+        categories: ["rear_derailleur", "cassette"],
+        limitCategory: "rear_derailleur",
+        limitSpecificationKey: "max_sprocket_teeth",
+        actualSpecificationKey: "max_sprocket_teeth",
+        label: "最大スプロケット歯数",
+        unit: "T",
+    },
+    {
+        categories: ["front_derailleur", "crankset"],
+        limitCategory: "front_derailleur",
+        limitSpecificationKey: "max_chainring_teeth",
+        actualSpecificationKey: "max_chainring_teeth",
+        label: "最大チェーンリング歯数",
+        unit: "T",
+    },
+    {
+        categories: ["brake_caliper", "disc_rotor"],
+        limitCategory: "brake_caliper",
+        limitSpecificationKey: "max_rotor_diameter_mm",
+        actualSpecificationKey: "rotor_diameter_mm",
+        label: "直付け対応ローター径",
+        unit: "mm",
+        note: "アダプター無し",
+    },
+    // フレームの対応ローター径は任意の規格で、登録があるフレームだけ比較する
+    {
+        categories: ["frame", "disc_rotor"],
+        limitCategory: "frame",
+        limitSpecificationKey: "max_rotor_diameter_mm",
+        actualSpecificationKey: "rotor_diameter_mm",
+        label: "直付け対応ローター径",
+        unit: "mm",
+        optionalLimit: true,
+        note: "アダプター無し",
+    },
 ]
 
 // 標準コックピットの規格値
@@ -742,6 +820,42 @@ function compareByEqualityRule(
         }
     }
 
+    // 許容差つきの数値規格（チェーンラインなど）
+    if (rule.toleranceMm !== undefined) {
+        // 両側の数値
+        const firstNumber = Number(candidateValue)
+        const secondNumber = Number(selectedValue)
+
+        // 数値でない場合は未確認として扱う
+        if (!Number.isFinite(firstNumber) || !Number.isFinite(secondNumber)) {
+            return {
+                status: "unknown",
+                reasons: [`${rule.label}が未確認です`],
+                details: createDetails("unknown"),
+            }
+        }
+
+        // 差が許容範囲内なら適合
+        if (Math.abs(firstNumber - secondNumber) <= rule.toleranceMm) {
+            return {
+                status: "compatible",
+                reasons: [
+                    `${rule.label}が適合します（差${Math.abs(firstNumber - secondNumber).toFixed(1)}mm）`,
+                ],
+                details: createDetails("compatible"),
+            }
+        }
+
+        // 差が大きい場合は調整範囲の確認を促す
+        return {
+            status: "unknown",
+            reasons: [
+                `${rule.label}が離れています（差${Math.abs(firstNumber - secondNumber).toFixed(1)}mm）。調整範囲を確認してください`,
+            ],
+            details: createDetails("unknown"),
+        }
+    }
+
     // 比較する規格値が一致
     if (specificationValuesMatch(candidateValue, selectedValue)) {
         return {
@@ -771,6 +885,94 @@ function compareByEqualityRule(
     return {
         status: "incompatible",
         reasons: [`${rule.label}が一致しません`],
+        details: createDetails("incompatible"),
+    }
+}
+
+// 上限ルール1件分の判定。上限と実値のどちらも未登録ならnullを返す
+function compareByLimitRule(
+    rule: LimitRule,
+    candidate: CompatibilityInput,
+    candidateCategory: string,
+    selected: CompatibilityInput,
+): PairCompatibilityResult | null {
+    // 候補側が上限値を持つか（持たなければ選択済み側が上限値を持つ）
+    const candidateIsLimit = candidateCategory === rule.limitCategory
+    // 上限値を持つパーツ
+    const limitPart = candidateIsLimit ? candidate : selected
+    // 実値を持つパーツ
+    const actualPart = candidateIsLimit ? selected : candidate
+    // 上限値の規格値
+    const limitValueText = getSpecification(limitPart, rule.limitSpecificationKey)
+    // 実値の規格値
+    const actualValueText = getSpecification(actualPart, rule.actualSpecificationKey)
+
+    // 上限と実値のどちらも未登録
+    if (!limitValueText && !actualValueText) {
+        return null
+    }
+
+    // 候補側の表示用規格値（候補が上限側なら上限値）
+    const candidateValue = candidateIsLimit
+        ? getSpecification(candidate, rule.limitSpecificationKey)
+        : getSpecification(candidate, rule.actualSpecificationKey)
+    // 選択済み側の表示用規格値（選択済みが上限側なら上限値）
+    const selectedValue = candidateIsLimit
+        ? getSpecification(selected, rule.actualSpecificationKey)
+        : getSpecification(selected, rule.limitSpecificationKey)
+
+    // 規格名と両側の値は、すべての判定結果で同じ形で表示用に添える
+    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [{
+        label: rule.label,
+        status,
+        specificationKey: rule.limitSpecificationKey,
+        candidateValue,
+        selectedValue,
+    }]
+
+    // 任意の上限が未登録なら、この組み合わせは判定しない
+    if (rule.optionalLimit && !limitValueText) {
+        return null
+    }
+
+    // 上限と実値の片方だけ未登録
+    if (!limitValueText || !actualValueText) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.label}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 上限値（数値として扱う）
+    const limitValue = Number(limitValueText)
+    // 実値（数値として扱う）
+    const actualValue = Number(actualValueText)
+
+    // 上限値か実値が数値でない
+    if (!Number.isFinite(limitValue) || !Number.isFinite(actualValue)) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.label}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 実値が上限以下
+    if (actualValue <= limitValue) {
+        return {
+            status: "compatible",
+            reasons: [`${rule.label}が適合します`],
+            details: createDetails("compatible"),
+        }
+    }
+
+    // 実値が上限を超える
+    return {
+        status: "incompatible",
+        reasons: [
+            `${rule.label}が上限を超えています（上限${limitValue}${rule.unit} / 実値${actualValue}${rule.unit}${rule.note ? `・${rule.note}` : ""}）`,
+        ],
         details: createDetails("incompatible"),
     }
 }
@@ -870,6 +1072,14 @@ export function compareParts(
             continue
         }
 
+        // 機械式ブレーキには油種が無いため、フルードの比較をしない
+        if (
+            rule.specificationKey === "brake_fluid" &&
+            isMechanicalBrakePair(candidate, selected)
+        ) {
+            continue
+        }
+
         // キャリパーを同梱しないコンポセットは、パッド形状を持たないため比較しない
         // パッドの適合はキャリパー側のルールで判定する
         if (
@@ -898,11 +1108,44 @@ export function compareParts(
         }
     }
 
+    // 該当する上限ルールをすべて評価し、一致ルールの結果へまとめる
+    for (const rule of LIMIT_RULES) {
+        // 対象外の組み合わせ
+        if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
+            continue
+        }
+
+        // 上限ルール1件分の判定結果
+        const result = compareByLimitRule(
+            rule,
+            candidate,
+            candidateCategory,
+            selected,
+        )
+
+        // 評価した結果を配列へ追加
+        if (result) {
+            ruleResults.push(result)
+        }
+    }
+
     return combinePairResults(ruleResults)
 }
 
 
+
+// どちらかが機械式ブレーキの組み合わせか判定する
+function isMechanicalBrakePair(
+    candidate: CompatibilityInput,
+    selected: CompatibilityInput,
+): boolean {
+    // 片側でも機械式と分かれば油種の比較は不要
+    return getSpecification(candidate, "brake_actuation") === "mechanical" ||
+        getSpecification(selected, "brake_actuation") === "mechanical"
+}
+
 // キャリパーを同梱しないコンポセットとブレーキパッドの組み合わせか判定する
+
 function isGroupsetPairWithoutCaliper(
     candidate: CompatibilityInput,
     candidateCategory: string,

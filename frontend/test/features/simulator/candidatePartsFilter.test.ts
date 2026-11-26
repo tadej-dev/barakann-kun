@@ -120,6 +120,66 @@ describe("buildSpecFilters", () => {
             {value: "2", label: "2x（ダブル）"},
         ])
     })
+
+    // 追加したカテゴリー系の規格も日本語ラベルつきで選択肢を生成
+    it("チェーン規格とブレーキ方式の選択肢を生成する", () => {
+        // チェーン規格とブレーキ方式が異なるテスト用パーツ
+        const parts = [
+            createPart({
+                id: 1,
+                specifications: {
+                    chain_standard: "shimano_hg",
+                    brake_actuation: "hydraulic",
+                },
+            }),
+            createPart({
+                id: 2,
+                specifications: {
+                    chain_standard: "sram_flattop",
+                    brake_actuation: "mechanical",
+                },
+            }),
+        ]
+
+        // 生成した規格の絞り込み選択肢
+        const specFilters = buildSpecFilters(parts)
+        // チェーン規格の絞り込み選択肢
+        const chainFilter = specFilters.find((filter) =>
+            filter.key === "chain_standard")
+        // ブレーキ方式の絞り込み選択肢
+        const brakeFilter = specFilters.find((filter) =>
+            filter.key === "brake_actuation")
+
+        expect(chainFilter?.label).toBe("チェーン規格")
+        expect(chainFilter?.options).toEqual([
+            {value: "shimano_hg", label: "Shimano HG"},
+            {value: "sram_flattop", label: "SRAM Flattop"},
+        ])
+        expect(brakeFilter?.label).toBe("ブレーキ方式")
+        expect(brakeFilter?.options).toEqual([
+            {value: "hydraulic", label: "油圧"},
+            {value: "mechanical", label: "機械式"},
+        ])
+    })
+
+    // 上限系の数値規格も文字列の値として選択肢を生成
+    it("最大スプロケット歯数の選択肢を生成する", () => {
+        // 最大スプロケット歯数が異なるカセット
+        const parts = [
+            createPart({id: 1, specifications: {max_sprocket_teeth: "34"}}),
+            createPart({id: 2, specifications: {max_sprocket_teeth: "36"}}),
+        ]
+
+        // 最大スプロケット歯数の絞り込み選択肢
+        const filter = buildSpecFilters(parts).find((item) =>
+            item.key === "max_sprocket_teeth")
+
+        expect(filter?.label).toBe("最大スプロケット歯数")
+        expect(filter?.options).toEqual([
+            {value: "34", label: "34"},
+            {value: "36", label: "36"},
+        ])
+    })
 })
 
 // 候補メーカーの収集を保証
@@ -214,6 +274,59 @@ describe("filterCandidateParts", () => {
 
         expect(result.map((part) => part.id)).toEqual([1])
     })
+
+    // チェーン規格はカンマ区切りの対応集合との交差で絞り込める
+    it("チェーン規格で絞り込める", () => {
+        // 複数規格対応チェーンとCampagnolo専用チェーン
+        const parts = [
+            createPart({
+                id: 1,
+                categoryKey: "chain",
+                specifications: {chain_standard: "shimano_hg,sram_flattop"},
+            }),
+            createPart({
+                id: 2,
+                categoryKey: "chain",
+                specifications: {chain_standard: "campagnolo"},
+            }),
+        ]
+
+        // 絞り込み結果
+        const result = filterCandidateParts(
+            parts,
+            filters({specs: {chain_standard: ["sram_flattop"]}}),
+            new Map(),
+        )
+
+        expect(result.map((part) => part.id)).toEqual([1])
+    })
+
+    // ブレーキ方式（油圧・機械式）でも絞り込める
+    it("ブレーキ方式で絞り込める", () => {
+        // 油圧レバーと機械式レバー
+        const parts = [
+            createPart({
+                id: 1,
+                categoryKey: "shift_brake_lever",
+                specifications: {brake_actuation: "hydraulic"},
+            }),
+            createPart({
+                id: 2,
+                categoryKey: "shift_brake_lever",
+                specifications: {brake_actuation: "mechanical"},
+            }),
+        ]
+
+        // 絞り込み結果
+        const result = filterCandidateParts(
+            parts,
+            filters({specs: {brake_actuation: ["mechanical"]}}),
+            new Map(),
+        )
+
+        expect(result.map((part) => part.id)).toEqual([2])
+    })
+
     // コックピット付属のフレームだけを残すことを保証
     it("コックピット付属のフレームだけを残す", () => {
         // コックピットが付属するフレーム

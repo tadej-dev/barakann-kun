@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
-import {cleanup, renderHook, waitFor} from "@testing-library/react"
+import {act, cleanup, renderHook, waitFor} from "@testing-library/react"
 
 import {fetchPartsByIds} from "@/api/parts"
 import {diagnoseBuild} from "@/features/simulator/buildDiagnosis"
@@ -131,4 +131,73 @@ describe("useSimulatorController のlocalStorage復元", () => {
         expect(result.current.restoreWarning).toBe("")
         expect(result.current.restoreError).toBe("")
     })
+    // 構成を切り替えると、前の構成の警告を残さない
+    it("構成を切り替えると復元警告を消す", async () => {
+        storeIncompatibleState()
+        // ホイール径が一致しないフレームとホイール
+        mockedFetchPartsByIds.mockResolvedValue([
+            createPart(1, "frame", {wheel_diameter: "700C"}),
+            createPart(2, "wheel", {wheel_diameter: "650B"}),
+        ])
+
+        const {result} = renderHook(() => useSimulatorController({
+            categories: [],
+            autoSaveEnabled: true,
+        }))
+
+        // 復元直後は警告が出る
+        await waitFor(() => {
+            expect(result.current.restoreWarning).toContain("ホイール径")
+        })
+
+        // 構成を切り替えると警告が消える
+        act(() => {
+            result.current.changeConfig("config-2")
+        })
+
+        expect(result.current.restoreWarning).toBe("")
+    })
+
+    // 適合する保存構成を開くと、前の警告を残さない
+    it("適合する保存構成を開くと復元警告を消す", async () => {
+        storeIncompatibleState()
+        // 最初は非互換の構成を復元して警告を出す
+        mockedFetchPartsByIds.mockResolvedValue([
+            createPart(1, "frame", {wheel_diameter: "700C"}),
+            createPart(2, "wheel", {wheel_diameter: "650B"}),
+        ])
+
+        const {result} = renderHook(() => useSimulatorController({
+            categories: [],
+            autoSaveEnabled: true,
+        }))
+
+        await waitFor(() => {
+            expect(result.current.restoreWarning).toContain("ホイール径")
+        })
+
+        // 適合する構成のパーツを返すように切り替える
+        mockedFetchPartsByIds.mockResolvedValue([
+            createPart(3, "frame", {wheel_diameter: "700C"}),
+            createPart(4, "wheel", {wheel_diameter: "700C"}),
+        ])
+
+        // 保存構成を開く
+        await act(async () => {
+            await result.current.selectConfig({
+                id: "config-2",
+                name: "正常構成",
+                version: 1,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+                parts: [
+                    {slotKey: "frame", partId: 3, price: 1000, weight: 200},
+                    {slotKey: "wheel", partId: 4, price: 1000, weight: 200},
+                ],
+            })
+        })
+
+        expect(result.current.restoreWarning).toBe("")
+    })
+
 })

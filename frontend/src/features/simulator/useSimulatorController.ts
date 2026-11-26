@@ -124,26 +124,6 @@ function restoreSavedBuildParts(
     return restoredParts
 }
 
-// 復元経路からも既知の規格不一致を持つ構成を編集状態へ入れない
-function assertRestoredPartsAreCompatible(
-    parts: SelectedParts,
-    buildName: string,
-) {
-    // 最初に見つかった非互換の問題
-    const issue = evaluateSelectedPartsCompatibility(parts).find(
-        (candidate) => candidate.status === "incompatible",
-    )
-
-    // 非互換が無ければ何もしない
-    if (!issue) {
-        return
-    }
-
-    throw new Error(
-        `「${buildName}」には規格が一致しないパーツが含まれています。${issue.reasons.join("、")}`,
-    )
-}
-
 // 取得済みパーツをIDで再利用できるようキャッシュへ登録
 function cacheParts(cache: Map<number, Part>, parts: Part[]) {
     // APIの返却順に依存せず、IDをキーにして候補取得と保存構成復元で共有する。
@@ -289,6 +269,7 @@ export function useSimulatorController({
         savedBuildSelectionRequestRef.current += 1
         setIsConfigLoading(false)
         setSavedBuildError("")
+        setRestoreWarning("")
         dispatch({
             type: "changeConfig",
             configId: activeConfigId,
@@ -555,6 +536,8 @@ export function useSimulatorController({
         savedBuildSelectionRequestRef.current += 1
         setIsConfigLoading(false)
         setSavedBuildError("")
+        // 構成を切り替えたら、前の構成の警告を残さない
+        setRestoreWarning("")
         dispatch({
             type: "changeConfig",
             configId,
@@ -582,7 +565,16 @@ export function useSimulatorController({
                 config,
                 partCacheRef.current,
             )
-            assertRestoredPartsAreCompatible(restoredParts, config.name)
+            // 非互換でも構成を開き、警告として知らせる（保存構成を開けなくしない）
+            const incompatibleIssue = evaluateSelectedPartsCompatibility(
+                restoredParts,
+            ).find((candidate) => candidate.status === "incompatible")
+
+            // 非互換の理由があれば警告へ残し、無ければ前の警告を消す
+            setRestoreWarning(incompatibleIssue
+                ? `「${config.name}」に規格が一致しないパーツがあります。比較画面で確認してください（${incompatibleIssue.reasons.join("、")}）`
+                : "")
+
             dispatch({
                 type: "restoreConfigSlot",
                 configId: config.id,
