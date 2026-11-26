@@ -4,7 +4,11 @@ import {cleanup, fireEvent, render, screen, waitFor} from "@testing-library/reac
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
 import {createSavedBuild, fetchSavedBuilds} from "@/api/savedBuilds"
-import {saveLocalOrigin} from "@/lib/local-config-sync"
+import {
+    hasIncompleteLocalMigration,
+    markLocalMigrationIncomplete,
+    saveLocalOrigin,
+} from "@/lib/local-config-sync"
 import {saveLocalConfigCollection} from "@/lib/simulator-storage"
 import {SimulatorPage} from "@/pages/SimulatorPage"
 
@@ -222,4 +226,58 @@ describe("SimulatorPage の構成引き継ぎ", () => {
         expect(simulatorProps.autoSaveEnabled).toBe(true)
         expect(simulatorProps.savedBuildsReloadKey).toBe(1)
     })
+    // 移行に失敗した構成が残る場合、未移行として記録しログアウト時の上書きから守る
+    it("移行に失敗したら未移行として記録する", async () => {
+        saveLocalOrigin("user-1")
+        seedLocalConfigs([{
+            id: "local-1",
+            name: "構成1",
+            parts: [{slotKey: "frame", partId: 1, price: 100, weight: 1000}],
+        }])
+        // 保存は失敗する
+        mockedCreateSavedBuild.mockRejectedValue(new Error("failed"))
+
+        render(<SimulatorPage />)
+
+        await screen.findByText("構成をアカウントへ保存")
+        fireEvent.click(screen.getByRole("button", {
+            name: "選択した構成を保存",
+        }))
+
+        // 失敗の通知と記録
+        await screen.findByText(/保存できませんでした/)
+        expect(hasIncompleteLocalMigration("user-1")).toBe(true)
+    })
+
+    // 移行に成功したら未移行の記録を消す
+    it("移行に成功したら未移行の記録を消す", async () => {
+        saveLocalOrigin("user-1")
+        // 以前の失敗で残っている未移行の記録
+        markLocalMigrationIncomplete("user-1")
+        seedLocalConfigs([{
+            id: "local-1",
+            name: "構成1",
+            parts: [{slotKey: "frame", partId: 1, price: 100, weight: 1000}],
+        }])
+        mockedCreateSavedBuild.mockResolvedValue({
+            id: "created",
+            name: "構成1",
+            version: 1,
+            createdAt: "",
+            updatedAt: "",
+            parts: [],
+        })
+
+        render(<SimulatorPage />)
+
+        await screen.findByText("構成をアカウントへ保存")
+        fireEvent.click(screen.getByRole("button", {
+            name: "選択した構成を保存",
+        }))
+
+        await waitFor(() => {
+            expect(hasIncompleteLocalMigration("user-1")).toBe(false)
+        })
+    })
+
 })

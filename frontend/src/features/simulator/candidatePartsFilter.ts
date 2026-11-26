@@ -35,6 +35,7 @@ export const initialCandidateFilterState: CandidateFilterState = {
 // 規格値フィルターとして提示するキーの許可リスト。
 // ここに無いキーは（値が複数あっても）自動生成の対象にしない。
 export const SPEC_FILTER_KEYS: readonly string[] = [
+    "chainring_count",
     "freehub_body",
     "wheel_diameter",
     "rotor_mount",

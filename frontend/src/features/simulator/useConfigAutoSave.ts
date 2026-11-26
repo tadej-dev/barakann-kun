@@ -56,6 +56,7 @@ export function useConfigAutoSave({
     const inFlightPromiseRef = useRef<Promise<boolean> | null>(null) // 実行中の保存。ログアウト時の確定依頼で完了を待つ
     const pendingRef = useRef(false) // 保存中に変更があったか
     const fingerprintRef = useRef("") // 最後に保存した内容の指紋
+    const failedFingerprintRef = useRef("") // 最後に保存へ失敗した内容の指紋
     const currentConfigIdRef = useRef(activeConfigId) // 非同期処理から最新の構成IDを参照するための記録
     const [revision, setRevision] = useState(0) // 保存完了後に自動保存を再評価するための更新番号
     const latestRef = useRef({ // 非同期処理から最新の状態を参照するためのref
@@ -100,6 +101,10 @@ export function useConfigAutoSave({
 
         // 保存するパーツ一覧（スロットキーとID）
         const parts = toSavedBuildParts(latest.selectedParts)
+        // 保存する内容の指紋（版を含まない）
+        const fingerprint = `${config.id}:${createPartsFingerprint(parts)}`
+        // 失敗の再送判定に使う試行の指紋。版が変われば再取得後として再試行を許す
+        const attemptFingerprint = `${fingerprint}:${config.version}`
         inFlightRef.current = true
 
         // 保存処理本体（成功時は送信内容を記録）
@@ -107,12 +112,14 @@ export function useConfigAutoSave({
             try {
                 await updateConfig(config, parts)
                 // 同じ構成・同じ内容の再保存を抑止する
-                fingerprintRef.current =
-                    `${config.id}:${createPartsFingerprint(parts)}`
+                fingerprintRef.current = fingerprint
+                failedFingerprintRef.current = ""
 
                 return true
             } catch {
-                // 失敗時は次回の変更で再試行する
+                // 失敗した内容と版を記録し、どちらかが変わるまで再送しない
+                failedFingerprintRef.current = attemptFingerprint
+
                 return false
             } finally {
                 inFlightRef.current = false
@@ -273,6 +280,11 @@ export function useConfigAutoSave({
         if (fingerprint === savedFingerprint ||
             fingerprintRef.current === fingerprint
         ) {
+            return
+        }
+
+        // 同じ内容・同じ版での失敗は、内容が変わるか再取得するまで再送しない
+        if (`${fingerprint}:${config.version}` === failedFingerprintRef.current) {
             return
         }
 

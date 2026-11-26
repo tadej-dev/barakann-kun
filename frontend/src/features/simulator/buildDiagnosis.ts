@@ -49,9 +49,10 @@ const CORE_REQUIRED_SLOTS: RequiredSlot[] = [
     {slotKey: "pedal", fallbackLabel: "ペダル"},
 ]
 
-// コンポセットを選ばない場合に必要な単品パーツ枠（12枠）
+// コンポセットを選ばない場合に必要な単品パーツ枠（13枠）
 const INDIVIDUAL_COMPONENT_SLOTS: RequiredSlot[] = [
     {slotKey: "shift_brake_lever", fallbackLabel: "シフト／ブレーキレバー"},
+    {slotKey: "front_derailleur", fallbackLabel: "フロントディレイラー"},
     {slotKey: "rear_derailleur", fallbackLabel: "リアディレーラー"},
     {slotKey: "crankset", fallbackLabel: "クランクセット"},
     {slotKey: "cassette", fallbackLabel: "カセット"},
@@ -120,12 +121,19 @@ export function diagnoseBuild(
     // コンポセットか単品コンポーネントを選択済みか
     const hasSelectedComponentOption = Boolean(selectedParts.groupset) ||
         INDIVIDUAL_COMPONENT_SLOTS.some((slot) =>
+            // フロントディレイラーだけでは単品コンポーネントの選択とみなさない
+            slot.slotKey !== "front_derailleur" &&
             Boolean(selectedParts[slot.slotKey]))
+    // チェーンリング1枚(1x)の構成か。コンポセットかクランクの登録値で判定
+    const isSingleChainring = [selectedParts.groupset, selectedParts.crankset]
+        .some((part) => part?.specifications?.chainring_count === "1")
     // 構成に必要な選択枠（同梱品が無い場合はステムも含む）
     const requiredSlots = [
         ...CORE_REQUIRED_SLOTS,
         // コンポセットは実際に占有するカテゴリーだけを満たし、未同梱品の見落としを防ぐ
-        ...INDIVIDUAL_COMPONENT_SLOTS,
+        // 1x構成はフロントディレイラーを使わないため必須枠から外す
+        ...INDIVIDUAL_COMPONENT_SLOTS.filter((slot) =>
+            !(isSingleChainring && slot.slotKey === "front_derailleur")),
         ...(providedCategories.has("stem")
             ? []
             : [{slotKey: "stem", fallbackLabel: "ステム"}]),
@@ -176,7 +184,10 @@ export function diagnoseBuild(
         slotKeys: issue.slotKeys,
     }))
     // 画面へ渡す全指摘（規格判定と選択漏れ）
-    const issues = [...compatibilityIssues, ...missingIssues]
+    const issues = [
+        ...compatibilityIssues,
+        ...missingIssues,
+    ]
     // 非互換の指摘件数
     const incompatibleCount = issues.filter((issue) =>
         issue.severity === "incompatible").length

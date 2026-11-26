@@ -95,4 +95,89 @@ describe("diagnoseBuild", () => {
             issue.id === "missing:groupset-or-individual-components",
         )).toBe(false)
     })
+
+    // フロントディレイラーだけを選んでも選択方法の案内を残すことを保証
+    it("フロントディレイラーだけでは選択方法の案内を消さない", () => {
+        // フロントディレイラーだけを選んだ構成
+        const selectedParts: SelectedParts = {
+            front_derailleur: part(1, "front_derailleur"),
+        }
+        // 構成診断の結果
+        const diagnosis = diagnoseBuild(selectedParts, [])
+
+        expect(diagnosis.issues.some((issue) =>
+            issue.id === "missing:groupset-or-individual-components",
+        )).toBe(true)
+    })
+
+    // 1xのコンポセットはフロントディレイラーを必須にしないことを保証
+    it("1xコンポセットではフロントディレイラーを未選択に数えない", () => {
+        // チェーンリング1枚のコンポセット
+        const selectedParts: SelectedParts = {
+            groupset: part(1, "groupset", {chainring_count: "1"}),
+        }
+        // 構成診断の結果
+        const diagnosis = diagnoseBuild(selectedParts, [])
+
+        expect(diagnosis.issues.some((issue) =>
+            issue.id === "missing:front_derailleur",
+        )).toBe(false)
+    })
+
+    // 1xのクランクでもフロントディレイラーを必須にしないことを保証
+    it("1xクランクではフロントディレイラーを未選択に数えない", () => {
+        // チェーンリング1枚のクランク
+        const selectedParts: SelectedParts = {
+            crankset: part(1, "crankset", {chainring_count: "1"}),
+        }
+        // 構成診断の結果
+        const diagnosis = diagnoseBuild(selectedParts, [])
+
+        expect(diagnosis.issues.some((issue) =>
+            issue.id === "missing:front_derailleur",
+        )).toBe(false)
+    })
+
+    // 2x・未登録のクランクはフロントディレイラーを必須にすることを保証
+    it.each([
+        ["2xクランク", {chainring_count: "2"}],
+        ["規格未登録のクランク", {}],
+    ])("%sではフロントディレイラーを未選択として指摘する", (_, specifications) => {
+        // 指定した規格を持つクランク
+        const selectedParts: SelectedParts = {
+            crankset: part(1, "crankset", specifications),
+        }
+        // 構成診断の結果
+        const diagnosis = diagnoseBuild(selectedParts, [])
+
+        expect(diagnosis.issues.some((issue) =>
+            issue.id === "missing:front_derailleur",
+        )).toBe(true)
+    })
+
+    // 1x構成でフロントディレイラーを選ぶと非互換を指摘することを保証
+    it.each([
+        ["1xコンポセット", "groupset"],
+        ["1xクランク", "crankset"],
+    ])("%sとフロントディレイラーの同時選択を非互換として指摘する", (_, categoryKey) => {
+        // 1xの構成パーツとフロントディレイラー
+        const selectedParts: SelectedParts = {
+            [categoryKey]: part(1, categoryKey, {chainring_count: "1"}),
+            front_derailleur: part(2, "front_derailleur", {
+                chainring_count: "2",
+            }),
+        }
+        // 構成診断の結果
+        const diagnosis = diagnoseBuild(selectedParts, [])
+        // チェーンリング枚数の不一致としての指摘
+        const issue = diagnosis.issues.find((item) =>
+            item.severity === "incompatible" &&
+            item.description.includes("チェーンリング枚数"))
+
+        // 比較した2パーツのスロットを含む
+        expect(issue?.slotKeys).toHaveLength(2)
+        expect(issue?.slotKeys).toContain("front_derailleur")
+        // 同じ組み合わせを二重に数えない
+        expect(diagnosis.incompatibleCount).toBe(1)
+    })
 })

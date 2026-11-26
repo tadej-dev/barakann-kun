@@ -208,4 +208,87 @@ describe("保存構成の規格適合チェック", () => {
 
         expect(issues).toEqual([])
     })
+
+    // チェーンリング枚数が食い違う組み合わせは保存不可として検出
+    it("1xクランクと2xフロントディレイラーを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "crankset",
+                part: part(1, "crankset", {chainring_count: "1"}),
+            },
+            {
+                slotKey: "front_derailleur",
+                part: part(2, "front_derailleur", {chainring_count: "2"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["crankset", "front_derailleur"])
+        expect(issues[0]?.reasons.join("、")).toContain("チェーンリング枚数")
+    })
+
+    // チェーンリング枚数が一致する組み合わせは不一致にしない
+    it("2xクランクと2xフロントディレイラーを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "crankset",
+                part: part(1, "crankset", {chainring_count: "2"}),
+            },
+            {
+                slotKey: "front_derailleur",
+                part: part(2, "front_derailleur", {chainring_count: "2"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 前輪専用タイヤを後輪スロットへ置いた構成は保存不可として検出
+    it("前輪専用タイヤを後輪に置いた構成を不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "tire:rear",
+                part: part(1, "tire", {allowed_position: "front"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.status).toBe("incompatible")
+        expect(issues[0]?.slotKeys).toEqual(["tire:rear"])
+        expect(issues[0]?.partIds).toEqual([1])
+        expect(issues[0]?.reasons[0]).toContain("前輪専用")
+    })
+
+    // 対応位置とスロット位置が一致する構成は不一致にしない
+    it("前輪専用タイヤを前輪に置いた構成を不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "tire:front",
+                part: part(1, "tire", {allowed_position: "front"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 占有された専用ステムを一体型ハンドルで置き換えられない
+    it("専用ステムを占有するフレームへの一体型ハンドルを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {
+                    cockpit_interface: "standard_1_1_8",
+                }, ["stem"]),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {
+                    cockpit_interface: "standard_1_1_8",
+                }, ["stem"]),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["frame", "handlebar"])
+    })
 })

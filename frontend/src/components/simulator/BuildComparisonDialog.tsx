@@ -366,9 +366,11 @@ export function BuildComparisonDialog({
                                                     >
                                                         {diagnosis.incompatibleCount > 0
                                                             ? `不一致 ${diagnosis.incompatibleCount}件`
-                                                            : diagnosis.missingCount > 0
-                                                                ? `未選択 ${diagnosis.missingCount}件`
-                                                                : "確認済み"}
+                                                            : diagnosis.unknownCount > 0
+                                                                ? `要確認 ${diagnosis.unknownCount}件`
+                                                                : diagnosis.missingCount > 0
+                                                                    ? `未選択 ${diagnosis.missingCount}件`
+                                                                    : "確認済み"}
                                                     </Badge>
                                                 </td>
                                             )

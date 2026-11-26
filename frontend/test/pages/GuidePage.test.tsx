@@ -33,6 +33,9 @@ describe("GuidePage", () => {
         expect(screen.getByText(/新規の構成（残り枠に収まる構成）が選ばれています/))
             .toBeTruthy()
         expect(screen.getByText(/アカウントの構成で置き換えます/)).toBeTruthy()
+        // 引き継ぎに失敗した構成はブラウザへ残す
+        expect(screen.getByText(/引き継ぎに失敗した構成が残っている場合/))
+            .toBeTruthy()
         expect(screen.getByText(/自動で再試行されます/)).toBeTruthy()
     })
 })

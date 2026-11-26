@@ -93,6 +93,33 @@ describe("buildSpecFilters", () => {
         expect(buildSpecFilters(parts).some((filter) =>
             filter.key === "tire_width_mm")).toBe(true)
     })
+
+    // チェーンリング枚数を1x/2xの表示名つき選択肢として生成
+    it("チェーンリング枚数の選択肢を1x/2xの表示名で生成する", () => {
+        // チェーンリング枚数が異なるクランク
+        const parts = [
+            createPart({
+                id: 1,
+                categoryKey: "crankset",
+                specifications: {chainring_count: "1"},
+            }),
+            createPart({
+                id: 2,
+                categoryKey: "crankset",
+                specifications: {chainring_count: "2"},
+            }),
+        ]
+
+        // チェーンリング枚数の絞り込み選択肢
+        const filter = buildSpecFilters(parts).find((item) =>
+            item.key === "chainring_count")
+
+        expect(filter?.label).toBe("チェーンリング枚数")
+        expect(filter?.options).toEqual([
+            {value: "1", label: "1x（シングル）"},
+            {value: "2", label: "2x（ダブル）"},
+        ])
+    })
 })
 
 // 候補メーカーの収集を保証
@@ -156,6 +183,32 @@ describe("filterCandidateParts", () => {
         const result = filterCandidateParts(
             parts,
             filters({specs: {tire_width_mm: ["28"]}}),
+            new Map(),
+        )
+
+        expect(result.map((part) => part.id)).toEqual([1])
+    })
+
+    // チェーンリング枚数でも1x/2xの規格値で絞り込める
+    it("チェーンリング枚数で絞り込める", () => {
+        // チェーンリング枚数が異なるクランク
+        const parts = [
+            createPart({
+                id: 1,
+                categoryKey: "crankset",
+                specifications: {chainring_count: "1"},
+            }),
+            createPart({
+                id: 2,
+                categoryKey: "crankset",
+                specifications: {chainring_count: "2"},
+            }),
+        ]
+
+        // 絞り込み結果
+        const result = filterCandidateParts(
+            parts,
+            filters({specs: {chainring_count: ["1"]}}),
             new Map(),
         )
 

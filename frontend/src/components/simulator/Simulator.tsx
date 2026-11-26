@@ -4,6 +4,7 @@ import type {CSSProperties} from "react"
 
 import {ConfigList} from "@/components/simulator/ConfigList"
 import {SelectedPartsTable} from "@/components/simulator/SelectedPartsTable"
+import {SimulatorNotices} from "@/components/simulator/SimulatorNotices"
 import {SummaryCards} from "@/components/simulator/SummaryCards"
 import {
     SidebarInset,
@@ -104,11 +105,10 @@ export function Simulator({
                         activeConfigName={collection.activeConfigName}
                     />
 
-                    {controller.restoreError && (
-                        <p className="mt-3 text-sm font-medium text-destructive">
-                            {controller.restoreError}。ページを再読み込みしてください。
-                        </p>
-                    )}
+                    <SimulatorNotices
+                        restoreError={controller.restoreError}
+                        restoreWarning={controller.restoreWarning}
+                    />
 
                     <div
                         className="mt-4 grid gap-6 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:grid-cols-2 [@media_(orientation:landscape)_and_(min-width:1280px)_and_(min-height:900px)]:gap-4">

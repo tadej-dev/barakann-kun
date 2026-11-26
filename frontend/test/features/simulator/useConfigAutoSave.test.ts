@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 import {act, cleanup, renderHook} from "@testing-library/react"
-import {useState} from "react"
+import {useCallback, useState} from "react"
 
+import type {SavedBuild, SavedBuildPart} from "@/api/savedBuilds"
 import {
     AUTH_LOGOUT_FLUSH_EVENT,
     type LogoutFlushDetail,
@@ -310,5 +311,102 @@ describe("useConfigAutoSave（未ログイン時）", () => {
         })
 
         expect(window.localStorage.getItem(COLLECTION_STORAGE_KEY)).toBe(saved)
+    })
+
+    // 保存に失敗した内容を、内容が変わるまで自動で再送しない
+    it("保存に失敗した内容を自動で再送しない", async () => {
+        // 保存対象の構成
+        const configs = [{
+            id: "fail-1",
+            name: "構成1",
+            version: 1,
+            createdAt: "",
+            updatedAt: "",
+            parts: [],
+        }]
+        // 保存処理へ渡されたパーツの記録
+        const saveCalls = vi.fn()
+
+        // 保存失敗時に操作中状態が戻る自動保存のテスト用フック
+        function useFailingHarness() {
+            const [selectedParts, setSelectedParts] = useState<SelectedParts>({})
+            const [operation, setOperation] = useState<"update" | null>(null)
+            // 操作中状態を立ててから失敗する保存処理
+            const saveParts = useCallback(async (
+                _build: SavedBuild,
+                parts: SavedBuildPart[],
+            ) => {
+                saveCalls(parts)
+                setOperation("update")
+                // 操作中表示を反映してから失敗させる
+                await new Promise<void>((resolve) => {
+                    setTimeout(resolve, 10)
+                })
+                setOperation(null)
+                throw new Error("保存に失敗しました")
+            }, [])
+
+            useConfigAutoSave({
+                collection: {
+                    configs,
+                    configsOperation: operation,
+                    updateConfig: saveParts,
+                } as unknown as ConfigCollection,
+                selectedParts,
+                activeConfigId: "fail-1",
+                isConfigLoading: false,
+                isActiveConfigLoaded: true,
+                autoSaveEnabled: true,
+            })
+
+            return {setSelectedParts}
+        }
+
+        const {result} = renderHook(() => useFailingHarness())
+
+        act(() => {
+            result.current.setSelectedParts({frame: createPart(10)})
+        })
+
+        // 1回目の自動保存を開始する
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+        })
+        expect(saveCalls).toHaveBeenCalledTimes(1)
+
+        // 保存失敗と操作中状態の解除を反映する
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10)
+        })
+
+        // 操作中状態が戻っても、同じ内容を再送しない
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS * 3)
+        })
+        expect(saveCalls).toHaveBeenCalledTimes(1)
+
+        // 明示操作（ログアウト前の確定）では同じ内容でも再試行する
+        const respond = vi.fn()
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_FLUSH_EVENT, {
+                detail: {handled: false, respond} satisfies LogoutFlushDetail,
+            }))
+            await vi.advanceTimersByTimeAsync(50)
+        })
+        expect(saveCalls).toHaveBeenCalledTimes(2)
+        expect(respond).toHaveBeenCalledWith(false)
+
+        // 内容が変われば自動保存を再試行する
+        act(() => {
+            result.current.setSelectedParts({frame: createPart(11)})
+        })
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(AUTO_SAVE_DELAY_MS)
+        })
+        expect(saveCalls).toHaveBeenCalledTimes(3)
+        expect(saveCalls.mock.calls[2]?.[0]).toEqual([
+            {slotKey: "frame", partId: 11, price: 1000, weight: 200},
+        ])
     })
 })

@@ -157,6 +157,38 @@ if (framesWithoutWeightScope.length > 0) {
     process.stdout.write(`重量の範囲(フロントフォーク込みか)が未登録のフレーム: ${framesWithoutWeightScope.length}件(プラットフォーム単位で調査中)\n`);
 }
 
+// 変速段数・チェーンリング枚数・ブレーキマウントは、判定に使うため欠落を指摘する。
+const requiredSpecs = [
+    {category: "crankset", key: "chainring_count", label: "チェーンリング枚数"},
+    {category: "front_derailleur", key: "chainring_count", label: "チェーンリング枚数"},
+    {category: "groupset", key: "chainring_count", label: "チェーンリング枚数"},
+    {category: "brake_caliper", key: "brake_mount", label: "ブレーキマウント"},
+];
+// カテゴリーごとの対象パーツ
+const partsByCategory = query(
+    "SELECT parts.id, parts.name, categories.key AS category_key FROM parts JOIN categories ON categories.id = parts.category_id;",
+);
+// 判定に必要な規格の欠落と、値の妥当性を確認する。
+for (const requirement of requiredSpecs) {
+    for (const part of partsByCategory) {
+        if (part.category_key !== requirement.category) continue;
+        const partSpecs = specsByPart.get(part.id) ?? new Map();
+        const value = partSpecs.get(requirement.key);
+        if (value === undefined) {
+            findings.push(`[判定用の規格なし] ${part.name}(id ${part.id}) は${requirement.label}(${requirement.key})が未登録`);
+            continue;
+        }
+        // チェーンリング枚数は1〜3のいずれか
+        if (requirement.key === "chainring_count" && !["1", "2", "3"].includes(value)) {
+            findings.push(`[規格値が不正] ${part.name}(id ${part.id}) のチェーンリング枚数が ${value}`);
+        }
+        // ブレーキマウントは既存の語彙だけを許可する
+        if (requirement.key === "brake_mount" && !["flat_mount", "post_mount"].includes(value)) {
+            findings.push(`[規格値が不正] ${part.name}(id ${part.id}) のブレーキマウントが ${value}`);
+        }
+    }
+}
+
 if (findings.length === 0) {
     process.stdout.write("監査OK: 欠落・不整合は見つかりませんでした。\n");
     process.exit(0);

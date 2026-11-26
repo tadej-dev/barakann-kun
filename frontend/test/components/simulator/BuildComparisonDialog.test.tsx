@@ -319,4 +319,40 @@ describe("BuildComparisonDialog", () => {
 
         expect(await screen.findByText("構成を比較")).toBeTruthy()
     })
+
+    // 規格未確認が残る構成を、確認済みと表示しない
+    it("規格未確認が残る場合は要確認と表示する", async () => {
+        // ホイール径が未登録のホイールと、径が登録済みのフレーム
+        mockedFetchPartsByIds.mockResolvedValue([
+            {
+                ...createPart(1, "Madone"),
+                specifications: {wheel_diameter: "700C"},
+            },
+            {
+                ...createPart(2, "Wheel"),
+                categoryKey: "wheel",
+                specifications: {},
+            },
+        ])
+        // フレームとホイールを持つ構成
+        const parts = [
+            {slotKey: "frame", partId: 1, price: 500000, weight: 1133},
+            {slotKey: "wheel", partId: 2, price: 100000, weight: 1500},
+        ]
+        // 比較対象の2件の構成
+        const builds = [
+            {key: "a", name: "通勤用", parts},
+            {key: "b", name: "レース用", parts},
+        ]
+
+        render(<BuildComparisonDialog builds={builds} categories={categories} />)
+
+        fireEvent.click(screen.getByRole("button", {name: "比較"}))
+
+        // 2列とも、未確認の指摘を要確認として出す
+        await waitFor(() => {
+            expect(rowCells("構成診断")).toEqual(["要確認 1件", "要確認 1件"])
+        })
+        expect(screen.queryByText("確認済み")).toBeNull()
+    })
 })

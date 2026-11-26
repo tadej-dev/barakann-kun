@@ -3,8 +3,10 @@ import {describe, expect, it} from "vitest"
 import {
     calculateSelectedPartsTotals,
     evaluatePartCompatibility,
+    evaluateSelectedPartsCompatibility,
     getFrameCockpitBadge,
     getFrameWeightBadge,
+    getSpecificationLabel,
     getSpecificationValueLabel,
     getTotalsBreakdown,
     getWeightBreakdown,
@@ -86,6 +88,14 @@ describe("evaluatePartCompatibility", () => {
             "freehub_body",
             "shimano_hg,sram_xdr,campagnolo_n3w",
         )).toBe("Shimano HG／SRAM XDR／Campagnolo N3W")
+    })
+
+    // チェーンリング枚数は、規格名と1x/2x/3xの値ラベルで表示する
+    it("チェーンリング枚数の規格名と値ラベルを表示する", () => {
+        expect(getSpecificationLabel("chainring_count")).toBe("チェーンリング枚数")
+        expect(getSpecificationValueLabel("chainring_count", "1")).toBe("1x（シングル）")
+        expect(getSpecificationValueLabel("chainring_count", "2")).toBe("2x（ダブル）")
+        expect(getSpecificationValueLabel("chainring_count", "3")).toBe("3x（トリプル）")
     })
 
     // フレームの最大タイヤ幅を超えるタイヤは、フレームを維持したまま選べない
@@ -284,6 +294,163 @@ describe("evaluatePartCompatibility", () => {
 
         expect(result?.status).toBe("incompatible")
         expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 選択済み構成でも前後位置の食い違いを非互換として返す
+    it("選択済み構成で前輪専用タイヤを後輪に置くと非互換を返す", () => {
+        // 後輪スロットへ置いた前輪専用タイヤ
+        const issues = evaluateSelectedPartsCompatibility({
+            "tire:rear": createPart(1, "Front Tire", "tire", {
+                allowed_position: "front",
+            }),
+        })
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.status).toBe("incompatible")
+        expect(issues[0]?.slotKeys).toEqual(["tire:rear"])
+        expect(issues[0]?.reasons[0]).toContain("前輪専用")
+    })
+
+    // 対応位置とスロット位置が一致する専用品は非互換にしない
+    it("前輪専用タイヤを前輪に置くと位置の非互換を返さない", () => {
+        // 前輪スロットへ置いた前輪専用タイヤ
+        const issues = evaluateSelectedPartsCompatibility({
+            "tire:front": createPart(1, "Front Tire", "tire", {
+                allowed_position: "front",
+            }),
+        })
+
+        expect(issues).toEqual([])
+    })
+
+    // 枚数が食い違うクランクとフロントディレイラーは同時に選べない
+    it("1xクランクと2xフロントディレイラーは非互換にする", () => {
+        // 1xクランクと2xフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {
+            chainring_count: "1",
+        })
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainring_count: "2",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["crankset"])
+        expect(result?.reasons.join("、")).toContain("チェーンリング枚数")
+    })
+
+    // 枚数が一致するクランクとフロントディレイラーは適合にする
+    it("2xクランクと2xフロントディレイラーは適合にする", () => {
+        // 2xクランクと2xフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {
+            chainring_count: "2",
+        })
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainring_count: "2",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // コンポセットとフロントディレイラー・クランクの枚数も比較する
+    it.each([
+        ["コンポセットとフロントディレイラー", "groupset", "front_derailleur"],
+        ["コンポセットとクランク", "groupset", "crankset"],
+    ])("%sのチェーンリング枚数が食い違う場合は非互換にする", (
+        _label,
+        selectedCategory,
+        candidateCategory,
+    ) => {
+        // 2xのコンポセットと1xの構成パーツ
+        const groupset = createPart(1, "Groupset", "groupset", {
+            chainring_count: "2",
+        })
+        const candidate = createPart(2, "Candidate", candidateCategory, {
+            chainring_count: "1",
+        })
+
+        const result = evaluatePartCompatibility(
+            candidate,
+            createPartSlot(candidateCategory),
+            {[selectedCategory]: groupset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons.join("、")).toContain("チェーンリング枚数")
+    })
+
+    // 占有された専用ステムを一体型ハンドルで置き換えられない
+    it("専用ステムを占有するフレームに一体型ハンドルは選択できない", () => {
+        // 専用ステムを占有し、ステム式のみを受け付けるフレームと一体型ハンドル
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            cockpit_connection: "integrated_only",
+        }, ["stem"])
+        const handlebar = createPart(2, "Integrated", "handlebar", {
+            cockpit_interface: "standard_1_1_8",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+    })
+
+    // 一体型・ステム式の両対応フレームは、付属ステムを外して一体型へ交換できる
+    it("一体型とステム式の両対応フレームは一体型ハンドルを許可する", () => {
+        // Tarmac SL8のように、付属ステムを持ち両対応のフレーム
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            cockpit_connection: "either",
+            steerer_standard: "tapered_1_1_8_1_5",
+        }, ["stem"])
+        const handlebar = createPart(2, "Roval Rapide Cockpit", "handlebar", {
+            cockpit_interface: "standard_1_1_8",
+            steerer_clamp_mm: "28.6",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 交換可の付属コックピットなら、一体型ハンドルの交換を許可する
+    it("交換可の専用ステムなら一体型ハンドルを許可する", () => {
+        // 専用ステムを占有するが交換可のフレームと一体型ハンドル
+        const frame = createPart(1, "Frame", "frame", {
+            cockpit_interface: "standard_1_1_8",
+            cockpit_replaceable: "true",
+        }, ["stem"])
+        const handlebar = createPart(2, "Integrated", "handlebar", {
+            cockpit_interface: "standard_1_1_8",
+        }, ["stem"])
+
+        const result = evaluatePartCompatibility(
+            handlebar,
+            createPartSlot("handlebar"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
     })
 
     // フレームを外して解決するのではなく、候補だけを選択不可にする
@@ -777,6 +944,67 @@ describe("evaluatePartCompatibility", () => {
         expect(result?.status).toBe("incompatible")
         expect(result?.conflictingSlotKeys).toEqual(["brake_caliper:front"])
     })
+    // キャリパーを同梱しないコンポセットは、パッド形状を比較しない
+    it("キャリパー非同梱のコンポセットとパッドを未確認にしない", () => {
+        // Swordのようにキャリパーを同梱しないセット
+        const groupset = createPart(1, "Sword", "groupset", {}, [
+            "shift_brake_lever",
+            "rear_derailleur",
+        ])
+        // パッド形状を持つパッド
+        const pad = createPart(2, "Pad", "brake_pad", {
+            pad_family: "shimano_road_flat_mount",
+        })
+
+        const result = evaluatePartCompatibility(
+            pad,
+            createPartSlot("brake_pad", "front"),
+            {groupset},
+        )
+
+        // 比較対象のルールが無いため未確認にしない
+        expect(result).toBeNull()
+    })
+
+    // キャリパーを同梱するがパッド形状が未登録のセットは、未確認のままにする
+    it("キャリパー同梱でパッド形状が未登録なら未確認にする", () => {
+        // パッド形状だけ未登録のセット
+        const groupset = createPart(1, "Groupset", "groupset", {}, [
+            "brake_caliper",
+        ])
+        const pad = createPart(2, "Pad", "brake_pad", {
+            pad_family: "shimano_road_flat_mount",
+        })
+
+        const result = evaluatePartCompatibility(
+            pad,
+            createPartSlot("brake_pad", "front"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("パッド形状")
+    })
+
+    // キャリパーを同梱するセットは、従来どおりパッド形状を比較する
+    it("キャリパー同梱のコンポセットとパッド形状が違えば非互換にする", () => {
+        // パッド形状を持つセット
+        const groupset = createPart(1, "Groupset", "groupset", {
+            pad_family: "shimano_road_flat_mount",
+        }, ["brake_caliper"])
+        const pad = createPart(2, "Pad", "brake_pad", {
+            pad_family: "campagnolo_db310",
+        })
+
+        const result = evaluatePartCompatibility(
+            pad,
+            createPartSlot("brake_pad", "front"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons.join("、")).toContain("パッド形状")
+    })
 
     // ホイール側へ追加した取付規格を使い、6ボルトローターとの不一致を検出
     it("ホイールとローターの取付方式が異なる場合は競合として扱う", () => {
@@ -1255,5 +1483,7 @@ describe("getWeightBreakdown", () => {
             item.totalPrice,
         ])).toEqual([["ハンドル", 1000], ["RD", 1000]])
     })
+
+
 
 })

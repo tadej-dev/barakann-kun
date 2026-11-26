@@ -5,6 +5,10 @@ import {Simulator} from "@/components/simulator/Simulator"
 import {SavedBuildMigrationDialog} from "@/components/simulator/SavedBuildMigrationDialog"
 import {Button} from "@/components/ui/button"
 import {AUTH_LOGGED_OUT_EVENT} from "@/features/auth/authEvents"
+import {
+    clearLocalMigrationIncomplete,
+    markLocalMigrationIncomplete,
+} from "@/lib/local-config-sync"
 import {useAuth} from "@/features/auth/useAuth"
 import {GoogleIcon} from "@/features/auth/GoogleIcon"
 import {
@@ -298,8 +302,9 @@ export function SimulatorPage() {
             return
         }
 
-        // 失敗が無ければ保存中表示を解除
+        // 失敗が無ければ保存中表示を解除し、移行未完了の記録も消す
         if (failed === 0) {
+            clearLocalMigrationIncomplete(authUserId)
             setIsMigrating(false)
         }
 
@@ -309,8 +314,9 @@ export function SimulatorPage() {
             setSavedBuildsReloadKey((current) => current + 1)
         }
 
-        // 失敗が残る場合は、状態を取り直してダイアログに残し再試行できるようにする
+        // 失敗が残る場合は、移行未完了として記録しログアウト時の上書きから守る
         if (failed > 0) {
+            markLocalMigrationIncomplete(authUserId)
             try {
                 // 取得し直したアカウント構成
                 const refreshed = await fetchSavedBuilds()
