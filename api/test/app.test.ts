@@ -11,13 +11,14 @@ import type {
 } from "../src/db/account-repository"
 import type {CatalogRepository} from "../src/db/catalog-repository"
 import type {ConfigOrderRepository} from "../src/db/config-order-repository"
-import type {
-    DeleteSavedBuildResult,
-    SavedBuild,
-    SavedBuildPartInput,
-    SavedBuildRepository,
-    RenameSavedBuildResult,
-    UpdateSavedBuildResult,
+import {
+    InvalidSavedBuildPartsError,
+    type DeleteSavedBuildResult,
+    type SavedBuild,
+    type SavedBuildPartInput,
+    type SavedBuildRepository,
+    type RenameSavedBuildResult,
+    type UpdateSavedBuildResult,
 } from "../src/db/saved-build-repository"
 import type {Category, Part} from "../src/types"
 import type {Bindings} from "../src/types"
@@ -1457,6 +1458,54 @@ describe("display name API", () => {
                 code: "AUTH_NOT_CONFIGURED",
                 message:
                     "認証設定が未完了です。api/.dev.varsにACCOUNT_ID_HASH_SECRETを設定してください。",
+            },
+        })
+    })
+})
+
+// 保存構成APIがスロット不整合を400として返す
+describe("saved builds API invalid slots", () => {
+    it("returns 400 with the slot reason for invalid parts", async () => {
+        // 不正スロットのエラーを返す保存構成リポジトリ
+        const invalidRepository = new TestSavedBuildRepository()
+        invalidRepository.create = async () => {
+            throw new InvalidSavedBuildPartsError([{
+                slotKey: "tire",
+                partId: 10,
+                reason: "missing-position",
+                detail: "スロット「tire」は前輪・後輪を指定してください",
+            }])
+        }
+        const invalidApp = createApp({
+            catalogRepository: createRepository(),
+            authAdapter: createAuthAdapter(),
+            savedBuildRepository: invalidRepository,
+        })
+        const bindings = createAuthBindings()
+        const csrf = await getAuthenticatedCsrfRequest(invalidApp, bindings)
+        const response = await invalidApp.request(
+            "/api/builds",
+            {
+                method: "POST",
+                headers: {
+                    cookie: csrf.cookie,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                    name: "不正なスロット",
+                    parts: [{slotKey: "tire", partId: 10}],
+                    csrfToken: csrf.csrfToken,
+                }),
+            },
+            bindings,
+        )
+
+        expect(response.status).toBe(400)
+        expect(await response.json()).toEqual({
+            error: {
+                code: "INVALID_SAVED_BUILD_PARTS",
+                message: "保存構成のパーツが互換性を満たしていません: スロット「tire」は前輪・後輪を指定してください",
+                partIds: [10],
             },
         })
     })

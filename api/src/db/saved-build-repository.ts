@@ -102,8 +102,15 @@ export type InvalidSavedBuildPartIssue = {
     slotKey: string
     // 不一致が見つかったパーツID
     partId: number
-    // 不一致の種類（category・position・compatibility）
-    reason: "category" | "position" | "compatibility"
+    // 不一致の種類（category・position・compatibility・missing-position・
+    // unexpected-position・duplicate-category）
+    reason:
+        | "category"
+        | "missing-position"
+        | "unexpected-position"
+        | "duplicate-category"
+        | "position"
+        | "compatibility"
     // 規格競合した相手パーツのスロットキー
     relatedSlotKey?: string
     // 規格競合した相手パーツのID
@@ -211,6 +218,16 @@ function parseSlotKey(slotKey: string) {
     }
 }
 
+// 前輪・後輪の2枠を持つカテゴリー
+// 画面側のスロット定義（frontend/src/features/simulator/partSlots.ts）と揃える
+const POSITIONED_CATEGORY_KEYS = new Set<string>([
+    "brake_caliper",
+    "brake_pad",
+    "disc_rotor",
+    "tire",
+    "inner_tube",
+])
+
 // パーツの存在・カテゴリー・前後位置・規格を検証し、価格と重量を返す
 export async function loadValidatedPartSnapshots(
     database: D1Database,
@@ -253,26 +270,60 @@ export async function loadValidatedPartSnapshots(
         throw new MissingSavedBuildPartsError(missingPartIds)
     }
 
+    // スロットキーから分解したカテゴリーと前後位置
+    const slotInfos = parts.map((part) => ({
+        slotKey: part.slotKey,
+        partId: part.partId,
+        ...parseSlotKey(part.slotKey),
+    }))
+
     // カテゴリー・前後位置の不一致一覧
     const issues: InvalidSavedBuildPartIssue[] = []
 
-    for (const part of parts) {
-        const row = rowsByPartId.get(part.partId)
+    for (const slot of slotInfos) {
+        const row = rowsByPartId.get(slot.partId)
 
         // 念のため照会結果に無いパーツは読み飛ばす
         if (!row) {
             continue
         }
 
-        // スロットキーから分解したカテゴリーと前後位置
-        const slot = parseSlotKey(part.slotKey)
-
         // スロットのカテゴリーとパーツの実カテゴリーが一致するか確認
         if (row.category_key !== slot.categoryKey) {
             issues.push({
-                slotKey: part.slotKey,
-                partId: part.partId,
+                slotKey: slot.slotKey,
+                partId: slot.partId,
                 reason: "category",
+            })
+
+            continue
+        }
+
+        // 前後2枠のカテゴリーは位置なしスロットを許可しない
+        if (
+            POSITIONED_CATEGORY_KEYS.has(slot.categoryKey) &&
+            slot.position === null
+        ) {
+            issues.push({
+                slotKey: slot.slotKey,
+                partId: slot.partId,
+                reason: "missing-position",
+                detail: `スロット「${slot.slotKey}」は前輪・後輪を指定してください`,
+            })
+
+            continue
+        }
+
+        // 前後2枠を持たないカテゴリーは位置付きスロットを許可しない
+        if (
+            !POSITIONED_CATEGORY_KEYS.has(slot.categoryKey) &&
+            slot.position !== null
+        ) {
+            issues.push({
+                slotKey: slot.slotKey,
+                partId: slot.partId,
+                reason: "unexpected-position",
+                detail: `スロット「${slot.slotKey}」は前輪・後輪を指定できません`,
             })
 
             continue
@@ -286,11 +337,57 @@ export async function loadValidatedPartSnapshots(
         ) {
             // 前後指定のあるパーツが反対側へ保存されることを防ぐ
             issues.push({
-                slotKey: part.slotKey,
-                partId: part.partId,
+                slotKey: slot.slotKey,
+                partId: slot.partId,
                 reason: "position",
             })
         }
+    }
+
+    // 同一カテゴリーのスロットが前後違い以外で重複している位置
+    const duplicateIndexes = new Set<number>()
+
+    for (const [index, first] of slotInfos.entries()) {
+        for (const [secondIndex, second] of slotInfos.entries()) {
+            // 同じスロットや後半の組み合わせは重複判定済み
+            if (secondIndex <= index) {
+                continue
+            }
+
+            // カテゴリーが違えば重複ではない
+            if (first.categoryKey !== second.categoryKey) {
+                continue
+            }
+
+            // 前輪と後輪の別スロットなら同じカテゴリーを2つ持てる
+            if (
+                first.position !== null &&
+                second.position !== null &&
+                first.position !== second.position
+            ) {
+                continue
+            }
+
+            duplicateIndexes.add(index)
+            duplicateIndexes.add(secondIndex)
+        }
+    }
+
+    for (const index of duplicateIndexes) {
+        // 重複判定の対象スロット
+        const slot = slotInfos[index]
+
+        // 配列外の位置が混ざった場合は重複として扱わない
+        if (!slot) {
+            continue
+        }
+
+        issues.push({
+            slotKey: slot.slotKey,
+            partId: slot.partId,
+            reason: "duplicate-category",
+            detail: `カテゴリー「${slot.categoryKey}」が複数のスロットで重複しています`,
+        })
     }
 
     // カテゴリー・前後位置の不一致をまとめてエラーにする

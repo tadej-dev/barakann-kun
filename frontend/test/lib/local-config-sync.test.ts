@@ -13,6 +13,8 @@ import {
     loadLocalOrigin,
     saveLocalOrigin,
     saveServerSnapshotToLocal,
+    hasIncompleteLocalMigration,
+    markLocalMigrationIncomplete,
 } from "@/lib/local-config-sync"
 import {saveLocalConfigCollection} from "@/lib/simulator-storage"
 import {loadLocalConfigCollection} from "@/lib/simulator-storage"
@@ -295,4 +297,153 @@ describe("ローカル構成の移行と保存", () => {
 
         setItem.mockRestore()
     })
+
+    // 移行に失敗したローカル構成を、ログアウト時の上書きで失わない
+    it("移行未完了ならサーバーに無いローカル構成を残して保存する", () => {
+        saveLocalOrigin("user-1")
+        markLocalMigrationIncomplete("user-1")
+        saveLocalConfigCollection(
+            [
+                // サーバーへ移行済みの構成
+                createLocalConfig("local-dup", "通勤用", [
+                    {slotKey: "frame", partId: 1, price: 100, weight: 1000},
+                ]),
+                // 移行に失敗して残った構成
+                createLocalConfig("local-only", "未移行の構成", [
+                    {slotKey: "frame", partId: 2, price: 100, weight: 1000},
+                ]),
+            ],
+            ["config:local-dup", "config:local-only"],
+        )
+
+        // サーバーに保存済みの構成（ローカルの通勤用と同内容）
+        const snapshot = {
+            configs: [createServerConfig("server-1", "通勤用", [
+                {slotKey: "frame", partId: 1, price: 100, weight: 1000},
+            ])],
+            order: ["config:server-1"],
+        }
+
+        expect(saveServerSnapshotToLocal("user-1", snapshot)).toBe(true)
+
+        // 保存されたローカル構成
+        const saved = loadLocalConfigCollection()
+
+        // サーバー構成に加え、未移行のローカル構成が残る
+        expect(saved.configs.map((config) => config.name)).toEqual([
+            "通勤用",
+            "未移行の構成",
+        ])
+        expect(saved.order).toEqual(["config:server-1", "config:local-only"])
+        expect(loadLocalOrigin()).toBe("user-1")
+    })
+
+    // 移行が完了していれば、サーバー構成でローカルを上書きする
+    it("移行完了後はサーバー構成で上書きする", () => {
+        saveLocalOrigin("user-1")
+        saveLocalConfigCollection(
+            [createLocalConfig("local-only", "未移行の構成", [
+                {slotKey: "frame", partId: 9, price: 100, weight: 1000},
+            ])],
+            ["config:local-only"],
+        )
+
+        // サーバーに保存済みの構成
+        const snapshot = {
+            configs: [createServerConfig("server-1", "通勤用")],
+            order: ["config:server-1"],
+        }
+
+        expect(saveServerSnapshotToLocal("user-1", snapshot)).toBe(true)
+
+        const saved = loadLocalConfigCollection()
+
+        expect(saved.configs.map((config) => config.name)).toEqual(["通勤用"])
+        expect(saved.order).toEqual(["config:server-1"])
+    })
+
+    // 別アカウント由来のローカル構成は、現在のアカウントへ統合しない
+    it("別アカウント由来のローカル構成は統合しない", () => {
+        // 移行未完了でも、別アカウントの構成は現在のアカウントへ移さない
+        markLocalMigrationIncomplete("user-A")
+        saveLocalOrigin("user-2")
+        saveLocalConfigCollection(
+            [createLocalConfig("local-b", "Bの構成", [
+                {slotKey: "frame", partId: 9, price: 100, weight: 1000},
+            ])],
+            ["config:local-b"],
+        )
+
+        // アカウントAの構成
+        const snapshot = {
+            configs: [createServerConfig("server-a", "Aの構成", [
+                {slotKey: "frame", partId: 1, price: 100, weight: 1000},
+            ])],
+            order: ["config:server-a"],
+        }
+
+        expect(saveServerSnapshotToLocal("user-A", snapshot)).toBe(true)
+
+        // アカウントAの構成だけが残る
+        expect(loadLocalConfigCollection().configs.map((config) =>
+            config.name)).toEqual(["Aの構成"])
+        expect(loadLocalOrigin()).toBe("user-A")
+    })
+
+    // 保存上限を超えるときも、未移行のローカル構成を優先して残す
+    it("上限超過時はサーバー構成より未移行のローカル構成を残す", () => {
+        saveLocalOrigin("user-1")
+        markLocalMigrationIncomplete("user-1")
+        saveLocalConfigCollection(
+            [createLocalConfig("local-only", "未移行の構成", [
+                {slotKey: "frame", partId: 9, price: 100, weight: 1000},
+            ])],
+            ["config:local-only"],
+        )
+
+        // 上限に達する20件のサーバー構成
+        const snapshot = {
+            configs: Array.from({length: 20}, (_, index) =>
+                createServerConfig(`server-${index}`, `サーバー構成${index}`)),
+            order: Array.from({length: 20}, (_, index) =>
+                `config:server-${index}`),
+        }
+
+        expect(saveServerSnapshotToLocal("user-1", snapshot)).toBe(true)
+
+        // 保存されたローカル構成
+        const saved = loadLocalConfigCollection()
+
+        expect(saved.configs).toHaveLength(20)
+        // 最後の1枠を、移行できていないローカル構成に使う
+        expect(saved.configs[19]?.name).toBe("未移行の構成")
+        expect(saved.configs.some((config) => config.name === "サーバー構成19"))
+            .toBe(false)
+    })
+    // 別アカウントの未移行記録では、現在のアカウントのローカル構成を残さない
+    it("別アカウントの未移行記録では統合しない", () => {
+        saveLocalOrigin("user-1")
+        // 現在のアカウントの移行は完了しており、別アカウントだけが未完了
+        markLocalMigrationIncomplete("user-2")
+        saveLocalConfigCollection(
+            [createLocalConfig("local-only", "未移行の構成", [
+                {slotKey: "frame", partId: 9, price: 100, weight: 1000},
+            ])],
+            ["config:local-only"],
+        )
+
+        const snapshot = {
+            configs: [createServerConfig("server-1", "通勤用")],
+            order: ["config:server-1"],
+        }
+
+        expect(saveServerSnapshotToLocal("user-1", snapshot)).toBe(true)
+
+        // 移行完了扱いのため、サーバー構成で上書きする
+        expect(loadLocalConfigCollection().configs.map((config) =>
+            config.name)).toEqual(["通勤用"])
+        // 他アカウントの未移行記録も消さない
+        expect(hasIncompleteLocalMigration("user-2")).toBe(true)
+    })
+
 })

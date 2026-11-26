@@ -126,6 +126,7 @@ const SPECIFICATION_LABELS: Record<string, string> = {
     allowed_position: "対応位置",
     bb_standard: "BB規格",
     brake_mount: "ブレーキマウント",
+    chainring_count: "チェーンリング枚数",
     cleat_system: "クリート規格",
     cockpit_connection: "コックピット接続方式",
     cockpit_interface: "コックピット規格",
@@ -271,6 +272,18 @@ const BOOLEAN_SPECIFICATION_LABELS: Record<string, Record<string, string>> = {
     cockpit_replaceable: {true: "交換可", false: "交換不可"},
 }
 
+// 規格キーと値の組み合わせで決まる表示名
+const SPECIFICATION_VALUE_LABELS_BY_KEY: Record<
+    string,
+    Record<string, string>
+> = {
+    chainring_count: {
+        "1": "1x（シングル）",
+        "2": "2x（ダブル）",
+        "3": "3x（トリプル）",
+    },
+}
+
 // 規格キーの日本語表示名（未知のキーはAPIキーを返す）
 export function getSpecificationLabel(key: string) {
     // 未知の規格キーも捨てず、APIキーをフォールバック表示する。
@@ -292,7 +305,10 @@ export function getSpecificationValueLabel(key: string, value: string) {
         // キーの接尾辞から決まる単位
         const unit = key.endsWith("_mm") ? "mm" : key.endsWith("_g") ? "g" : ""
 
-        return SPECIFICATION_VALUE_LABELS[single] ?? `${single}${unit}`
+        // キー固有の表示名（例: チェーンリング枚数の 1→1x）
+        const keyedLabel = SPECIFICATION_VALUE_LABELS_BY_KEY[key]?.[single]
+
+        return keyedLabel ?? SPECIFICATION_VALUE_LABELS[single] ?? `${single}${unit}`
     }
 
     return value.split(",").map((part) => label(part.trim())).filter(Boolean).join("／")

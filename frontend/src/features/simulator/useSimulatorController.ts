@@ -62,6 +62,7 @@ export type SimulatorController = {
     loadedConfigIds: string[] // 保存内容を読み込んで編集中の状態にある構成ID
     partsError: string // 候補パーツ取得のエラーメッセージ
     restoreError: string // localStorage復元のエラーメッセージ
+    restoreWarning: string // 復元した構成に残る非互換の警告
     savedBuildError: string // 保存構成読み込みのエラーメッセージ
     selectedPart: Part | undefined // 選択中の枠に入っているパーツ
     selectedParts: SelectedParts // 編集中の構成の選択済みパーツ
@@ -181,6 +182,7 @@ export function useSimulatorController({
     )
     // localStorageのパーツ取得が終わるまで、ログイン後自動保存を開始しない。
     const [restoreError, setRestoreError] = useState("") // localStorage復元のエラーメッセージ
+    const [restoreWarning, setRestoreWarning] = useState("") // 復元した構成に残る非互換の警告
     const [isConfigLoading, setIsConfigLoading] = useState(false) // 保存構成の読み込み中フラグ
     const [loadedConfigIds, setLoadedConfigIds] = useState<string[]>([]) // 読み込み済みの構成ID
     const [savedBuildError, setSavedBuildError] = useState("") // 保存構成読み込みのエラーメッセージ
@@ -341,30 +343,21 @@ export function useSimulatorController({
                     ),
                 ) as ConfigStates
 
-                // 互換性違反で空にした構成があるか
-                let hadIncompatibleState = false
+                // 復元した構成に残る規格不一致の理由
+                const incompatibleReasons: string[] = []
 
                 for (const configId of Object.keys(restoredConfigs)) {
-                    // 古いlocalStorageからの復元でも、既知の不一致を現行状態へ持ち込まない
-                    try {
-                        assertRestoredPartsAreCompatible(
-                            restoredConfigs[configId],
-                            `構成${configId}`,
-                        )
-                    } catch {
-                        // 互換性違反の構成は空にして復元を続行し、他構成の復元を妨げない
-                        restoredConfigs[configId] = {}
-                        hadIncompatibleState = true
-                    }
-                }
+                    // 古い構成もパーツを削除せず保持し、診断で非互換として示す
+                    const issues = evaluateSelectedPartsCompatibility(
+                        restoredConfigs[configId],
+                    )
 
-                // 互換性違反で空にした構成があれば保存し直す
-                if (hadIncompatibleState) {
-                    // 破棄した構成を保存し直し、次回以降の復元失敗を防ぐ
-                    saveSimulatorState({
-                        activeConfigId: stateToRestore.activeConfigId,
-                        configs: restoredConfigs,
-                    })
+                    for (const issue of issues) {
+                        // 規格が一致しない理由だけを画面表示用に集める
+                        if (issue.status === "incompatible") {
+                            incompatibleReasons.push(...issue.reasons)
+                        }
+                    }
                 }
 
                 dispatch({
@@ -372,6 +365,11 @@ export function useSimulatorController({
                     activeConfigId: stateToRestore.activeConfigId,
                     configs: restoredConfigs,
                 })
+                // 非互換が残る場合は、構成を保持したまま理由を画面へ表示
+                // 非互換はパーツを残したうえで警告として示し、再読み込みの案内とは分ける
+                setRestoreWarning(incompatibleReasons.length > 0
+                    ? `保存済みの構成に規格が一致しないパーツがあります。比較画面で確認してください（${Array.from(new Set(incompatibleReasons)).join("、")}）`
+                    : "")
                 setRestoreError("")
                 setHasRestoredStoredParts(true)
             } catch (error) {
@@ -689,6 +687,7 @@ export function useSimulatorController({
             loadedConfigIds.includes(configId),
         partsError,
         restoreError,
+        restoreWarning,
         savedBuildError,
         selectedPart: selectedParts[activeSlot.key],
         selectedParts,

@@ -556,3 +556,167 @@ describe("アカウントIDのハッシュ化", () => {
         expect(fromScript).toBe(fromApp)
     })
 })
+
+// 保存構成APIのスロット・前後位置・カテゴリー重複の検証
+describe("保存構成のスロット検証", () => {
+    type SlotValidationPartRow = {
+        // パーツID
+        id: number
+        // パーツのカテゴリーキー
+        category_key: string
+        // 前後位置の指定（指定なしはnull）
+        allowed_position: string | null
+    }
+
+    // パーツ行だけを返し、関連テーブルは空にするD1スタブ
+    function createSlotValidationDatabase(rows: SlotValidationPartRow[]) {
+        return {
+            // SQLの種類に応じてパーツ行か空の結果を返す実行部を用意
+            prepare(sql: string) {
+                return {
+                    // D1のbind呼び出しに合わせて実行部を返す
+                    bind() {
+                        return {
+                            all: async () => ({
+                                results: sql.includes("FROM parts")
+                                    ? rows.map((row) => ({
+                                        ...row,
+                                        price: 100,
+                                        weight: 100,
+                                    }))
+                                    : [],
+                            }),
+                        }
+                    },
+                }
+            },
+        } as unknown as D1Database
+    }
+
+    // 保存検証が投げたエラーを取り出す
+    async function captureValidationError(
+        database: D1Database,
+        parts: {slotKey: string; partId: number}[],
+    ) {
+        try {
+            await loadValidatedPartSnapshots(database, parts)
+        } catch (error) {
+            return error
+        }
+
+        throw new Error("保存検証がエラーになりませんでした")
+    }
+
+    it("前後2枠のカテゴリーを位置なしスロットで保存できない", async () => {
+        // 位置指定なしでは保存できないタイヤ
+        const database = createSlotValidationDatabase([{
+            id: 1,
+            category_key: "tire",
+            allowed_position: null,
+        }])
+        // 保存検証が返したエラー
+        const error = await captureValidationError(database, [
+            {slotKey: "tire", partId: 1},
+        ])
+
+        expect(error).toBeInstanceOf(InvalidSavedBuildPartsError)
+        expect(error).toMatchObject({
+            issues: [{
+                slotKey: "tire",
+                partId: 1,
+                reason: "missing-position",
+            }],
+            partIds: [1],
+        } satisfies Partial<InvalidSavedBuildPartsError>)
+        expect((error as Error).message).toContain(
+            "スロット「tire」は前輪・後輪を指定してください",
+        )
+    })
+
+    it("前後2枠を持たないカテゴリーに位置付きスロットを保存できない", async () => {
+        // 位置指定を持つフレーム
+        const database = createSlotValidationDatabase([{
+            id: 2,
+            category_key: "frame",
+            allowed_position: null,
+        }])
+        // 保存検証が返したエラー
+        const error = await captureValidationError(database, [
+            {slotKey: "frame:front", partId: 2},
+        ])
+
+        expect(error).toBeInstanceOf(InvalidSavedBuildPartsError)
+        expect(error).toMatchObject({
+            issues: [{
+                slotKey: "frame:front",
+                partId: 2,
+                reason: "unexpected-position",
+            }],
+            partIds: [2],
+        } satisfies Partial<InvalidSavedBuildPartsError>)
+        expect((error as Error).message).toContain(
+            "スロット「frame:front」は前輪・後輪を指定できません",
+        )
+    })
+
+    it.each<[string, number, number]>([
+        ["frame", 3, 4],
+        ["wheel", 5, 6],
+    ])(
+        "%sカテゴリーの重複スロットを拒否する",
+        async (categoryKey, firstPartId, secondPartId) => {
+            // 同じカテゴリーのパーツ2件
+            const database = createSlotValidationDatabase([
+                {
+                    id: firstPartId,
+                    category_key: categoryKey,
+                    allowed_position: null,
+                },
+                {
+                    id: secondPartId,
+                    category_key: categoryKey,
+                    allowed_position: null,
+                },
+            ])
+            // 位置なしと位置付きの重複スロット
+            const error = await captureValidationError(database, [
+                {slotKey: categoryKey, partId: firstPartId},
+                {slotKey: `${categoryKey}:front`, partId: secondPartId},
+            ])
+
+            expect(error).toBeInstanceOf(InvalidSavedBuildPartsError)
+
+            // 重複した両方のスロットをエラーへ含める
+            expect((error as InvalidSavedBuildPartsError).issues).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        slotKey: categoryKey,
+                        partId: firstPartId,
+                        reason: "duplicate-category",
+                    }),
+                    expect.objectContaining({
+                        slotKey: `${categoryKey}:front`,
+                        partId: secondPartId,
+                        reason: "duplicate-category",
+                    }),
+                ]),
+            )
+            expect((error as Error).message).toContain(
+                `カテゴリー「${categoryKey}」が複数のスロットで重複しています`,
+            )
+        },
+    )
+
+    it("前輪と後輪のタイヤを同じ構成に保存できる", async () => {
+        // 前輪用と後輪用のタイヤ
+        const database = createSlotValidationDatabase([
+            {id: 7, category_key: "tire", allowed_position: null},
+            {id: 8, category_key: "tire", allowed_position: null},
+        ])
+
+        await expect(loadValidatedPartSnapshots(database, [
+            {slotKey: "tire:front", partId: 7},
+            {slotKey: "tire:rear", partId: 8},
+        ])).resolves.toBeInstanceOf(Map)
+    })
+})

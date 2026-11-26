@@ -1,9 +1,20 @@
 import type {SavedBuild} from "@/api/savedBuilds"
-import type {StoredConfig} from "@/features/saved-builds/configRules"
-import {saveLocalConfigCollection} from "@/lib/simulator-storage"
+import {
+    MAX_CONFIGS,
+    configItemKey,
+    type StoredConfig,
+} from "@/features/saved-builds/configRules"
+import {
+    loadLocalConfigCollection,
+    saveLocalConfigCollection,
+    type LocalConfigCollection,
+} from "@/lib/simulator-storage"
 
 // 由来アカウントの保存キー
 const ORIGIN_STORAGE_KEY = "barakann-local-config-origin-v1"
+// 移行が完了していないアカウントの保存キー
+const INCOMPLETE_MIGRATION_STORAGE_KEY =
+    "barakann-local-config-incomplete-migration-v1"
 
 // 移行可否（新規・重複・上限超過）
 export type MigrationCandidateStatus = "new" | "duplicate" | "over-limit"
@@ -216,27 +227,139 @@ export function intersectSelectableIds(
         candidate.config.id === id && candidate.status !== "duplicate"))
 }
 
+
+// 移行が完了していないアカウントを記録する
+export function markLocalMigrationIncomplete(accountId: string): boolean {
+    try {
+        window.localStorage.setItem(INCOMPLETE_MIGRATION_STORAGE_KEY, accountId)
+
+        return true
+    } catch {
+        // 記録できなくても移行自体は続けられる
+        return false
+    }
+}
+
+// 移行が完了していないアカウントか判定する
+export function hasIncompleteLocalMigration(accountId: string): boolean {
+    try {
+        return window.localStorage.getItem(INCOMPLETE_MIGRATION_STORAGE_KEY) ===
+            accountId
+    } catch {
+        return false
+    }
+}
+
+// 移行が完了したアカウントの記録を、そのアカウントのときだけ消す
+export function clearLocalMigrationIncomplete(accountId: string): void {
+    try {
+        // 別アカウントの未移行記録を消さない
+        if (
+            window.localStorage.getItem(INCOMPLETE_MIGRATION_STORAGE_KEY) !==
+            accountId
+        ) {
+            return
+        }
+
+        window.localStorage.removeItem(INCOMPLETE_MIGRATION_STORAGE_KEY)
+    } catch {
+        // 消せなくても次回の移行で上書きされる
+    }
+}
+
+// 構成IDごとの表示順キーを、希望順と構成一覧から作る
+function orderedConfigKeys(
+    configs: StoredConfig[],
+    preferredOrder: string[],
+): string[] {
+    // 構成一覧に存在する表示順キー
+    const configKeys = configs.map((config) => configItemKey(config.id))
+
+    return [
+        ...preferredOrder.filter((key) => configKeys.includes(key)),
+        ...configKeys.filter((key) => !preferredOrder.includes(key)),
+    ]
+}
+
 // アカウントの構成をローカルへ保存する(ログアウト時)
+// 移行に失敗した構成が残る場合だけ、サーバー構成で上書きする前に統合
 export function saveServerSnapshotToLocal(
     accountId: string,
     snapshot: SavedConfigSnapshot,
 ): boolean {
-    // 容量超過などで保存できなかった場合は、中途半端に由来だけ記録しない
+    // 保存できなかった場合に中途半端な由来だけ残さないよう、以前の由来を退避
     // 失敗時に戻せるよう、以前の由来を退避しておく
     const previousOrigin = loadLocalOrigin()
+
+    // 移行に失敗した構成が残る場合だけ統合し、通常のログアウトは上書きのまま
+    const canMergeLocal = hasIncompleteLocalMigration(accountId) &&
+        canMigrateForAccount(previousOrigin, accountId)
+    // 統合対象のローカル構成一覧（別アカウント由来なら空）
+    const localCollection: LocalConfigCollection = canMergeLocal
+        ? loadLocalConfigCollection()
+        : {configs: [], order: []}
+    // サーバー構成と同一と判定するためのキー一覧
+    const serverMatchKeys = new Set(
+        snapshot.configs.map((config) => createConfigMatchKey(config)),
+    )
+    // サーバー構成のID一覧
+    const serverIds = new Set(snapshot.configs.map((config) => config.id))
+    // サーバーに無いローカル構成（移行できていない構成）
+    const localOnlyConfigs: StoredConfig[] = []
+    // ローカル構成同士の重複判定用キー
+    const localMatchKeys = new Set<string>()
+
+    for (const config of localCollection.configs) {
+        // サーバーに同じID・同じ内容の構成があれば移行済みとして除く
+        if (
+            serverIds.has(config.id) ||
+            serverMatchKeys.has(createConfigMatchKey(config))
+        ) {
+            continue
+        }
+
+        // ローカル内で同じ内容が重複していれば1件だけ残す
+        const matchKey = createConfigMatchKey(config)
+
+        // 同じ内容の構成が既にあれば追加しない
+        if (localMatchKeys.has(matchKey)) {
+            continue
+        }
+
+        localMatchKeys.add(matchKey)
+        localOnlyConfigs.push(config)
+    }
+
+    // 上限超過時はサーバーにも残る構成より、未移行のローカル構成を優先
+    const localConfigsToKeep = localOnlyConfigs.slice(0, MAX_CONFIGS)
+    // ローカルへ残せる残り枠に収まるサーバー構成
+    const serverConfigsToKeep = snapshot.configs.slice(
+        0,
+        Math.max(0, MAX_CONFIGS - localConfigsToKeep.length),
+    )
+    // サーバー構成と未移行のローカル構成を合わせた一覧
+    const mergedConfigs = [...serverConfigsToKeep, ...localConfigsToKeep]
+    // 統合後の表示順（サーバー構成の後ろへ残したローカル構成を続ける）
+    const mergedOrder = [
+        ...orderedConfigKeys(serverConfigsToKeep, snapshot.order),
+        ...orderedConfigKeys(localConfigsToKeep, localCollection.order),
+    ]
 
     // 由来を先に記録し、構成の保存に失敗したら元へ戻す
     if (!saveLocalOrigin(accountId)) {
         return false
     }
 
-    const saved = saveLocalConfigCollection(snapshot.configs, snapshot.order)
+    const saved = saveLocalConfigCollection(mergedConfigs, mergedOrder)
 
     // 保存に失敗したら以前の由来へ戻し、中途半端な状態を残さない
     if (!saved) {
         saveLocalOrigin(previousOrigin)
         return false
     }
+
+    // 統合できたら未移行の記録を消し、次回から通常の上書きに戻す
+    clearLocalMigrationIncomplete(accountId)
 
     return true
 }

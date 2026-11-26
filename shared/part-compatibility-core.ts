@@ -58,6 +58,14 @@ const SHIFT_SYSTEM_CATEGORIES = [
     "rear_derailleur",
 ] as const
 
+// チェーンリング枚数(1x/2x/3x)をそろえる必要があるカテゴリー
+// クランクとFDの対応枚数が食い違うと変速できないため、全組み合わせで比較
+const CHAINRING_COUNT_CATEGORIES = [
+    "crankset",
+    "front_derailleur",
+    "groupset",
+] as const
+
 // 指定したカテゴリーの全組み合わせに、同じ規格キーの一致ルールを作る
 function createPairwiseRules(
     categories: readonly string[], // 比較するカテゴリー
@@ -124,6 +132,11 @@ export const EQUALITY_RULES: EqualityRule[] = [
         SHIFT_SYSTEM_CATEGORIES,
         "shift_system",
         "変速方式",
+    ),
+    ...createPairwiseRules(
+        CHAINRING_COUNT_CATEGORIES,
+        "chainring_count",
+        "チェーンリング枚数",
     ),
 ]
 
@@ -483,6 +496,19 @@ function compareCockpitParts(
         const handlebar = candidateCategory === "handlebar" ? candidate : selectedPart
         const frameStatus = getFrameCockpitStatus(frame)
         const cockpitConnection = getSpecification(frame, "cockpit_connection")
+
+        // 専用ステムを占有し、ステム式を受け付けないフレームだけ一体型ハンドルを拒否する
+        // 一体型・ステム式の両対応(either)は、付属ステムを外して一体型へ交換できる
+        if (
+            isIntegratedHandlebar(handlebar) &&
+            blocksCategory(frame, "stem") &&
+            cockpitConnection !== "either"
+        ) {
+            return {
+                status: "incompatible",
+                reasons: ["フレームが専用ステムを占有するため、一体型ハンドルは選択できません"],
+            }
+        }
 
         // コックピット付属フレームや規格未確認フレームは、ハンドル側の規格値で比較
         if (frameStatus === "included" || frameStatus === "unknown") {
@@ -844,6 +870,20 @@ export function compareParts(
             continue
         }
 
+        // キャリパーを同梱しないコンポセットは、パッド形状を持たないため比較しない
+        // パッドの適合はキャリパー側のルールで判定する
+        if (
+            rule.specificationKey === "pad_family" &&
+            isGroupsetPairWithoutCaliper(
+                candidate,
+                candidateCategory,
+                selected,
+                selectedCategory,
+            )
+        ) {
+            continue
+        }
+
         const result = compareByEqualityRule(
             rule,
             candidate,
@@ -861,7 +901,42 @@ export function compareParts(
     return combinePairResults(ruleResults)
 }
 
+
+// キャリパーを同梱しないコンポセットとブレーキパッドの組み合わせか判定する
+function isGroupsetPairWithoutCaliper(
+    candidate: CompatibilityInput,
+    candidateCategory: string,
+    selected: CompatibilityInput,
+    selectedCategory: string,
+): boolean {
+    // コンポセット側のパーツ
+    const groupset = candidateCategory === "groupset"
+        ? candidate
+        : selectedCategory === "groupset"
+            ? selected
+            : null
+    // パッド側のパーツ
+    const pad = candidateCategory === "brake_pad"
+        ? candidate
+        : selectedCategory === "brake_pad"
+            ? selected
+            : null
+
+    if (!groupset || !pad) {
+        return false
+    }
+
+    // パッド形状を持つセットは従来どおり比較する
+    if (getSpecification(groupset, "pad_family")) {
+        return false
+    }
+
+    // キャリパーを同梱しないセットは、パッドとの比較対象外
+    return !blocksCategory(groupset, "brake_caliper")
+}
+
 // 構成全体の非互換・未確認
+
 export type CompatibilityIssue = {
     slotKeys: string[] // 問題が起きているスロットキー
     partIds: number[] // 問題が起きているパーツID
@@ -887,6 +962,33 @@ function categoryKeyFromSlotKey(slotKey: string) {
         : slotKey.slice(0, separatorIndex)
 }
 
+// 対応位置(allowed_position)とスロット位置の食い違い理由を返す
+// 前輪・後輪専用パーツを反対側へ置けないようにするため、単一枠は判定しない
+function findPositionMismatchReason(
+    slotKey: string,
+    part: CompatibilityInput,
+): string | null {
+    const allowedPosition = getSpecification(part, "allowed_position")
+
+    // 前輪専用・後輪専用の規格が無ければ位置の判定をしない
+    if (allowedPosition !== "front" && allowedPosition !== "rear") {
+        return null
+    }
+
+    const slotPosition = partPositionFromSlotKey(slotKey)
+
+    // 前後位置の無い単一枠は、専用品の対応位置と食い違うとは限らない
+    if (slotPosition === "single" || slotPosition === allowedPosition) {
+        return null
+    }
+
+    // 対応位置とスロット位置の表示名（前輪・後輪）
+    const allowedLabel = allowedPosition === "front" ? "前輪" : "後輪"
+    const slotLabel = slotPosition === "front" ? "前輪" : "後輪"
+
+    return `${allowedLabel}専用の製品のため、${slotLabel}には取り付けられません`
+}
+
 // 前後位置の比較対象か判定
 export function appliesToPosition(targetSlotKey: string, selectedSlotKey: string) {
     // 単一枠は前後共通、前後枠は同じ位置だけを比較
@@ -905,6 +1007,24 @@ export function findCompatibilityIssues(
     parts: {slotKey: string; part: CompatibilityInput & {id: number}}[],
 ): CompatibilityIssue[] {
     const issues = new Map<string, CompatibilityIssue>()
+
+    for (const {slotKey, part} of parts) {
+        // 対応位置とスロット位置の食い違い理由（食い違いなしはnull）
+        const positionMismatchReason = findPositionMismatchReason(slotKey, part)
+
+        // 対応位置がスロット位置と合う
+        if (!positionMismatchReason) {
+            continue
+        }
+
+        // 同じスロット・理由の位置問題は一度だけ登録する
+        issues.set(`${slotKey}::${positionMismatchReason}`, {
+            slotKeys: [slotKey],
+            partIds: [part.id],
+            reasons: [positionMismatchReason],
+            status: "incompatible",
+        })
+    }
 
     for (const [index, candidate] of parts.entries()) {
         for (const selected of parts.slice(index + 1)) {
