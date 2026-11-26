@@ -35,6 +35,8 @@ export const initialCandidateFilterState: CandidateFilterState = {
 // 規格値フィルターとして提示するキーの許可リスト。
 // ここに無いキーは（値が複数あっても）自動生成の対象にしない。
 export const SPEC_FILTER_KEYS: readonly string[] = [
+    "chain_standard",
+    "chainline_mm",
     "chainring_count",
     "freehub_body",
     "wheel_diameter",
@@ -45,10 +47,15 @@ export const SPEC_FILTER_KEYS: readonly string[] = [
     "crank_spindle",
     "pad_family",
     "rotor_diameter_mm",
+    "max_rotor_diameter_mm",
     "cleat_system",
     "saddle_rail",
     "seatpost_diameter_mm",
+    "brake_actuation",
+    "brake_fluid",
     "brake_mount",
+    "max_chainring_teeth",
+    "max_sprocket_teeth",
     "max_tire_width_mm",
     "tire_width_mm",
     "min_tire_width_mm",

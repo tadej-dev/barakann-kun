@@ -291,4 +291,164 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues).toHaveLength(1)
         expect(issues[0]?.slotKeys).toEqual(["frame", "handlebar"])
     })
+
+    // チェーン規格が一致しないチェーンとカセットは保存不可として検出
+    it("チェーン規格が一致しないチェーンとカセットを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "chain",
+                part: part(1, "chain", {chain_standard: "sram_flattop"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {chain_standard: "shimano_hg"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["cassette", "chain"])
+        expect(issues[0]?.reasons.join("、")).toContain("チェーン規格")
+    })
+
+    // カンマ区切りの対応規格が重なる場合は保存を許可
+    it("チェーン規格がカンマ区切りで交差するチェーンとカセットを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "chain",
+                part: part(1, "chain", {
+                    chain_standard: "shimano_hg,sram_flattop",
+                }),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {chain_standard: "sram_flattop"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // リアディレイラーの上限を超えるカセットは保存不可として検出
+    it("リアディレイラーの上限を超えるカセットを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "rear_derailleur",
+                part: part(1, "rear_derailleur", {max_sprocket_teeth: "36"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {max_sprocket_teeth: "42"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["cassette", "rear_derailleur"])
+        expect(issues[0]?.reasons.join("、")).toContain("最大スプロケット歯数")
+    })
+
+    // 上限ちょうどのカセットは保存を許可
+    it("リアディレイラーの上限ちょうどのカセットを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "rear_derailleur",
+                part: part(1, "rear_derailleur", {max_sprocket_teeth: "36"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {max_sprocket_teeth: "36"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 上限値が数値でない場合は適否を断定せず保存を許可
+    it("最大スプロケット歯数が数値でない組み合わせは保存を許可する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "rear_derailleur",
+                part: part(1, "rear_derailleur", {max_sprocket_teeth: "36T"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {max_sprocket_teeth: "42"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 上限値が片側だけ未登録の場合は未確認として保存を許可
+    it("最大スプロケット歯数が片側だけ未登録の組み合わせは保存を許可する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "rear_derailleur",
+                part: part(1, "rear_derailleur", {max_sprocket_teeth: "36"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // フロントディレイラーの上限を超えるクランクは保存不可として検出
+    it("フロントディレイラーの上限を超えるクランクを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "front_derailleur",
+                part: part(1, "front_derailleur", {max_chainring_teeth: "50"}),
+            },
+            {
+                slotKey: "crankset",
+                part: part(2, "crankset", {max_chainring_teeth: "53"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.reasons.join("、")).toContain("最大チェーンリング歯数")
+    })
+
+    // ブレーキフルードが異なるレバーとキャリパーは保存不可として検出
+    it("ブレーキフルードが異なるレバーとキャリパーを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "shift_brake_lever",
+                part: part(1, "shift_brake_lever", {
+                    brake_actuation: "hydraulic",
+                    brake_fluid: "mineral_oil",
+                }),
+            },
+            {
+                slotKey: "brake_caliper:front",
+                part: part(2, "brake_caliper", {
+                    brake_actuation: "hydraulic",
+                    brake_fluid: "dot_4",
+                }),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.reasons.join("、")).toContain("ブレーキフルード")
+    })
+
+    // フレームの対応ローター径を超えるローターは保存不可として検出
+    it("フレームの対応ローター径を超えるローターを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {max_rotor_diameter_mm: "160"}),
+            },
+            {
+                slotKey: "disc_rotor:front",
+                part: part(2, "disc_rotor", {rotor_diameter_mm: "180"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["disc_rotor:front", "frame"])
+        expect(issues[0]?.reasons.join("、")).toContain("対応ローター径")
+    })
 })

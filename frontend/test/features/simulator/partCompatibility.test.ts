@@ -98,6 +98,37 @@ describe("evaluatePartCompatibility", () => {
         expect(getSpecificationValueLabel("chainring_count", "3")).toBe("3x（トリプル）")
     })
 
+    // 追加した規格キーの表示名を返す
+    it("チェーン・容量・ブレーキ系の規格名を表示する", () => {
+        expect(getSpecificationLabel("chain_standard")).toBe("チェーン規格")
+        expect(getSpecificationLabel("max_sprocket_teeth")).toBe("最大スプロケット歯数")
+        expect(getSpecificationLabel("max_chainring_teeth")).toBe("最大チェーンリング歯数")
+        expect(getSpecificationLabel("chainline_mm")).toBe("チェーンライン")
+        expect(getSpecificationLabel("brake_actuation")).toBe("ブレーキ方式")
+        expect(getSpecificationLabel("brake_fluid")).toBe("ブレーキフルード")
+        expect(getSpecificationLabel("max_rotor_diameter_mm")).toBe("対応ローター径")
+    })
+
+    // 追加した規格値の表示名を返す（カンマ区切りも日本語で並べる）
+    it("チェーン規格・ブレーキ方式・油種の値ラベルを表示する", () => {
+        expect(getSpecificationValueLabel("chain_standard", "shimano_hg")).toBe("Shimano HG")
+        expect(getSpecificationValueLabel("chain_standard", "sram_flattop")).toBe("SRAM Flattop")
+        expect(getSpecificationValueLabel("chain_standard", "campagnolo")).toBe("Campagnolo")
+        expect(getSpecificationValueLabel(
+            "chain_standard",
+            "shimano_hg,campagnolo",
+        )).toBe("Shimano HG／Campagnolo")
+        expect(getSpecificationValueLabel("brake_actuation", "hydraulic")).toBe("油圧")
+        expect(getSpecificationValueLabel("brake_actuation", "mechanical")).toBe("機械式")
+        expect(getSpecificationValueLabel("brake_fluid", "mineral_oil")).toBe("ミネラルオイル")
+        expect(getSpecificationValueLabel("brake_fluid", "dot_4")).toBe("DOT 4")
+        expect(getSpecificationValueLabel("brake_fluid", "dot_5_1")).toBe("DOT 5.1")
+        // 歯数は単位を付けず、mm系は単位を補う
+        expect(getSpecificationValueLabel("max_sprocket_teeth", "36")).toBe("36")
+        expect(getSpecificationValueLabel("chainline_mm", "43.5")).toBe("43.5mm")
+        expect(getSpecificationValueLabel("max_rotor_diameter_mm", "180")).toBe("180mm")
+    })
+
     // フレームの最大タイヤ幅を超えるタイヤは、フレームを維持したまま選べない
     it("フレームの最大タイヤ幅を超えるタイヤは選択できない", () => {
         // 最大タイヤ幅30mmのフレームと幅32mmのタイヤ
@@ -1272,6 +1303,616 @@ describe("evaluatePartCompatibility", () => {
     })
 })
 
+// チェーン規格・容量上限・ブレーキ方式の判定を確認
+describe("追加した規格の判定", () => {
+    // チェーンとカセットの規格が一致する場合は適合
+    it("チェーン規格が一致するチェーンとカセットは適合する", () => {
+        // Shimano HG対応のチェーンとカセット
+        const chain = createPart(1, "Chain", "chain", {chain_standard: "shimano_hg"})
+        const cassette = createPart(2, "Cassette", "cassette", {chain_standard: "shimano_hg"})
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("チェーン規格が適合します")
+    })
+
+    // チェーンとカセットの規格が一致しない場合は非互換
+    it("チェーン規格が一致しないチェーンとカセットは非互換にする", () => {
+        // SRAM Flattop専用チェーンとShimano HGカセット
+        const chain = createPart(1, "Chain", "chain", {chain_standard: "sram_flattop"})
+        const cassette = createPart(2, "Cassette", "cassette", {chain_standard: "shimano_hg"})
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["cassette"])
+        expect(result?.reasons.join("、")).toContain("チェーン規格")
+    })
+
+    // カンマ区切りの対応規格が1つでも重なれば適合
+    it("チェーン規格がカンマ区切りで交差すれば適合する", () => {
+        // 複数規格対応チェーンとSRAM Flattopカセット
+        const chain = createPart(1, "Chain", "chain", {
+            chain_standard: "shimano_hg,sram_flattop",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            chain_standard: "sram_flattop",
+        })
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // カンマ区切りの対応規格が交差しない場合は非互換
+    it("チェーン規格がカンマ区切りで交差しなければ非互換にする", () => {
+        // Campagnolo専用チェーンとShimano HG・SRAM Flattop対応カセット
+        const chain = createPart(1, "Chain", "chain", {chain_standard: "campagnolo"})
+        const cassette = createPart(2, "Cassette", "cassette", {
+            chain_standard: "shimano_hg,sram_flattop",
+        })
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // チェーン規格はリアディレイラーとも比較する（一致・不一致）
+    it.each([
+        // 規格が一致する組み合わせと一致しない組み合わせ
+        ["shimano_hg", "shimano_hg", "compatible"],
+        ["shimano_hg", "sram_flattop", "incompatible"],
+    ])(
+        "チェーン規格が%sのチェーンと%sのリアディレイラーは%sにする",
+        (chainStandard, derailleurStandard, expectedStatus) => {
+            // チェーン規格が異なるチェーンとリアディレイラー
+            const chain = createPart(1, "Chain", "chain", {
+                chain_standard: chainStandard,
+            })
+            const derailleur = createPart(2, "RD", "rear_derailleur", {
+                chain_standard: derailleurStandard,
+            })
+
+            const result = evaluatePartCompatibility(
+                derailleur,
+                createPartSlot("rear_derailleur"),
+                {chain},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+        },
+    )
+
+    // チェーン規格はクランクとも比較する（一致・不一致）
+    it.each([
+        // 規格が一致する組み合わせと一致しない組み合わせ
+        ["campagnolo", "campagnolo", "compatible"],
+        ["campagnolo", "shimano_hg", "incompatible"],
+    ])(
+        "チェーン規格が%sのチェーンと%sのクランクは%sにする",
+        (chainStandard, cranksetStandard, expectedStatus) => {
+            // チェーン規格が異なるチェーンとクランク
+            const chain = createPart(1, "Chain", "chain", {
+                chain_standard: chainStandard,
+            })
+            const crankset = createPart(2, "Crankset", "crankset", {
+                chain_standard: cranksetStandard,
+            })
+
+            const result = evaluatePartCompatibility(
+                crankset,
+                createPartSlot("crankset"),
+                {chain},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+        },
+    )
+
+    // チェーン規格が片側だけ未登録なら未確認
+    it.each([
+        ["カセット", "cassette"],
+        ["リアディレイラー", "rear_derailleur"],
+        ["クランク", "crankset"],
+    ])("チェーン規格が片側だけ未登録のチェーンと%sは未確認にする", (
+        _label,
+        selectedCategory,
+    ) => {
+        // 規格を登録したチェーンと未登録の相手パーツ
+        const chain = createPart(1, "Chain", "chain", {chain_standard: "shimano_hg"})
+        const selected = createPart(2, "Selected", selectedCategory, {})
+
+        const result = evaluatePartCompatibility(
+            chain,
+            createPartSlot("chain"),
+            {[selectedCategory]: selected},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("チェーン規格")
+    })
+
+    // チェーンラインが一致するクランクとFDは適合
+    it("チェーンラインが一致するクランクとフロントディレイラーは適合する", () => {
+        // チェーンライン43.5mmで一致するクランクとフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {chainline_mm: "43.5"})
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainline_mm: "43.5",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons.join("、")).toContain("チェーンラインが適合します")
+    })
+
+    // チェーンラインの差が許容範囲を超える場合は調整確認にする
+    it("チェーンラインが大きく離れている場合は未確認にする", () => {
+        // チェーンライン43.5mmのクランクと47.5mmのフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {chainline_mm: "43.5"})
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainline_mm: "47.5",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("チェーンラインが離れています")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // 1mm以内の差は調整で吸収できるため適合
+    it("チェーンラインの差が1mm以内なら適合にする", () => {
+        // チェーンライン44mmのクランクと44.5mmのフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {chainline_mm: "44"})
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainline_mm: "44.5",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons.join("、")).toContain("差0.5mm")
+    })
+
+    // 表記ゆれ（45と45.0）でも同じ値として扱う
+    it("チェーンラインの表記ゆれを同じ値として扱う", () => {
+        const crankset = createPart(1, "Crankset", "crankset", {chainline_mm: "45"})
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {
+            chainline_mm: "45.0",
+        })
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // チェーンラインが片側だけ未登録なら未確認
+    it("チェーンラインが片側だけ未登録なら未確認にする", () => {
+        // チェーンラインを登録したクランクと未登録のフロントディレイラー
+        const crankset = createPart(1, "Crankset", "crankset", {chainline_mm: "43.5"})
+        const frontDerailleur = createPart(2, "FD", "front_derailleur", {})
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("チェーンラインが未確認です")
+    })
+
+    // 油圧レバーと油圧キャリパーの方式・油種が一致する場合は適合
+    it("ブレーキ方式と油種が一致するレバーとキャリパーは適合する", () => {
+        // ミネラルオイルの油圧レバーとキャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "mineral_oil",
+        })
+        const caliper = createPart(2, "Caliper", "brake_caliper", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "mineral_oil",
+        })
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toEqual([
+            "ブレーキ方式が適合します",
+            "ブレーキフルードが適合します",
+        ])
+    })
+
+    // 油圧レバーと機械式キャリパーの方式が異なる場合は非互換
+    it("ブレーキ方式が異なるレバーとキャリパーは非互換にする", () => {
+        // 油圧レバーと機械式キャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            brake_actuation: "hydraulic",
+        })
+        const caliper = createPart(2, "Caliper", "brake_caliper", {
+            brake_actuation: "mechanical",
+        })
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons.join("、")).toContain("ブレーキ方式が一致しません")
+    })
+
+    // 油種が異なる油圧レバーとキャリパーは非互換
+    it("ブレーキフルードが異なるレバーとキャリパーは非互換にする", () => {
+        // ミネラルオイルの油圧レバーとDOT 4の油圧キャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "mineral_oil",
+        })
+        const caliper = createPart(2, "Caliper", "brake_caliper", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "dot_4",
+        })
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toContain("ブレーキフルードが一致しません")
+    })
+
+    // 油種が片側だけ未登録なら未確認
+    it("ブレーキフルードが片側だけ未登録なら未確認にする", () => {
+        // 油種を登録したレバーと油種が未登録のキャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "mineral_oil",
+        })
+        const caliper = createPart(2, "Caliper", "brake_caliper", {
+            brake_actuation: "hydraulic",
+        })
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("ブレーキフルードが未確認です")
+    })
+
+    // ブレーキ方式・油種のどちらも未登録なら判定しない
+    it("ブレーキ方式と油種が未登録のレバーとキャリパーは判定しない", () => {
+        // 規格を持たないレバーとキャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {})
+        const caliper = createPart(2, "Caliper", "brake_caliper", {})
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // 実値が上限ちょうどなら適合（境界値）
+    it("カセットの最大歯数がリアディレイラーの上限ちょうどなら適合する", () => {
+        // 最大36T対応のリアディレイラーと最大36Tのカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "36",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            max_sprocket_teeth: "36",
+        })
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("最大スプロケット歯数が適合します")
+    })
+
+    // 実値が上限を超える場合は非互換（表示用の内訳も上限と実値を持つ）
+    it("カセットの最大歯数がリアディレイラーの上限を超える場合は非互換にする", () => {
+        // 最大36T対応のリアディレイラーと最大42Tのカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "36",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            max_sprocket_teeth: "42",
+        })
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["cassette"])
+        expect(result?.reasons).toContain(
+            "最大スプロケット歯数が上限を超えています（上限36T / 実値42T）",
+        )
+        expect(result?.counterparts[0]?.details).toEqual([{
+            label: "最大スプロケット歯数",
+            status: "incompatible",
+            specificationKey: "max_sprocket_teeth",
+            candidateValue: "36",
+            selectedValue: "42",
+        }])
+    })
+
+    // 候補と選択済みが逆でも、上限側と実値側を取り違えず判定する
+    it("カセットを候補にしてもリアディレイラーの上限で判定する", () => {
+        // 最大36T対応のリアディレイラーと最大42Tのカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "36",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            max_sprocket_teeth: "42",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {rear_derailleur: derailleur},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["rear_derailleur"])
+    })
+
+    // 実値が片側だけ未登録なら未確認
+    it("カセットの最大歯数が未登録ならリアディレイラーとの判定を未確認にする", () => {
+        // 最大36T対応のリアディレイラーと最大歯数が未登録のカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "36",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {})
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("最大スプロケット歯数が未確認です")
+    })
+
+    // 数値でない上限・実値は未確認
+    it("最大歯数が数値でない場合は未確認にする", () => {
+        // 数値でない上限を持つリアディレイラーと数値のカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "36T",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            max_sprocket_teeth: "42",
+        })
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur"),
+            {cassette},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("最大スプロケット歯数が未確認です")
+    })
+
+    // 上限と実値のどちらも未登録なら判定しない
+    it("最大歯数がどちらも未登録なら判定しない", () => {
+        // 最大歯数を持たないリアディレイラーとカセット
+        const derailleur = createPart(1, "RD", "rear_derailleur", {})
+        const cassette = createPart(2, "Cassette", "cassette", {})
+
+        const result = evaluatePartCompatibility(
+            derailleur,
+            createPartSlot("rear_derailleur"),
+            {cassette},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // 最大チェーンリング歯数はFDの上限とクランクの実値を比較する
+    it.each([
+        // 上限と実値が同じ場合と上限を超える場合
+        ["52", "52", "compatible"],
+        ["50", "53", "incompatible"],
+    ])(
+        "FDの上限が%sT・クランクが%sTなら%sにする",
+        (limit, actual, expectedStatus) => {
+            // 最大チェーンリング歯数を持つFDとクランク
+            const frontDerailleur = createPart(1, "FD", "front_derailleur", {
+                max_chainring_teeth: limit,
+            })
+            const crankset = createPart(2, "Crankset", "crankset", {
+                max_chainring_teeth: actual,
+            })
+
+            const result = evaluatePartCompatibility(
+                frontDerailleur,
+                createPartSlot("front_derailleur"),
+                {crankset},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+        },
+    )
+
+    // クランクの最大チェーンリング歯数が未登録なら未確認
+    it("クランクの最大チェーンリング歯数が未登録なら未確認にする", () => {
+        // 上限を登録したFDと実値が未登録のクランク
+        const frontDerailleur = createPart(1, "FD", "front_derailleur", {
+            max_chainring_teeth: "52",
+        })
+        const crankset = createPart(2, "Crankset", "crankset", {})
+
+        const result = evaluatePartCompatibility(
+            frontDerailleur,
+            createPartSlot("front_derailleur"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("最大チェーンリング歯数が未確認です")
+    })
+
+    // キャリパーの対応ローター径とローターの径を比較する
+    it.each([
+        // 径が上限ちょうどと上限を超える場合
+        ["180", "180", "compatible"],
+        ["180", "203", "incompatible"],
+    ])(
+        "キャリパーの上限が%smm・ローターが%smmなら%sにする",
+        (limit, actual, expectedStatus) => {
+            // 対応ローター径を持つキャリパーと径の異なるローター
+            const caliper = createPart(1, "Caliper", "brake_caliper", {
+                max_rotor_diameter_mm: limit,
+            })
+            const rotor = createPart(2, "Rotor", "disc_rotor", {
+                rotor_diameter_mm: actual,
+            })
+
+            const result = evaluatePartCompatibility(
+                rotor,
+                createPartSlot("disc_rotor", "front"),
+                {"brake_caliper:front": caliper},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+        },
+    )
+
+    // ローターの径が未登録なら未確認
+    it("ローター径が未登録ならキャリパーとの判定を未確認にする", () => {
+        // 対応ローター径を持つキャリパーと径が未登録のローター
+        const caliper = createPart(1, "Caliper", "brake_caliper", {
+            max_rotor_diameter_mm: "180",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {"brake_caliper:front": caliper},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("対応ローター径が未確認です")
+    })
+
+    // フレームの対応ローター径がローター径以上なら適合
+    it("フレームの対応ローター径以内のローターは適合する", () => {
+        // 最大180mm対応のフレームと160mmローター
+        const frame = createPart(1, "Frame", "frame", {max_rotor_diameter_mm: "180"})
+        const rotor = createPart(2, "Rotor", "disc_rotor", {rotor_diameter_mm: "160"})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // フレームの対応ローター径を超えるローターは選択できない
+    it("フレームの対応ローター径を超えるローターは選択できない", () => {
+        // 最大160mm対応のフレームと180mmローター
+        const frame = createPart(1, "Frame", "frame", {max_rotor_diameter_mm: "160"})
+        const rotor = createPart(2, "Rotor", "disc_rotor", {rotor_diameter_mm: "180"})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+        expect(result?.reasons.join("、")).toContain("対応ローター径が上限を超えています")
+    })
+
+    // フレームの対応ローター径が未登録なら判定しない（任意規格のため）
+    it("フレームの対応ローター径が未登録なら判定しない", () => {
+        // 対応ローター径が未登録のフレームと180mmローター
+        const frame = createPart(1, "Frame", "frame", {})
+        const rotor = createPart(2, "Rotor", "disc_rotor", {rotor_diameter_mm: "180"})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // フレームとローターの両方に径の規格が無ければ判定しない
+    it("フレームとローターの両方に径の規格が無ければ判定しない", () => {
+        // 径の規格を持たないフレームとローター
+        const frame = createPart(1, "Frame", "frame", {})
+        const rotor = createPart(2, "Rotor", "disc_rotor", {})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        expect(result).toBeNull()
+    })
+})
+
 // フレームのコックピットバッジを確認
 describe("getFrameCockpitBadge", () => {
     // 付属は規格名を併記し、標準付属か専用付属かを区別
@@ -1485,5 +2126,46 @@ describe("getWeightBreakdown", () => {
     })
 
 
+
+    // 機械式ブレーキは油種を持たないため、フルードの未確認を出さない
+    it("機械式キャリパーではブレーキフルードを比較しない", () => {
+        // 油圧レバーと機械式キャリパー
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            brake_actuation: "hydraulic",
+            brake_fluid: "mineral_oil",
+        })
+        const caliper = createPart(2, "Caliper", "brake_caliper", {
+            brake_actuation: "mechanical",
+        })
+
+        const result = evaluatePartCompatibility(
+            caliper,
+            createPartSlot("brake_caliper", "front"),
+            {shift_brake_lever: lever},
+        )
+
+        // 方式の不一致だけを理由にし、油種の未確認は出さない
+        expect(result?.reasons.join("、")).toContain("ブレーキ方式")
+        expect(result?.reasons.join("、")).not.toContain("ブレーキフルード")
+    })
+
+    // 容量の実値が数値でない場合も未確認にする
+    it("実値が数値でない容量は未確認にする", () => {
+        // 最大42T表記のカセットと34T対応のリアディレイラー
+        const rearDerailleur = createPart(1, "RD", "rear_derailleur", {
+            max_sprocket_teeth: "34",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            max_sprocket_teeth: "42T",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {rear_derailleur: rearDerailleur},
+        )
+
+        expect(result?.status).toBe("unknown")
+    })
 
 })
