@@ -101,4 +101,31 @@ describe("buildCompatibilitySummary", () => {
         expect(lines[0]?.items[0]?.text).toBe("ホイール径（フレーム）")
         expect(lines[0]?.items[0]?.title).toContain("未登録")
     })
+    // 上限と実値を1行にまとめても、両側の値を落とさない
+    it("ローター径の行に両側の値を残す", () => {
+        // 180mmローターを持つフレームの比較結果
+        const counterparts: CompatibilityCounterpart[] = [{
+            slotKey: "frame",
+            partName: "Frame A",
+            status: "incompatible",
+            reasons: [],
+            details: [{
+                label: "直付け対応ローター径",
+                status: "incompatible",
+                specificationKey: "max_rotor_diameter_mm",
+                candidateValue: "180",
+                selectedValue: "160",
+            }],
+        }]
+
+        // 画面に出す行
+        const summary = buildCompatibilitySummary(counterparts, categoryDisplayNames)
+
+        // 上限と実値の両方が1行に残る
+        expect(summary[0]?.items).toHaveLength(1)
+        expect(summary[0]?.items[0]?.text).toContain("直付け対応ローター径")
+        expect(summary[0]?.items[0]?.title).toContain("180")
+        expect(summary[0]?.items[0]?.title).toContain("160")
+    })
+
 })

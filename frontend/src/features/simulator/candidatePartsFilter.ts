@@ -59,6 +59,18 @@ export const SPEC_FILTER_KEYS: readonly string[] = [
     "max_tire_width_mm",
     "tire_width_mm",
     "min_tire_width_mm",
+    "front_axle",
+    "rear_axle",
+    "bb_shell_width_mm",
+    "rim_tire_interface",
+    "tire_bead",
+    "rim_inner_width_mm",
+    "min_rim_inner_width_mm",
+    "max_rim_inner_width_mm",
+    "pedal_thread",
+    "control_clamp_mm",
+    "seatpost_min_insert_mm",
+    "seat_tube_depth_mm",
 ]
 
 // 規格フィルターの選択肢（APIの値と日本語表示名）

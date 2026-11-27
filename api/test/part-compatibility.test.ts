@@ -451,4 +451,233 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.slotKeys).toEqual(["disc_rotor:front", "frame"])
         expect(issues[0]?.reasons.join("、")).toContain("対応ローター径")
     })
+
+    // 後輪アクスルが一致しないフレームとホイールは保存不可として検出
+    it("後輪アクスルが一致しないフレームとホイールを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {rear_axle: "12x142"}),
+            },
+            {
+                slotKey: "wheel",
+                part: part(2, "wheel", {rear_axle: "qr_135"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["frame", "wheel"])
+        expect(issues[0]?.reasons.join("、")).toContain("後輪アクスル")
+    })
+
+    // ホイールの複数対応にフレームのアクスルが含まれれば保存を許可
+    it("後輪アクスルの対応が交差するフレームとホイールを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {rear_axle: "12x142"}),
+            },
+            {
+                slotKey: "wheel",
+                part: part(2, "wheel", {rear_axle: "12x142,qr_135"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // BBシェル幅の表記ゆれ（68と68.0）は同じ値として保存を許可
+    it("BBシェル幅が表記ゆれでも不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {bb_shell_width_mm: "68"}),
+            },
+            {
+                slotKey: "bottom_bracket",
+                part: part(2, "bottom_bracket", {bb_shell_width_mm: "68.0"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // BBシェル幅が異なるフレームとBBは保存不可として検出
+    it("BBシェル幅が異なるフレームとBBを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {bb_shell_width_mm: "68"}),
+            },
+            {
+                slotKey: "bottom_bracket",
+                part: part(2, "bottom_bracket", {bb_shell_width_mm: "73"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["bottom_bracket", "frame"])
+        expect(issues[0]?.reasons.join("、")).toContain("BBシェル幅")
+    })
+
+    // サドルレールが一致しないサドルとシートポストは保存不可として検出
+    it("サドルレールが一致しないサドルとシートポストを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "saddle",
+                part: part(1, "saddle", {saddle_rail: "carbon_7x9_3"}),
+            },
+            {
+                slotKey: "seatpost",
+                part: part(2, "seatpost", {saddle_rail: "carbon_7x9"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["saddle", "seatpost"])
+        expect(issues[0]?.reasons.join("、")).toContain("サドルレール")
+    })
+
+    // ペダル軸規格が一致しないペダルとクランクは保存不可として検出
+    it("ペダル軸規格が一致しないペダルとクランクを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "pedal",
+                part: part(1, "pedal", {pedal_thread: "1_2_20tpi"}),
+            },
+            {
+                slotKey: "crankset",
+                part: part(2, "crankset", {pedal_thread: "9_16_20tpi"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["crankset", "pedal"])
+        expect(issues[0]?.reasons.join("、")).toContain("ペダル軸規格")
+    })
+
+    // フックレスリムとチューブタイヤは保存不可として検出
+    it("フックレスリムとチューブタイヤを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {rim_tire_interface: "hookless"}),
+            },
+            {
+                slotKey: "tire:front",
+                part: part(2, "tire", {tire_bead: "tube_type"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["tire:front", "wheel"])
+        expect(issues[0]?.reasons).toContain(
+            "フックレスリムにチューブタイヤは装着できません",
+        )
+    })
+
+    // フックレスリムでもチューブレスタイヤは保存を許可
+    it("フックレスリムとチューブレスタイヤを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {rim_tire_interface: "hookless"}),
+            },
+            {
+                slotKey: "tire:front",
+                part: part(2, "tire", {tire_bead: "tubeless"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // リム内幅がタイヤの推奨範囲外でも保存は許可
+    it("リム内幅がタイヤの対応範囲外でも保存を止めない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {rim_inner_width_mm: "26"}),
+            },
+            {
+                slotKey: "tire:front",
+                part: part(2, "tire", {
+                    min_rim_inner_width_mm: "19",
+                    max_rim_inner_width_mm: "25",
+                }),
+            },
+        ])
+
+        // 推奨範囲外は注意として扱い、保存は許可する
+        expect(issues).toHaveLength(0)
+    })
+
+    // リム内幅が対応範囲の境界ちょうどなら保存を許可
+    it("リム内幅がタイヤの対応範囲ちょうどなら不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {rim_inner_width_mm: "25"}),
+            },
+            {
+                slotKey: "tire:front",
+                part: part(2, "tire", {
+                    min_rim_inner_width_mm: "19",
+                    max_rim_inner_width_mm: "25",
+                }),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // ポスト最小挿入長がシートチューブ長を超えると保存不可として検出
+    it("ポスト最小挿入長がシートチューブ長を超えると不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {seat_tube_depth_mm: "120"}),
+            },
+            {
+                slotKey: "seatpost",
+                part: part(2, "seatpost", {seatpost_min_insert_mm: "150"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["frame", "seatpost"])
+        expect(issues[0]?.reasons.join("、")).toContain("シートチューブ長")
+    })
+
+    // フレームのシートチューブ長が未登録なら保存を許可
+    it("シートチューブ長が未登録の組み合わせは保存を許可する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {}),
+            },
+            {
+                slotKey: "seatpost",
+                part: part(2, "seatpost", {seatpost_min_insert_mm: "150"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // クランプ径の差が0.5mmを超える場合は未確認として保存を許可
+    it("クランプ径の差が0.5mmを超える組み合わせは保存を許可する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "shift_brake_lever",
+                part: part(1, "shift_brake_lever", {control_clamp_mm: "31.8"}),
+            },
+            {
+                slotKey: "handlebar",
+                part: part(2, "handlebar", {control_clamp_mm: "32.4"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
 })

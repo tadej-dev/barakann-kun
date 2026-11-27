@@ -180,6 +180,70 @@ describe("buildSpecFilters", () => {
             {value: "36", label: "36"},
         ])
     })
+
+    // 追加したアクスル・リム・ペダル軸の許可キーも選択肢として生成
+    it("アクスル・リム・ペダル軸の選択肢を生成する", () => {
+        // 後輪アクスル・リム対応・リム内幅が異なるテスト用パーツ
+        const wheelParts = [
+            createPart({
+                id: 1,
+                specifications: {
+                    rear_axle: "12x142,qr_135",
+                    rim_tire_interface: "hooked",
+                    rim_inner_width_mm: "21",
+                },
+            }),
+            createPart({
+                id: 2,
+                specifications: {
+                    rear_axle: "qr_135",
+                    rim_tire_interface: "hookless",
+                    rim_inner_width_mm: "25",
+                },
+            }),
+        ]
+        // ペダル軸規格が異なるクランク
+        const cranksetParts = [
+            createPart({
+                id: 3,
+                categoryKey: "crankset",
+                specifications: {pedal_thread: "9_16_20tpi"},
+            }),
+            createPart({
+                id: 4,
+                categoryKey: "crankset",
+                specifications: {pedal_thread: "1_2_20tpi"},
+            }),
+        ]
+
+        // 生成した規格の絞り込み選択肢
+        const specFilters = buildSpecFilters([...wheelParts, ...cranksetParts])
+        // 後輪アクスルの絞り込み選択肢
+        const rearAxleFilter = specFilters.find((filter) =>
+            filter.key === "rear_axle")
+        // リム対応の絞り込み選択肢
+        const rimInterfaceFilter = specFilters.find((filter) =>
+            filter.key === "rim_tire_interface")
+        // ペダル軸規格の絞り込み選択肢
+        const pedalThreadFilter = specFilters.find((filter) =>
+            filter.key === "pedal_thread")
+
+        expect(rearAxleFilter?.label).toBe("後輪アクスル")
+        expect(rearAxleFilter?.options).toEqual([
+            {value: "12x142", label: "12x142mm"},
+            {value: "qr_135", label: "QR 135mm"},
+        ])
+        expect(rimInterfaceFilter?.label).toBe("リムのタイヤ対応")
+        expect(rimInterfaceFilter?.options).toEqual([
+            {value: "hooked", label: "フックあり"},
+            {value: "hookless", label: "フックレス"},
+        ])
+        expect(pedalThreadFilter?.label).toBe("ペダル軸規格")
+        expect(pedalThreadFilter?.options).toEqual([
+            {value: "1_2_20tpi", label: "1/2-20TPI"},
+            {value: "9_16_20tpi", label: "9/16-20TPI"},
+        ])
+    })
 })
 
 // 候補メーカーの収集を保証
@@ -321,6 +385,32 @@ describe("filterCandidateParts", () => {
         const result = filterCandidateParts(
             parts,
             filters({specs: {brake_actuation: ["mechanical"]}}),
+            new Map(),
+        )
+
+        expect(result.map((part) => part.id)).toEqual([2])
+    })
+
+    // リムのタイヤ対応（フックあり・フックレス）で絞り込める
+    it("リムのタイヤ対応で絞り込める", () => {
+        // フックありとフックレスのホイール
+        const parts = [
+            createPart({
+                id: 1,
+                categoryKey: "wheel",
+                specifications: {rim_tire_interface: "hooked"},
+            }),
+            createPart({
+                id: 2,
+                categoryKey: "wheel",
+                specifications: {rim_tire_interface: "hookless"},
+            }),
+        ]
+
+        // 絞り込み結果
+        const result = filterCandidateParts(
+            parts,
+            filters({specs: {rim_tire_interface: ["hookless"]}}),
             new Map(),
         )
 

@@ -1520,6 +1520,40 @@ describe("追加した規格の判定", () => {
         expect(result?.status).toBe("compatible")
     })
 
+    // 複数のシェル幅に対応するBBは、いずれかが一致すれば適合
+    it("BBが複数のシェル幅に対応していれば適合にする", () => {
+        // 68mmのフレームと、68/73mm対応のBB
+        const frame = createPart(1, "Frame", "frame", {bb_shell_width_mm: "68"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "68,73",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 複数対応でも一致する幅が無ければ非互換
+    it("BBの対応シェル幅に一致が無ければ非互換にする", () => {
+        // 68mmのフレームと、73/86mm対応のBB
+        const frame = createPart(1, "Frame", "frame", {bb_shell_width_mm: "68"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "73,86",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
     // チェーンラインが片側だけ未登録なら未確認
     it("チェーンラインが片側だけ未登録なら未確認にする", () => {
         // チェーンラインを登録したクランクと未登録のフロントディレイラー
@@ -1912,6 +1946,928 @@ describe("追加した規格の判定", () => {
         expect(result).toBeNull()
     })
 })
+
+// アクスル・BBシェル幅・タイヤ・サドル・ペダル・シートポストの判定を確認
+describe("アクスル・BBシェル幅・タイヤ・サドル・ペダル・シートポストの判定", () => {
+    // 追加した規格キーの表示名を返す
+    it("追加した規格の表示名を返す", () => {
+        expect(getSpecificationLabel("front_axle")).toBe("前輪アクスル")
+        expect(getSpecificationLabel("rear_axle")).toBe("後輪アクスル")
+        expect(getSpecificationLabel("bb_shell_width_mm")).toBe("BBシェル幅")
+        expect(getSpecificationLabel("rim_tire_interface")).toBe("リムのタイヤ対応")
+        expect(getSpecificationLabel("tire_bead")).toBe("タイヤのビード")
+        expect(getSpecificationLabel("rim_inner_width_mm")).toBe("リム内幅")
+        expect(getSpecificationLabel("min_rim_inner_width_mm"))
+            .toBe("対応リム内幅（最小）")
+        expect(getSpecificationLabel("max_rim_inner_width_mm"))
+            .toBe("対応リム内幅（最大）")
+        expect(getSpecificationLabel("saddle_rail")).toBe("サドルレール")
+        expect(getSpecificationLabel("pedal_thread")).toBe("ペダル軸規格")
+        expect(getSpecificationValueLabel("front_axle", "15x110")).toBe("15x110mm")
+        expect(getSpecificationValueLabel("rear_axle", "12x148")).toBe("12x148mm")
+        expect(getSpecificationLabel("control_clamp_mm")).toBe("クランプ径")
+        expect(getSpecificationLabel("seatpost_min_insert_mm")).toBe("ポスト最小挿入長")
+        expect(getSpecificationLabel("seat_tube_depth_mm")).toBe("シートチューブ長")
+    })
+
+    // アクスル・タイヤビード・ペダル軸の値ラベルを返す
+    it("追加した規格値の表示名を返す", () => {
+        expect(getSpecificationValueLabel("front_axle", "12x100")).toBe("12x100mm")
+        expect(getSpecificationValueLabel("rear_axle", "12x142")).toBe("12x142mm")
+        expect(getSpecificationValueLabel("rear_axle", "qr_135")).toBe("QR 135mm")
+        expect(getSpecificationValueLabel("rim_tire_interface", "hooked")).toBe("フックあり")
+        expect(getSpecificationValueLabel("rim_tire_interface", "hookless")).toBe("フックレス")
+        expect(getSpecificationValueLabel("tire_bead", "tube_type")).toBe("チューブタイプ")
+        expect(getSpecificationValueLabel("tire_bead", "tubeless")).toBe("チューブレス")
+        expect(getSpecificationValueLabel("tire_bead", "tubular")).toBe("チューブラー")
+        expect(getSpecificationValueLabel("pedal_thread", "9_16_20tpi")).toBe("9/16-20TPI")
+        expect(getSpecificationValueLabel("pedal_thread", "1_2_20tpi")).toBe("1/2-20TPI")
+    })
+
+    // フレームの前輪アクスルがホイールの対応複数に含まれれば適合
+    it("前輪アクスルが一致するフレームとホイールは適合する", () => {
+        // 12x100mmのフレームと12x100/15x110mm対応ホイール
+        const frame = createPart(1, "Frame", "frame", {front_axle: "12x100"})
+        const wheel = createPart(2, "Wheel", "wheel", {
+            front_axle: "12x100,15x110",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("前輪アクスルが適合します")
+    })
+
+    // フレームの前輪アクスルがホイールの対応複数に無ければ非互換
+    it("前輪アクスルが一致しないフレームとホイールは非互換にする", () => {
+        // 12x100mmのフレームと15x110mm専用ホイール
+        const frame = createPart(1, "Frame", "frame", {front_axle: "12x100"})
+        const wheel = createPart(2, "Wheel", "wheel", {front_axle: "15x110"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+        expect(result?.reasons.join("、")).toContain(
+            "前輪アクスルが一致しないため、フレームを維持したまま選択できません",
+        )
+    })
+
+    // フレームの前輪アクスルが未登録なら判定しない
+    it("前輪アクスルが片側だけ未登録なら判定しない", () => {
+        // アクスル規格を持たないフレームと12x100mmホイール
+        const frame = createPart(1, "Frame", "frame", {})
+        const wheel = createPart(2, "Wheel", "wheel", {front_axle: "12x100"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // フレームの後輪アクスルがホイールの対応複数に含まれれば適合
+    it("後輪アクスルが一致するフレームとホイールは適合する", () => {
+        // 12x142mmのフレームと12x142/QR135mm対応ホイール
+        const frame = createPart(1, "Frame", "frame", {rear_axle: "12x142"})
+        const wheel = createPart(2, "Wheel", "wheel", {
+            rear_axle: "12x142,qr_135",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("後輪アクスルが適合します")
+    })
+
+    // フレームの後輪アクスルがホイールの対応複数に無ければ非互換
+    it("後輪アクスルが一致しないフレームとホイールは非互換にする", () => {
+        // 12x142mmのフレームとQR135mm専用ホイール
+        const frame = createPart(1, "Frame", "frame", {rear_axle: "12x142"})
+        const wheel = createPart(2, "Wheel", "wheel", {rear_axle: "qr_135"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+        expect(result?.reasons.join("、")).toContain(
+            "後輪アクスルが一致しないため、フレームを維持したまま選択できません",
+        )
+    })
+
+    // ホイールの後輪アクスルが未登録なら判定しない
+    it("後輪アクスルが片側だけ未登録なら判定しない", () => {
+        // 12x142mmのフレームとアクスル規格を持たないホイール
+        const frame = createPart(1, "Frame", "frame", {rear_axle: "12x142"})
+        const wheel = createPart(2, "Wheel", "wheel", {})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // BBシェル幅の68と68.0を同じ値として扱う
+    it("BBシェル幅が表記ゆれでも一致すれば適合する", () => {
+        // 68mmのフレームと68.0mm表記のBB
+        const frame = createPart(1, "Frame", "frame", {bb_shell_width_mm: "68"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "68.0",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("BBシェル幅が適合します")
+    })
+
+    // BBシェル幅が異なるフレームとBBは非互換
+    it("BBシェル幅が一致しないフレームとBBは非互換にする", () => {
+        // 68mmのフレームと73mmのBB
+        const frame = createPart(1, "Frame", "frame", {bb_shell_width_mm: "68"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "73",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+        expect(result?.reasons.join("、")).toContain("BBシェル幅")
+    })
+
+    // BBシェル幅が片側だけ未登録なら判定しない
+    it("BBシェル幅が片側だけ未登録なら判定しない", () => {
+        // BBシェル幅を持たないフレームと68mmのBB
+        const frame = createPart(1, "Frame", "frame", {})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "68",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // サドルのレール規格がシートポストの対応複数に含まれれば適合
+    it("サドルレールが一致するサドルとシートポストは適合する", () => {
+        // カーボン7x9mmレールのサドルとアロイ7mm/カーボン7x9mm対応ポスト
+        const saddle = createPart(1, "Saddle", "saddle", {
+            saddle_rail: "carbon_7x9",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            saddle_rail: "alloy_7mm,carbon_7x9",
+        })
+
+        const result = evaluatePartCompatibility(
+            saddle,
+            createPartSlot("saddle"),
+            {seatpost},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("サドルレールが適合します")
+    })
+
+    // サドルのレール規格がシートポストの対応複数に無ければ非互換
+    it("サドルレールが一致しないサドルとシートポストは非互換にする", () => {
+        // カーボン7x9.3mmレールのサドルとカーボン7x9mm対応ポスト
+        const saddle = createPart(1, "Saddle", "saddle", {
+            saddle_rail: "carbon_7x9_3",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            saddle_rail: "carbon_7x9",
+        })
+
+        const result = evaluatePartCompatibility(
+            saddle,
+            createPartSlot("saddle"),
+            {seatpost},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["seatpost"])
+        expect(result?.reasons.join("、")).toContain("サドルレールが一致しません")
+    })
+
+    // サドルレールが片側だけ未登録なら判定しない
+    it("サドルレールが片側だけ未登録なら判定しない", () => {
+        // レール規格を持つサドルと規格未登録のシートポスト
+        const saddle = createPart(1, "Saddle", "saddle", {
+            saddle_rail: "carbon_7x9",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {})
+
+        const result = evaluatePartCompatibility(
+            saddle,
+            createPartSlot("saddle"),
+            {seatpost},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // ペダル軸規格がクランクの対応複数に含まれれば適合
+    it("ペダル軸規格が一致するペダルとクランクは適合する", () => {
+        // 9/16-20TPIのペダルと9/16/1/2-20TPI対応クランク
+        const pedal = createPart(1, "Pedal", "pedal", {
+            pedal_thread: "9_16_20tpi",
+        })
+        const crankset = createPart(2, "Crankset", "crankset", {
+            pedal_thread: "9_16_20tpi,1_2_20tpi",
+        })
+
+        const result = evaluatePartCompatibility(
+            pedal,
+            createPartSlot("pedal"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("ペダル軸規格が適合します")
+    })
+
+    // ペダル軸規格がクランクの対応複数に無ければ非互換
+    it("ペダル軸規格が一致しないペダルとクランクは非互換にする", () => {
+        // 1/2-20TPIのペダルと9/16-20TPI専用クランク
+        const pedal = createPart(1, "Pedal", "pedal", {
+            pedal_thread: "1_2_20tpi",
+        })
+        const crankset = createPart(2, "Crankset", "crankset", {
+            pedal_thread: "9_16_20tpi",
+        })
+
+        const result = evaluatePartCompatibility(
+            pedal,
+            createPartSlot("pedal"),
+            {crankset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.conflictingSlotKeys).toEqual(["crankset"])
+        expect(result?.reasons.join("、")).toContain("ペダル軸規格が一致しません")
+    })
+
+    // ペダル軸規格が片側だけ未登録なら判定しない
+    it("ペダル軸規格が片側だけ未登録なら判定しない", () => {
+        // 軸規格を持つペダルと規格未登録のクランク
+        const pedal = createPart(1, "Pedal", "pedal", {
+            pedal_thread: "9_16_20tpi",
+        })
+        const crankset = createPart(2, "Crankset", "crankset", {})
+
+        const result = evaluatePartCompatibility(
+            pedal,
+            createPartSlot("pedal"),
+            {crankset},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // クランプ径の差が0.5mmちょうどなら調整範囲内として適合
+    it("クランプ径の差が0.5mmちょうどなら適合する", () => {
+        // 32.0mmのレバーと32.5mmのハンドル
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            control_clamp_mm: "32.0",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            control_clamp_mm: "32.5",
+        })
+
+        const result = evaluatePartCompatibility(
+            lever,
+            createPartSlot("shift_brake_lever"),
+            {handlebar},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons.join("、")).toContain("差0.5mm")
+    })
+
+    // クランプ径の差が0.5mmを超える場合は調整確認にする
+    it("クランプ径の差が0.5mmを超える場合は未確認にする", () => {
+        // 32.0mmのレバーと32.6mmのハンドル
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            control_clamp_mm: "32.0",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {
+            control_clamp_mm: "32.6",
+        })
+
+        const result = evaluatePartCompatibility(
+            lever,
+            createPartSlot("shift_brake_lever"),
+            {handlebar},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("調整範囲を確認してください")
+        expect(result?.selectionBlocked).toBe(false)
+    })
+
+    // クランプ径が片側だけ未登録なら判定しない
+    it("クランプ径が片側だけ未登録なら判定しない", () => {
+        // クランプ径を持つレバーと規格未登録のハンドル
+        const lever = createPart(1, "Lever", "shift_brake_lever", {
+            control_clamp_mm: "32.0",
+        })
+        const handlebar = createPart(2, "Handlebar", "handlebar", {})
+
+        const result = evaluatePartCompatibility(
+            lever,
+            createPartSlot("shift_brake_lever"),
+            {handlebar},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // タイヤの対応リム内幅にホイールのリム内幅が収まれば適合
+    it("リム内幅がタイヤの対応範囲内なら適合する", () => {
+        // リム内幅21mmのホイールと19〜25mm対応タイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {rim_inner_width_mm: "21"})
+        const tire = createPart(2, "Tire", "tire", {
+            min_rim_inner_width_mm: "19",
+            max_rim_inner_width_mm: "25",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons.join("、")).toContain(
+            "リム内幅21mmは対応リム内幅19〜25mmの範囲内です",
+        )
+    })
+
+    // 対応範囲の内訳は単位を重ねない
+    it("対応リム内幅の内訳に単位を重ねない", () => {
+        // 21mmのホイールと19〜25mm対応タイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_inner_width_mm: "21",
+        })
+        const tire = createPart(2, "Tire", "tire", {
+            min_rim_inner_width_mm: "19",
+            max_rim_inner_width_mm: "25",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        // 範囲側の内訳は整形済みの値をそのまま示す
+        expect(result?.counterparts[0]?.details[1]?.specificationKey)
+            .toBeUndefined()
+        expect(result?.counterparts[0]?.details[1]?.selectedValue)
+            .toBe("19〜25mm")
+    })
+
+
+    // 対応範囲の下限・上限ちょうどは適合（境界値）
+    it.each([
+        // 下限ちょうどと上限ちょうどのリム内幅
+        ["19", "compatible"],
+        ["25", "compatible"],
+    ])(
+        "リム内幅が%smmなら%sにする",
+        (rimInnerWidth, expectedStatus) => {
+            // 19〜25mm対応タイヤと境界値のホイール
+            const wheel = createPart(1, "Wheel", "wheel", {
+                rim_inner_width_mm: rimInnerWidth,
+            })
+            const tire = createPart(2, "Tire", "tire", {
+                min_rim_inner_width_mm: "19",
+                max_rim_inner_width_mm: "25",
+            })
+
+            const result = evaluatePartCompatibility(
+                wheel,
+                createPartSlot("wheel"),
+                {"tire:front": tire},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+        },
+    )
+
+    // 対応範囲の外側は推奨外として注意（非互換にしない）
+    it.each([
+        // 下限未満と上限超過のリム内幅
+        ["18", "unknown"],
+        ["26", "unknown"],
+    ])(
+        "リム内幅が%smmなら%sにする",
+        (rimInnerWidth, expectedStatus) => {
+            // 19〜25mm対応タイヤと範囲外のホイール
+            const wheel = createPart(1, "Wheel", "wheel", {
+                rim_inner_width_mm: rimInnerWidth,
+            })
+            const tire = createPart(2, "Tire", "tire", {
+                min_rim_inner_width_mm: "19",
+                max_rim_inner_width_mm: "25",
+            })
+
+            const result = evaluatePartCompatibility(
+                wheel,
+                createPartSlot("wheel"),
+                {"tire:front": tire},
+            )
+
+            expect(result?.status).toBe(expectedStatus)
+            expect(result?.reasons.join("、")).toContain("推奨範囲外")
+            expect(result?.selectionBlocked).toBe(false)
+        },
+    )
+
+    // リム内幅が未登録なら判定しない
+    it("リム内幅が片側だけ未登録なら判定しない", () => {
+        // リム内幅を持たないホイールと19〜25mm対応タイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {})
+        const tire = createPart(2, "Tire", "tire", {
+            min_rim_inner_width_mm: "19",
+            max_rim_inner_width_mm: "25",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // 対応リム内幅が未登録なら判定しない
+    it("対応リム内幅が未登録なら判定しない", () => {
+        // リム内幅21mmのホイールと対応範囲を持たないタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {rim_inner_width_mm: "21"})
+        const tire = createPart(2, "Tire", "tire", {})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+
+    // 数値規格が数値でない場合は未確認
+    it("BBシェル幅が数値でない場合は未確認にする", () => {
+        // 68mmのフレームと「68mm」表記のBB
+        const frame = createPart(1, "Frame", "frame", {bb_shell_width_mm: "68"})
+        const bottomBracket = createPart(2, "BB", "bottom_bracket", {
+            bb_shell_width_mm: "68mm",
+        })
+
+        const result = evaluatePartCompatibility(
+            bottomBracket,
+            createPartSlot("bottom_bracket"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("unknown")
+    })
+
+    // リム内幅と対応範囲のどちらも未登録なら判定しない
+    it("リム内幅と対応リム内幅のどちらも未登録なら判定しない", () => {
+        // リム内幅の規格を持たないホイールとタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {})
+        const tire = createPart(2, "Tire", "tire", {})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // フックレスリムとチューブタイヤは装着できない
+    // 非互換の内訳は、候補側と選択済み側を取り違えない
+    it("非互換の内訳で候補と選択済みの値を取り違えない", () => {
+        // チューブタイヤを候補にしたときのフックレスリム
+        const wheel = createPart(1, "Wheel A", "wheel", {
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire B", "tire", {tire_bead: "tube_type"})
+
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {wheel: wheel},
+        )
+
+        // 2つ目の内訳はタイヤ側の値を候補として示す
+        expect(result?.counterparts[0]?.details[1]?.label).toBe("タイヤのビード")
+        expect(result?.counterparts[0]?.details[1]?.candidateValue)
+            .toBe("tube_type")
+        expect(result?.counterparts[0]?.details[1]?.selectedValue).toBeUndefined()
+    })
+
+
+    it("フックレスリムとチューブタイヤは非互換にする", () => {
+        // フックレスリムのホイールとチューブタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire", "tire", {tire_bead: "tube_type"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toContain(
+            "フックレスリムにチューブタイヤは装着できません",
+        )
+        expect(result?.counterparts[0]?.details?.map((detail) => detail.label))
+            .toEqual(["リムのタイヤ対応", "タイヤのビード"])
+    })
+
+    // フックレスリムでもチューブレスタイヤは判定しない
+    it("フックレスリムとチューブレスタイヤは判定しない", () => {
+        // フックレスリムのホイールとチューブレスタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire", "tire", {tire_bead: "tubeless"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        // 装着できる組み合わせのため、この規格では判定しない
+        expect(result).toBeNull()
+    })
+
+    // フックありリムならチューブタイヤも判定しない
+    it("フックありリムとチューブタイヤは判定しない", () => {
+        // フックありリムのホイールとチューブタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_tire_interface: "hooked",
+        })
+        const tire = createPart(2, "Tire", "tire", {tire_bead: "tube_type"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        // 装着できる組み合わせのため、この規格では判定しない
+        expect(result).toBeNull()
+    })
+
+    // フックレスリムはチューブラータイヤも装着できない
+    it("フックレスリムとチューブラータイヤは非互換にする", () => {
+        // フックレスリムのホイールとチューブラータイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire", "tire", {tire_bead: "tubular"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // リムのタイヤ対応が未登録なら未確認
+    it("リムのタイヤ対応が未登録なら未確認にする", () => {
+        // リム対応規格を持たないホイールとチューブタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {})
+        const tire = createPart(2, "Tire", "tire", {tire_bead: "tube_type"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons).toContain("リムのタイヤ対応が未確認です")
+    })
+
+    // タイヤのビードが未登録なら未確認
+    it("タイヤのビードが未登録なら未確認にする", () => {
+        // フックレスリムのホイールとビード規格を持たないタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire", "tire", {})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons).toContain("タイヤのビードが未確認です")
+    })
+
+    // 候補と選択済みが逆でもリム内幅とタイヤビードを判定する
+    it("候補と選択済みが逆でもリム内幅とタイヤビードを判定する", () => {
+        // 範囲内のリム内幅とフックレス×チューブタイヤの組み合わせ
+        const wheel = createPart(1, "Wheel", "wheel", {
+            rim_inner_width_mm: "21",
+            rim_tire_interface: "hookless",
+        })
+        const tire = createPart(2, "Tire", "tire", {
+            min_rim_inner_width_mm: "19",
+            max_rim_inner_width_mm: "25",
+            tire_bead: "tube_type",
+        })
+
+        // タイヤを候補、ホイールを選択済みにして判定
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toContain(
+            "フックレスリムにチューブタイヤは装着できません",
+        )
+        expect(result?.reasons.join("、")).toContain("範囲内です")
+    })
+
+    // シートチューブ長とポスト最小挿入長が同じなら適合（境界値）
+    it("シートチューブ長とポスト最小挿入長が同じなら適合する", () => {
+        // シートチューブ長150mmのフレームと最小挿入長150mmのポスト
+        const frame = createPart(1, "Frame", "frame", {
+            seat_tube_depth_mm: "150",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_min_insert_mm: "150",
+        })
+
+        const result = evaluatePartCompatibility(
+            seatpost,
+            createPartSlot("seatpost"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("シートチューブ長が適合します")
+    })
+
+    // 上限と実値が別の規格なら、内訳を分けて示す
+    it("シートチューブ長とポスト最小挿入長の内訳を分けて示す", () => {
+        // シートチューブ長120mmのフレームと最小挿入長150mmのポスト
+        const frame = createPart(1, "Frame", "frame", {seat_tube_depth_mm: "120"})
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_min_insert_mm: "150",
+        })
+
+        const result = evaluatePartCompatibility(
+            seatpost,
+            createPartSlot("seatpost"),
+            {frame},
+        )
+
+        // 内訳はシートチューブ長とポスト最小挿入長の2件
+        expect(result?.counterparts[0]?.details.map((detail) => detail.label))
+            .toEqual(["シートチューブ長", "ポスト最小挿入長"])
+        // それぞれのキーで値を示す
+        expect(result?.counterparts[0]?.details.map((detail) =>
+            detail.specificationKey)).toEqual([
+            "seat_tube_depth_mm",
+            "seatpost_min_insert_mm",
+        ])
+        // 候補はポスト、選択済みはフレームなので、値を取り違えない
+        expect(result?.counterparts[0]?.details[0]?.selectedValue).toBe("120")
+        expect(result?.counterparts[0]?.details[0]?.candidateValue).toBeUndefined()
+        expect(result?.counterparts[0]?.details[1]?.candidateValue).toBe("150")
+        expect(result?.counterparts[0]?.details[1]?.selectedValue).toBeUndefined()
+    })
+
+    // ポスト最小挿入長がシートチューブ長を超える場合は非互換
+    it("ポスト最小挿入長がシートチューブ長を超える場合は非互換にする", () => {
+        // シートチューブ長120mmのフレームと最小挿入長150mmのポスト
+        const frame = createPart(1, "Frame", "frame", {
+            seat_tube_depth_mm: "120",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_min_insert_mm: "150",
+        })
+
+        const result = evaluatePartCompatibility(
+            seatpost,
+            createPartSlot("seatpost"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.selectionBlocked).toBe(true)
+        // どちらが大きいかを読み違えない文言にする
+        expect(result?.reasons.join("、")).toContain(
+            "ポスト最小挿入長150mmがシートチューブ長120mmを超えています",
+        )
+    })
+
+    // フレームのシートチューブ長が未登録なら判定しない（任意規格のため）
+    it("シートチューブ長が未登録なら判定しない", () => {
+        // シートチューブ長を持たないフレームと最小挿入長150mmのポスト
+        const frame = createPart(1, "Frame", "frame", {})
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_min_insert_mm: "150",
+        })
+
+        const result = evaluatePartCompatibility(
+            seatpost,
+            createPartSlot("seatpost"),
+            {frame},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // ポスト最小挿入長が未登録なら判定しない
+    it("ポスト最小挿入長が未登録なら判定しない", () => {
+        // シートチューブ長150mmのフレームと最小挿入長が未登録のポスト
+        const frame = createPart(1, "Frame", "frame", {
+            seat_tube_depth_mm: "150",
+        })
+        const seatpost = createPart(2, "Seatpost", "seatpost", {})
+
+        const result = evaluatePartCompatibility(
+            seatpost,
+            createPartSlot("seatpost"),
+            {frame},
+        )
+
+        // 登録漏れのため判定しない
+        expect(result).toBeNull()
+    })
+})
+
+// 上限と実値が別規格の内訳は、比較の向きを変えても値を取り違えない
+describe("上限ルールの内訳（逆方向）", () => {
+    // フレームが候補、シートポストが選択済みでも左右を取り違えない
+    it("フレームとシートポストの内訳を逆方向でも取り違えない", () => {
+        // シートチューブ長120mmのフレーム候補と最小挿入長150mmのポスト
+        const frame = createPart(1, "Frame", "frame", {seat_tube_depth_mm: "120"})
+        const seatpost = createPart(2, "Seatpost", "seatpost", {
+            seatpost_min_insert_mm: "150",
+        })
+
+        const result = evaluatePartCompatibility(
+            frame,
+            createPartSlot("frame"),
+            {seatpost},
+        )
+
+        // シートチューブ長は候補、最小挿入長は選択済みの値として示す
+        expect(result?.counterparts[0]?.details[0]?.candidateValue).toBe("120")
+        expect(result?.counterparts[0]?.details[0]?.selectedValue).toBeUndefined()
+        expect(result?.counterparts[0]?.details[1]?.candidateValue).toBeUndefined()
+        expect(result?.counterparts[0]?.details[1]?.selectedValue).toBe("150")
+    })
+})
+
+// 上限と実値が別の規格でも、実値側の名前が無ければ内訳を1件にまとめる
+describe("上限ルールの内訳", () => {
+    // フレームとローターの内訳は1件にまとめ、両側の値を残す
+    it("フレームとローターの内訳を1件にまとめる", () => {
+        // 上限160mmのフレームと180mmローター
+        const frame = createPart(1, "Frame", "frame", {
+            max_rotor_diameter_mm: "160",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {
+            rotor_diameter_mm: "180",
+        })
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        // 内訳は1件で、候補と選択済みの両方の値を残す
+        expect(result?.counterparts[0]?.details).toHaveLength(1)
+        expect(result?.counterparts[0]?.details[0]?.candidateValue).toBe("180")
+        expect(result?.counterparts[0]?.details[0]?.selectedValue).toBe("160")
+    })
+
+    // フレームが候補、ローターが選択済みでも値を取り違えない
+    it("フレームとローターの内訳を逆方向でも取り違えない", () => {
+        // 上限160mmのフレーム候補と180mmローター
+        const frame = createPart(1, "Frame", "frame", {
+            max_rotor_diameter_mm: "160",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {
+            rotor_diameter_mm: "180",
+        })
+
+        const result = evaluatePartCompatibility(
+            frame,
+            createPartSlot("frame"),
+            {"disc_rotor:front": rotor},
+        )
+
+        expect(result?.counterparts[0]?.details).toHaveLength(1)
+        expect(result?.counterparts[0]?.details[0]?.candidateValue).toBe("160")
+        expect(result?.counterparts[0]?.details[0]?.selectedValue).toBe("180")
+    })
+
+    // フレームに上限がありローター径が未登録なら未確認にする
+    it("ローター径が未登録なら未確認にする", () => {
+        // 上限160mmのフレームと径が未登録のローター
+        const frame = createPart(1, "Frame", "frame", {
+            max_rotor_diameter_mm: "160",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {})
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons.join("、")).toContain("直付け対応ローター径")
+    })
+
+    // キャリパーとローターの内訳も1件にまとめる
+    it("キャリパーとローターの内訳を1件にまとめる", () => {
+        // 上限160mmのキャリパーと180mmローター
+        const caliper = createPart(1, "Caliper", "brake_caliper", {
+            max_rotor_diameter_mm: "160",
+        })
+        const rotor = createPart(2, "Rotor", "disc_rotor", {
+            rotor_diameter_mm: "180",
+        })
+
+        const result = evaluatePartCompatibility(
+            rotor,
+            createPartSlot("disc_rotor", "front"),
+            {"brake_caliper:front": caliper},
+        )
+
+        expect(result?.counterparts[0]?.details).toHaveLength(1)
+        expect(result?.counterparts[0]?.details[0]?.candidateValue).toBe("180")
+        expect(result?.counterparts[0]?.details[0]?.selectedValue).toBe("160")
+    })
+})
+
 
 // フレームのコックピットバッジを確認
 describe("getFrameCockpitBadge", () => {
