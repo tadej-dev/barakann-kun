@@ -40,6 +40,22 @@ type EqualityRule = {
     toleranceMm?: number // 数値規格で許容する差（mm）
     numeric?: boolean // 数値として比較し、表記ゆれを吸収する
     missingBehavior?: "unknown" | "ignore" // 片側未登録時の扱い（未確認 | 判定しない）
+    acceptance?: AcceptanceRule // 片方向の受入（ハブ側→カセット側）
+}
+
+// ハブ側がカセット側の値を受け入れる片方向の関係
+// フリーボディ規格は、片方向だけ成立する組み合わせがある
+type AcceptanceRule = {
+    hubCategory: string // ハブ側（ドライバを備える）のカテゴリー
+    cassetteCategory: string // カセット側（ドライバを要求する）のカテゴリー
+    acceptedValues: Record<string, readonly string[]> // ハブ側の値→受け入れるカセット側の値
+    note: string // 理由に添える条件（スペーサーの併用など）
+}
+
+// 値の表記が違っても同じ規格として扱う値の組（双方向の等価）
+type EquivalentValueGroup = {
+    specificationKey: string // 等価とみなす規格キー
+    values: readonly string[] // 互いに同じ規格として扱う値
 }
 
 // 上限値を持つ側と実値を持つ側を比べる組み合わせ
@@ -151,12 +167,39 @@ function createPairwiseRules(
     return rules
 }
 
+// 表記が違っても同じ規格として扱う値の組
+// 出典: DT Swiss「Rim Diameter for Road」
+//   700c = 622mm = 29インチ、650b = 584mm = 27.5インチ
+//   https://www.dtswiss.com/en/support/wheel-characteristics/rim-diameter-road
+//   確認日: 2026-11-27
+// 28インチは622mmと635mmの2通りに使われるため、等価として登録しない
+export const EQUIVALENT_VALUE_GROUPS: readonly EquivalentValueGroup[] = [
+    {specificationKey: "wheel_diameter", values: ["700C", "29"]},
+    {specificationKey: "wheel_diameter", values: ["650B", "27.5"]},
+]
+
 // 規格値が一致しない場合に、候補を解除確認または選択不可へ導く関係を定義
 export const EQUALITY_RULES: EqualityRule[] = [
     {categories: ["brake_caliper", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
     {categories: ["wheel", "tire"], specificationKey: "wheel_diameter", label: "ホイール径"},
     {categories: ["wheel", "disc_rotor"], specificationKey: "rotor_mount", label: "ローター取付方式"},
-    {categories: ["wheel", "cassette"], specificationKey: "freehub_body", label: "フリーボディ"},
+    // XDRドライバは1.85mmスペーサー併用でXDカセットを受け入れる（逆は不可）
+    // 出典: SRAM「XD and XDR Driver Body Explained」
+    //   https://www.sram.com/en/service/articles/sram-xd-and-xdr-driver-body-explained
+    // 出典: SRAM カセット取扱説明書
+    //   https://docs.sram.com/en-US/publications/2cG2yNlJjDq98qJIYqGxWd/UM%20-%20Cassettes
+    // 確認日: 2026-11-27
+    {
+        categories: ["wheel", "cassette"],
+        specificationKey: "freehub_body",
+        label: "フリーボディ",
+        acceptance: {
+            hubCategory: "wheel",
+            cassetteCategory: "cassette",
+            acceptedValues: {sram_xdr: ["sram_xd"]},
+            note: "XDRドライバはXDカセットを1.85mmスペーサー併用で受け入れます",
+        },
+    },
     {categories: ["crankset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
     {
         categories: ["frame", "seatpost"],
@@ -227,7 +270,18 @@ export const EQUALITY_RULES: EqualityRule[] = [
     // コンポセットは構成品(クランク・カセット・キャリパー)の規格をセット本体に持たせて判定
     // 構成品のカテゴリーはセットが占有するため、単体パーツとの組み合わせはボトムブラケット・ホイール・ブレーキパッドの3つだけになる
     {categories: ["groupset", "bottom_bracket"], specificationKey: "crank_spindle", label: "クランク軸規格"},
-    {categories: ["groupset", "wheel"], specificationKey: "freehub_body", label: "フリーボディ"},
+    // コンポセットのフリーボディは同梱カセットの要求なので、ホイールをハブ側にする
+    {
+        categories: ["groupset", "wheel"],
+        specificationKey: "freehub_body",
+        label: "フリーボディ",
+        acceptance: {
+            hubCategory: "wheel",
+            cassetteCategory: "groupset",
+            acceptedValues: {sram_xdr: ["sram_xd"]},
+            note: "XDRドライバはXDカセットを1.85mmスペーサー併用で受け入れます",
+        },
+    },
     {categories: ["groupset", "brake_pad"], specificationKey: "pad_family", label: "パッド形状"},
     // チェーンは対応規格、カセット・リアディレイラー・クランクは受入規格として交差で比較
     {categories: ["chain", "cassette"], specificationKey: "chain_standard", label: "チェーン規格"},
@@ -416,13 +470,53 @@ function getSpecification(part: CompatibilityInput, key: string) {
     return part.specifications?.[key]
 }
 
+// カンマ区切りの規格値を分解し、比較できる値の配列にする
+function splitSpecificationValues(value: string) {
+    return value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+}
+
 // カンマ区切りの規格値は、いずれか一致すれば適合とみなす
 // 複数フリーボディ対応など、1パーツが複数規格に跨るケースを表現
 function specificationValuesMatch(first: string, second: string) {
-    const firstValues = first.split(",").map((value) => value.trim()).filter(Boolean)
-    const secondValues = second.split(",").map((value) => value.trim()).filter(Boolean)
+    const firstValues = splitSpecificationValues(first)
+    const secondValues = splitSpecificationValues(second)
 
     return firstValues.some((value) => secondValues.includes(value))
+}
+
+// 表記が違っても同じ規格として扱う値の組に、両側が含まれるか判定
+// 片方向だけ成り立つ値の組は登録しない
+function equivalentSpecificationValuesMatch(
+    specificationKey: string,
+    first: string,
+    second: string,
+) {
+    const firstValues = splitSpecificationValues(first)
+    const secondValues = splitSpecificationValues(second)
+
+    return EQUIVALENT_VALUE_GROUPS.some((group) =>
+        group.specificationKey === specificationKey &&
+        firstValues.some((value) => group.values.includes(value)) &&
+        secondValues.some((value) => group.values.includes(value)),
+    )
+}
+
+// ハブ側の値が、カセット側の値を受け入れるか判定
+// どちらもカンマ区切りの複数対応を取れるため、値ごとに照合する
+function acceptanceValuesMatch(
+    acceptance: AcceptanceRule,
+    hubValue: string,
+    cassetteValue: string,
+) {
+    // ハブ側の各値が受け入れる値の一覧
+    const acceptedValues = splitSpecificationValues(hubValue)
+        .flatMap((value) => acceptance.acceptedValues[value] ?? [])
+
+    return splitSpecificationValues(cassetteValue)
+        .some((value) => acceptedValues.includes(value))
 }
 
 // 数値規格の表記ゆれ（68と68.0）を同じ文字列へそろえる
@@ -883,8 +977,11 @@ function compareTireAndTube(
         }
     }
 
-    // ホイール径の不一致
-    if (tireDiameter !== tubeDiameter) {
+    // ホイール径の不一致（700Cと29インチのような等価表記は同じ径として扱う）
+    if (
+        !specificationValuesMatch(tireDiameter, tubeDiameter) &&
+        !equivalentSpecificationValuesMatch("wheel_diameter", tireDiameter, tubeDiameter)
+    ) {
         return {
             status: "incompatible",
             reasons: [`ホイール径が一致しません（${tireDiameter} / ${tubeDiameter}）`],
@@ -1071,6 +1168,53 @@ function compareByEqualityRule(
             status: "compatible",
             reasons: [`${rule.label}が適合します`],
             details: createDetails("compatible"),
+        }
+    }
+
+    // 表記が違っても同じ規格として扱う値（700Cと29インチなど）
+    if (
+        equivalentSpecificationValuesMatch(
+            rule.specificationKey,
+            candidateComparable,
+            selectedComparable,
+        )
+    ) {
+        return {
+            status: "compatible",
+            reasons: [`${rule.label}が同じ規格のため適合します`],
+            details: createDetails("compatible"),
+        }
+    }
+
+    // ハブ側の値がカセット側の値を受け入れる（片方向）
+    const acceptance = rule.acceptance
+
+    // 受入ルールを持つ規格だけ判定
+    if (acceptance) {
+        // 候補がハブ側で選択済みがカセット側か
+        const candidateIsHub =
+            candidateCategory === acceptance.hubCategory &&
+            selectedCategory === acceptance.cassetteCategory
+        // 候補がカセット側で選択済みがハブ側か
+        const selectedIsHub =
+            selectedCategory === acceptance.hubCategory &&
+            candidateCategory === acceptance.cassetteCategory
+
+        // ハブ側とカセット側が1つずつそろう場合だけ判定
+        if (candidateIsHub || selectedIsHub) {
+            // ハブ側の規格値（ドライバの規格）
+            const hubValue = candidateIsHub ? candidateValue : selectedValue
+            // カセット側の規格値（ドライバの要求）
+            const cassetteValue = candidateIsHub ? selectedValue : candidateValue
+
+            // ハブ側がカセット側の値を受け入れる
+            if (acceptanceValuesMatch(acceptance, hubValue, cassetteValue)) {
+                return {
+                    status: "compatible",
+                    reasons: [`${rule.label}が適合します（${acceptance.note}）`],
+                    details: createDetails("compatible"),
+                }
+            }
         }
     }
 

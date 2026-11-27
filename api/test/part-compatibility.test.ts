@@ -193,6 +193,92 @@ describe("保存構成の規格適合チェック", () => {
         expect(issues[0]?.partIds).toEqual([2, 1])
     })
 
+    // XDRドライバは1.85mmスペーサー併用でXDカセットを受け入れる
+    it("XDRドライバのホイールはXDカセットを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {freehub_body: "sram_xdr"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {freehub_body: "sram_xd"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // XDドライバはXDRカセットを受け入れないため、保存不可として検出
+    it("XDドライバのホイールはXDRカセットを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {freehub_body: "sram_xd"}),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {freehub_body: "sram_xdr"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["cassette", "wheel"])
+        expect(issues[0]?.partIds).toEqual([2, 1])
+    })
+
+    // 複数対応ホイールでも、受入対象の値が含まれればXDカセットを許可
+    it("複数対応ホイールは受入対象のXDカセットを不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {
+                    freehub_body: "shimano_hg,sram_xdr",
+                }),
+            },
+            {
+                slotKey: "cassette",
+                part: part(2, "cassette", {freehub_body: "sram_xd"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 700Cと29インチは同じリム径なので、保存時の判定でも不一致にしない
+    it("700Cフレームと29インチホイールは同じ規格として不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {wheel_diameter: "700C"}),
+            },
+            {
+                slotKey: "wheel",
+                part: part(2, "wheel", {wheel_diameter: "29"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
+    // 等価でないホイール径は保存不可として検出
+    it("700Cフレームと650Bホイールを不一致として検出する", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "frame",
+                part: part(1, "frame", {wheel_diameter: "700C"}),
+            },
+            {
+                slotKey: "wheel",
+                part: part(2, "wheel", {wheel_diameter: "650B"}),
+            },
+        ])
+
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.slotKeys).toEqual(["frame", "wheel"])
+        expect(issues[0]?.partIds).toEqual([1, 2])
+    })
+
     // 規格が未登録の組み合わせは、適合不明として保存を許可
     it("規格が未登録の組み合わせは保存拒否対象にしない", () => {
         const issues = findIncompatiblePartPairs([
@@ -680,4 +766,20 @@ describe("保存構成の規格適合チェック", () => {
 
         expect(issues).toEqual([])
     })
+    // XDRドライバのホイールはXDカセットをスペーサー併用で受け入れる
+    it("XDRドライバのホイールとXDカセットは不一致にしない", () => {
+        const issues = findIncompatiblePartPairs([
+            {
+                slotKey: "wheel",
+                part: part(1, "wheel", {freehub_body: "shimano_hg,sram_xdr"}),
+            },
+            {
+                slotKey: "groupset",
+                part: part(2, "groupset", {freehub_body: "sram_xd"}),
+            },
+        ])
+
+        expect(issues).toEqual([])
+    })
+
 })
