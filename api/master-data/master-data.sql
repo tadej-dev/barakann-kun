@@ -1533,7 +1533,7 @@ INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, 
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (773, 546, 'cockpit_interface', 'standard_1_1_8', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (774, 94, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (775, 95, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (776, 96, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (776, 96, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (777, 97, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (778, 98, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (779, 106, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -1639,13 +1639,13 @@ INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, 
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (883, 569, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (884, 570, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (885, 570, 'rotor_mount', 'center_lock', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (886, 570, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (886, 570, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (887, 571, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (888, 571, 'rotor_mount', 'center_lock', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (889, 571, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (889, 571, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (890, 572, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (891, 572, 'rotor_mount', 'center_lock', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (892, 572, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (892, 572, 'freehub_body', 'shimano_hg,sram_xdr,campagnolo_n3w', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (893, 573, 'wheel_diameter', '700C', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (894, 573, 'rotor_mount', 'center_lock', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO part_specifications (id, part_id, spec_key, spec_value, created_at, updated_at) VALUES (895, 573, 'freehub_body', 'shimano_hg,sram_xdr', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

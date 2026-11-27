@@ -90,6 +90,23 @@ describe("evaluatePartCompatibility", () => {
         )).toBe("Shimano HG／SRAM XDR／Campagnolo N3W")
     })
 
+    // インチ表記のホイール径は、同じリム径のフレンチ表記と併記する
+    it("インチ表記のホイール径を対応する表記と併記する", () => {
+        expect(getSpecificationValueLabel(
+            "wheel_diameter",
+            "29",
+        )).toBe("29インチ（700C相当）")
+        expect(getSpecificationValueLabel(
+            "wheel_diameter",
+            "27.5",
+        )).toBe("27.5インチ（650B相当）")
+        // 既存のフレンチ表記はそのまま表示する
+        expect(getSpecificationValueLabel(
+            "wheel_diameter",
+            "700C",
+        )).toBe("700C")
+    })
+
     // チェーンリング枚数は、規格名と1x/2x/3xの値ラベルで表示する
     it("チェーンリング枚数の規格名と値ラベルを表示する", () => {
         expect(getSpecificationLabel("chainring_count")).toBe("チェーンリング枚数")
@@ -269,6 +286,88 @@ describe("evaluatePartCompatibility", () => {
 
         expect(result?.status).toBe("compatible")
     })
+
+    // 700Cと29インチは同じ径としてタイヤとチューブを適合させる
+    it("700Cタイヤと29インチチューブは適合する", () => {
+        // 幅28mmの700Cタイヤと29インチ表記のチューブ
+        const tire = createPart(1, "Tire", "tire", {
+            wheel_diameter: "700C",
+            tire_width_mm: "28",
+        })
+        const tube = createPart(2, "Tube", "inner_tube", {
+            wheel_diameter: "29",
+            min_tire_width_mm: "25",
+            max_tire_width_mm: "32",
+        })
+
+        const result = evaluatePartCompatibility(
+            tube,
+            createPartSlot("inner_tube", "front"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 28インチは622mmと635mmの両方で使われるため等価にしない
+    it("700Cフレームと28インチホイールは非互換にする", () => {
+        // 700Cのフレームと28インチ表記のホイール
+        const frame = createPart(1, "Frame", "frame", {wheel_diameter: "700C"})
+        const wheel = createPart(2, "Wheel", "wheel", {wheel_diameter: "28"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // 650Bと27.5インチも同じ径として扱う
+    it("650Bタイヤと27.5インチチューブは適合する", () => {
+        // 幅40mmの650Bタイヤと27.5インチ表記のチューブ
+        const tire = createPart(1, "Tire", "tire", {
+            wheel_diameter: "650B",
+            tire_width_mm: "40",
+        })
+        const tube = createPart(2, "Tube", "inner_tube", {
+            wheel_diameter: "27.5",
+            min_tire_width_mm: "35",
+            max_tire_width_mm: "45",
+        })
+
+        const result = evaluatePartCompatibility(
+            tube,
+            createPartSlot("inner_tube", "front"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 径が違う組み合わせは等価扱いにしない
+    it("650Bタイヤと700Cチューブは非互換にする", () => {
+        // 幅28mmの650Bタイヤと700Cのチューブ
+        const tire = createPart(1, "Tire", "tire", {
+            wheel_diameter: "650B",
+            tire_width_mm: "28",
+        })
+        const tube = createPart(2, "Tube", "inner_tube", {
+            wheel_diameter: "700C",
+            min_tire_width_mm: "25",
+            max_tire_width_mm: "32",
+        })
+
+        const result = evaluatePartCompatibility(
+            tube,
+            createPartSlot("inner_tube", "front"),
+            {"tire:front": tire},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
 
     // 対応範囲外なら競合するタイヤのスロットも結果へ返す
     it("タイヤ幅がチューブの対応範囲外なら競合として扱う", () => {
@@ -1132,6 +1231,206 @@ describe("evaluatePartCompatibility", () => {
             cassette,
             createPartSlot("cassette"),
             {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // XDRドライバは1.85mmスペーサー併用でXDカセットを受け入れる
+    it("XDRドライバのホイールはXDカセットを適合とする", () => {
+        // XDR専用ドライバのホイールとXDカセット
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "sram_xdr",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xd",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toEqual([
+            "フリーボディが適合します（XDRドライバはXDカセットを1.85mmスペーサー併用で受け入れます）",
+        ])
+    })
+
+    // XDドライバはXDRカセットを受け入れない（受入は片方向だけ成立）
+    it("XDドライバのホイールはXDRカセットを非互換にする", () => {
+        // XD専用ドライバのホイールとXDRカセット
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "sram_xd",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xdr",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+        expect(result?.reasons).toEqual(["フリーボディが一致しません"])
+    })
+
+    // 複数対応ホイールでも受入対象を含めばXDカセットは適合
+    it("複数対応ホイールは受入対象のXDカセットを適合とする", () => {
+        // Shimano HG・SRAM XDR対応ホイールとXDカセット
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "shimano_hg,sram_xdr",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xd",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 受入対象を持たないホイールはXDカセットを非互換にする
+    it("Shimano HG専用ホイールはXDカセットを非互換にする", () => {
+        // Shimano HG専用ドライバのホイールとXDカセット
+        const wheel = createPart(1, "Wheel", "wheel", {
+            freehub_body: "shimano_hg",
+        })
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xd",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // コンポセットのフリーボディは同梱カセットの要求なのでホイールをハブ側にする
+    it("XDRドライバのホイールはXDカセットのコンポセットを適合とする", () => {
+        // XDカセットを同梱するコンポセットとXDRドライバのホイール
+        const groupset = createPart(1, "Groupset", "groupset", {
+            freehub_body: "sram_xd",
+        })
+        const wheel = createPart(2, "Wheel", "wheel", {
+            freehub_body: "sram_xdr",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel", "single"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 逆方向は成立しないため、XDドライバはXDRカセットのコンポセットを非互換
+    it("XDドライバのホイールはXDRカセットのコンポセットを非互換にする", () => {
+        // XDRカセットを同梱するコンポセットとXDドライバのホイール
+        const groupset = createPart(1, "Groupset", "groupset", {
+            freehub_body: "sram_xdr",
+        })
+        const wheel = createPart(2, "Wheel", "wheel", {
+            freehub_body: "sram_xd",
+        })
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel", "single"),
+            {groupset},
+        )
+
+        expect(result?.status).toBe("incompatible")
+    })
+
+    // カセット側だけ規格がある場合は、従来どおり未確認として扱う
+    it("ホイールのフリーボディ未登録は未確認にする", () => {
+        // フリーボディ未登録のホイールとXDカセット
+        const wheel = createPart(1, "Wheel", "wheel", {})
+        const cassette = createPart(2, "Cassette", "cassette", {
+            freehub_body: "sram_xd",
+        })
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("unknown")
+        expect(result?.reasons).toEqual(["フリーボディが未確認です"])
+    })
+
+    // 両側とも規格が未登録なら、判定そのものを行わない
+    it("フリーボディが両側で未登録なら判定しない", () => {
+        // フリーボディを登録していないホイールとカセット
+        const wheel = createPart(1, "Wheel", "wheel", {})
+        const cassette = createPart(2, "Cassette", "cassette", {})
+
+        const result = evaluatePartCompatibility(
+            cassette,
+            createPartSlot("cassette"),
+            {wheel},
+        )
+
+        expect(result).toBeNull()
+    })
+
+    // 700Cと29インチは同じリム径なので、表記が違っても適合とする
+    it("700Cフレームと29インチホイールは同じ規格として適合する", () => {
+        // 700Cのフレームと29インチ表記のホイール
+        const frame = createPart(1, "Frame", "frame", {wheel_diameter: "700C"})
+        const wheel = createPart(2, "Wheel", "wheel", {wheel_diameter: "29"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel", "single"),
+            {frame},
+        )
+
+        expect(result?.status).toBe("compatible")
+        expect(result?.reasons).toContain("ホイール径が同じ規格のため適合します")
+    })
+
+    // 650Bと27.5インチも同じリム径なので適合とする
+    it("650Bホイールと27.5インチタイヤは同じ規格として適合する", () => {
+        // 650Bのホイールと27.5インチ表記のタイヤ
+        const wheel = createPart(1, "Wheel", "wheel", {wheel_diameter: "650B"})
+        const tire = createPart(2, "Tire", "tire", {
+            wheel_diameter: "27.5",
+            tire_width_mm: "28",
+        })
+
+        const result = evaluatePartCompatibility(
+            tire,
+            createPartSlot("tire", "front"),
+            {wheel},
+        )
+
+        expect(result?.status).toBe("compatible")
+    })
+
+    // 等価でない表記は従来どおり非互換
+    it("700Cフレームと650Bホイールは非互換にする", () => {
+        // 700Cのフレームと650Bのホイール
+        const frame = createPart(1, "Frame", "frame", {wheel_diameter: "700C"})
+        const wheel = createPart(2, "Wheel", "wheel", {wheel_diameter: "650B"})
+
+        const result = evaluatePartCompatibility(
+            wheel,
+            createPartSlot("wheel", "single"),
+            {frame},
         )
 
         expect(result?.status).toBe("incompatible")
