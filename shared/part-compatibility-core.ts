@@ -38,6 +38,8 @@ type EqualityRule = {
     protectedCategory?: string // 維持するカテゴリーのキー
     protectedCategoryLabel?: string // 維持するカテゴリーの表示名
     toleranceMm?: number // 数値規格で許容する差（mm）
+    numeric?: boolean // 数値として比較し、表記ゆれを吸収する
+    missingBehavior?: "unknown" | "ignore" // 片側未登録時の扱い（未確認 | 判定しない）
 }
 
 // 上限値を持つ側と実値を持つ側を比べる組み合わせ
@@ -48,9 +50,61 @@ type LimitRule = {
     limitSpecificationKey: string // 上限値の規格キー
     actualSpecificationKey: string // 実値の規格キー
     label: string // 表示名（規格）
+    actualLabel?: string // 実値側の表示名（省略時は実値）
     unit: string // 理由に添える値の単位（歯数はT、径はmm）
     optionalLimit?: boolean // 上限が未登録なら判定しない
     note?: string // 理由に添える条件（例: アダプター無し）
+    missingBehavior?: "unknown" | "ignore" // 片側未登録時の扱い（未確認 | 判定しない）
+}
+
+
+// 片側未登録時の結果を作る（判定しない規格はnull、それ以外は未確認）
+function createMissingResult(
+    missingBehavior: "unknown" | "ignore" | undefined,
+    label: string,
+    createDetails: (status: CompatibilityStatus) => CompatibilityDetail[],
+): PairCompatibilityResult | null {
+    // 登録漏れで未確認を出さない規格は、判定そのものを行わない
+    if (missingBehavior === "ignore") {
+        return null
+    }
+
+    return {
+        status: "unknown",
+        reasons: [`${label}が未確認です`],
+        details: createDetails("unknown"),
+    }
+}
+
+// 実値が対応範囲に収まるかを比べる組み合わせ
+
+// タイヤの対応リム内幅のように、片側が下限と上限を持つ範囲規格で使う
+type RangeRule = {
+    categories: readonly [string, string] // 対象カテゴリーの組
+    rangeCategory: string // 対応範囲を持つカテゴリー
+    minSpecificationKey: string // 対応範囲の下限
+    maxSpecificationKey: string // 対応範囲の上限
+    actualSpecificationKey: string // 実値の規格キー
+    actualLabel: string // 実値側の表示名（規格）
+    label: string // 表示名（対応範囲の規格）
+    unit: string // 理由に添える値の単位（径はmm）
+    missingBehavior?: "unknown" | "ignore" // 片側未登録時の扱い（未確認 | 判定しない）
+}
+
+// 特定の値の組み合わせだけを非互換にする組み合わせ
+// フックレスリムとチューブタイヤのように、片側の値だけでは決まらない組み合わせで使う
+type IncompatibilityRule = {
+    categories: readonly [string, string] // 対象カテゴリーの組
+    firstCategory: string // 1つ目の値を持つカテゴリー
+    firstSpecificationKey: string // 1つ目の規格キー
+    firstValue: string // 1つ目の非互換値
+    firstLabel: string // 1つ目の表示名（規格）
+    secondCategory: string // 2つ目の値を持つカテゴリー
+    secondSpecificationKey: string // 2つ目の規格キー
+    secondValue: string // 2つ目の非互換値
+    secondLabel: string // 2つ目の表示名（規格）
+    reason: string // 非互換の理由（画面・APIに表示する文章）
+    skipWhenNotMatched?: boolean // 非互換の組み合わせ以外は判定しない
 }
 
 // 変速段数をそろえる必要がある駆動系のカテゴリー
@@ -111,6 +165,14 @@ export const EQUALITY_RULES: EqualityRule[] = [
         protectedCategory: "frame",
         protectedCategoryLabel: "フレーム",
     },
+    // サドルはレール規格を1つ、シートポストは対応する複数を持つ
+    {
+        categories: ["saddle", "seatpost"],
+        specificationKey: "saddle_rail",
+        label: "サドルレール",
+        // 片側の登録漏れで未確認を増やさない
+        missingBehavior: "ignore",
+    },
     {
         categories: ["frame", "bottom_bracket"],
         specificationKey: "bb_standard",
@@ -118,12 +180,42 @@ export const EQUALITY_RULES: EqualityRule[] = [
         protectedCategory: "frame",
         protectedCategoryLabel: "フレーム",
     },
+    // BBシェル幅は数値の表記ゆれ（68と68.0）を吸収して比較
+    {
+        categories: ["frame", "bottom_bracket"],
+        specificationKey: "bb_shell_width_mm",
+        label: "BBシェル幅",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+        numeric: true,
+        // 片側の登録漏れで未確認を増やさない
+        missingBehavior: "ignore",
+    },
     {
         categories: ["frame", "wheel"],
         specificationKey: "wheel_diameter",
         label: "ホイール径",
         protectedCategory: "frame",
         protectedCategoryLabel: "フレーム",
+    },
+    // フレームは前後アクスルを1つずつ、ホイールは対応する複数を持つ
+    {
+        categories: ["frame", "wheel"],
+        specificationKey: "front_axle",
+        label: "前輪アクスル",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+        // 片側の登録漏れで未確認を増やさない
+        missingBehavior: "ignore",
+    },
+    {
+        categories: ["frame", "wheel"],
+        specificationKey: "rear_axle",
+        label: "後輪アクスル",
+        protectedCategory: "frame",
+        protectedCategoryLabel: "フレーム",
+        // 片側の登録漏れで未確認を増やさない
+        missingBehavior: "ignore",
     },
     {
         categories: ["frame", "brake_caliper"],
@@ -159,6 +251,23 @@ export const EQUALITY_RULES: EqualityRule[] = [
         categories: ["shift_brake_lever", "brake_caliper"],
         specificationKey: "brake_fluid",
         label: "ブレーキフルード",
+    },
+    // レバーとハンドルのクランプ径は±0.5mmの差まで調整で吸収できる
+    {
+        categories: ["shift_brake_lever", "handlebar"],
+        specificationKey: "control_clamp_mm",
+        label: "クランプ径",
+        toleranceMm: 0.5,
+        // エアロ・一体型バーは径を公表しないため、未確認を出さない
+        missingBehavior: "ignore",
+    },
+    // ペダルは軸規格を1つ、クランクは対応する複数を持つ
+    {
+        categories: ["pedal", "crankset"],
+        specificationKey: "pedal_thread",
+        label: "ペダル軸規格",
+        // 片側の登録漏れで未確認を増やさない
+        missingBehavior: "ignore",
     },
     ...createPairwiseRules(
         DRIVETRAIN_SPEED_CATEGORIES,
@@ -216,6 +325,54 @@ const LIMIT_RULES: LimitRule[] = [
         optionalLimit: true,
         note: "アダプター無し",
     },
+    // フレームのシートチューブ長は任意の規格で、登録があるフレームだけ比較する
+    // ポストの最小挿入長がシートチューブ長を超えると、十分に差し込めない
+    {
+        categories: ["frame", "seatpost"],
+        limitCategory: "frame",
+        limitSpecificationKey: "seat_tube_depth_mm",
+        actualSpecificationKey: "seatpost_min_insert_mm",
+        label: "シートチューブ長",
+        actualLabel: "ポスト最小挿入長",
+        unit: "mm",
+        optionalLimit: true,
+        missingBehavior: "ignore",
+    },
+]
+
+// 実値が対応範囲に収まるかを比べる組み合わせ
+const RANGE_RULES: RangeRule[] = [
+    // タイヤの対応リム内幅に、ホイールのリム内幅が収まるか
+    {
+        categories: ["wheel", "tire"],
+        rangeCategory: "tire",
+        minSpecificationKey: "min_rim_inner_width_mm",
+        maxSpecificationKey: "max_rim_inner_width_mm",
+        actualSpecificationKey: "rim_inner_width_mm",
+        actualLabel: "リム内幅",
+        label: "対応リム内幅",
+        unit: "mm",
+        // メーカーが公開しない対応幅で未確認を増やさない
+        missingBehavior: "ignore",
+    },
+]
+
+// 特定の値の組み合わせだけを非互換にする組み合わせ
+const INCOMPATIBILITY_RULES: IncompatibilityRule[] = [
+    // フックレスリムはタイヤビードを引っ掛けるフックが無いため、チューブタイヤを装着できない
+    {
+        categories: ["wheel", "tire"],
+        firstCategory: "wheel",
+        firstSpecificationKey: "rim_tire_interface",
+        firstValue: "hookless",
+        firstLabel: "リムのタイヤ対応",
+        secondCategory: "tire",
+        secondSpecificationKey: "tire_bead",
+        secondValue: "tube_type,tubular",
+        secondLabel: "タイヤのビード",
+        reason: "フックレスリムにチューブタイヤは装着できません",
+        skipWhenNotMatched: true,
+    },
 ]
 
 // 標準コックピットの規格値
@@ -266,6 +423,36 @@ function specificationValuesMatch(first: string, second: string) {
     const secondValues = second.split(",").map((value) => value.trim()).filter(Boolean)
 
     return firstValues.some((value) => secondValues.includes(value))
+}
+
+// 数値規格の表記ゆれ（68と68.0）を同じ文字列へそろえる
+// カンマ区切りの複数対応は、各値を正規化してカンマで連結する
+// 数値として読めない値が1つでもあればnullを返し、未確認として扱えるようにする
+function normalizeNumericSpecificationValue(value: string) {
+    // カンマ区切りの各値
+    const parts = value.split(",").map((part) => part.trim()).filter(Boolean)
+
+    // 空文字は数値として扱えない
+    if (parts.length === 0) {
+        return null
+    }
+
+    // 正規化した数値の一覧
+    const normalizedValues: string[] = []
+
+    for (const part of parts) {
+        // カンマ区切りの1つ分を数値へ変換
+        const numberValue = Number(part)
+
+        // 数値として読めない値が含まれる
+        if (!Number.isFinite(numberValue)) {
+            return null
+        }
+
+        normalizedValues.push(String(numberValue))
+    }
+
+    return normalizedValues.join(",")
 }
 
 // 2つのカテゴリーが指定の組か判定
@@ -813,6 +1000,28 @@ function compareByEqualityRule(
 
     // 比較する規格値がどちらか未登録
     if (!candidateValue || !selectedValue) {
+        // 登録漏れで未確認を出さない規格は、判定そのものを行わない
+        if (rule.missingBehavior === "ignore") {
+            return null
+        }
+
+        return {
+            status: "unknown",
+            reasons: [`${rule.label}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 数値規格の表記ゆれを吸収した比較用の値（数値でなければnull）
+    const candidateComparable = rule.numeric
+        ? normalizeNumericSpecificationValue(candidateValue)
+        : candidateValue
+    const selectedComparable = rule.numeric
+        ? normalizeNumericSpecificationValue(selectedValue)
+        : selectedValue
+
+    // 数値規格が数値でない
+    if (candidateComparable === null || selectedComparable === null) {
         return {
             status: "unknown",
             reasons: [`${rule.label}が未確認です`],
@@ -857,7 +1066,7 @@ function compareByEqualityRule(
     }
 
     // 比較する規格値が一致
-    if (specificationValuesMatch(candidateValue, selectedValue)) {
+    if (specificationValuesMatch(candidateComparable, selectedComparable)) {
         return {
             status: "compatible",
             reasons: [`${rule.label}が適合します`],
@@ -922,13 +1131,50 @@ function compareByLimitRule(
         : getSpecification(selected, rule.limitSpecificationKey)
 
     // 規格名と両側の値は、すべての判定結果で同じ形で表示用に添える
-    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [{
-        label: rule.label,
-        status,
-        specificationKey: rule.limitSpecificationKey,
-        candidateValue,
-        selectedValue,
-    }]
+    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => {
+        // 上限と実値が同じ規格、または実値側の表示名が無い場合は1件にまとめる
+        if (
+            rule.limitSpecificationKey === rule.actualSpecificationKey ||
+            rule.actualLabel === undefined
+        ) {
+            return [{
+                label: rule.label,
+                status,
+                specificationKey: rule.limitSpecificationKey,
+                candidateValue,
+                selectedValue,
+            }]
+        }
+
+        // 上限と実値が別の規格なら、それぞれの値を分けて示す
+        const limitPart = candidateIsLimit ? candidate : selected
+        const actualPart = candidateIsLimit ? selected : candidate
+
+        return [
+            {
+                label: rule.label,
+                status,
+                specificationKey: rule.limitSpecificationKey,
+                candidateValue: candidateIsLimit
+                    ? getSpecification(limitPart, rule.limitSpecificationKey)
+                    : undefined,
+                selectedValue: candidateIsLimit
+                    ? undefined
+                    : getSpecification(limitPart, rule.limitSpecificationKey),
+            },
+            {
+                label: rule.actualLabel ?? rule.label,
+                status,
+                specificationKey: rule.actualSpecificationKey,
+                candidateValue: candidateIsLimit
+                    ? undefined
+                    : getSpecification(actualPart, rule.actualSpecificationKey),
+                selectedValue: candidateIsLimit
+                    ? getSpecification(actualPart, rule.actualSpecificationKey)
+                    : undefined,
+            },
+        ]
+    }
 
     // 任意の上限が未登録なら、この組み合わせは判定しない
     if (rule.optionalLimit && !limitValueText) {
@@ -937,6 +1183,11 @@ function compareByLimitRule(
 
     // 上限と実値の片方だけ未登録
     if (!limitValueText || !actualValueText) {
+        // 登録漏れで未確認を出さない規格は、判定そのものを行わない
+        if (rule.missingBehavior === "ignore") {
+            return null
+        }
+
         return {
             status: "unknown",
             reasons: [`${rule.label}が未確認です`],
@@ -968,12 +1219,196 @@ function compareByLimitRule(
     }
 
     // 実値が上限を超える
+    // 実値側の名前がある場合は、どちらが大きいかを読み違えない文にする
+    const reason = rule.actualLabel
+        ? `${rule.actualLabel}${actualValue}${rule.unit}が${rule.label}${limitValue}${rule.unit}を超えています${rule.note ? `（${rule.note}）` : ""}`
+        : `${rule.label}が上限を超えています（上限${limitValue}${rule.unit} / 実値${actualValue}${rule.unit}${rule.note ? `・${rule.note}` : ""}）`
+
     return {
         status: "incompatible",
-        reasons: [
-            `${rule.label}が上限を超えています（上限${limitValue}${rule.unit} / 実値${actualValue}${rule.unit}${rule.note ? `・${rule.note}` : ""}）`,
-        ],
+        reasons: [reason],
         details: createDetails("incompatible"),
+    }
+}
+
+// 範囲ルール1件分の判定。対応範囲と実値のどちらも未登録ならnullを返す
+function compareByRangeRule(
+    rule: RangeRule,
+    candidate: CompatibilityInput,
+    candidateCategory: string,
+    selected: CompatibilityInput,
+): PairCompatibilityResult | null {
+    // 候補側が対応範囲を持つか（持たなければ選択済み側が対応範囲を持つ）
+    const candidateIsRange = candidateCategory === rule.rangeCategory
+    // 対応範囲を持つパーツ
+    const rangePart = candidateIsRange ? candidate : selected
+    // 実値を持つパーツ
+    const actualPart = candidateIsRange ? selected : candidate
+    // 対応範囲の下限
+    const minValueText = getSpecification(rangePart, rule.minSpecificationKey)
+    // 対応範囲の上限
+    const maxValueText = getSpecification(rangePart, rule.maxSpecificationKey)
+    // 実値
+    const actualValueText = getSpecification(actualPart, rule.actualSpecificationKey)
+
+    // 対応範囲と実値のどちらも未登録
+    if (!minValueText && !maxValueText && !actualValueText) {
+        return null
+    }
+
+    // 対応範囲を下限〜上限の1つの表示用の値にまとめる
+    const rangeText = minValueText && maxValueText
+        ? `${minValueText}〜${maxValueText}${rule.unit}`
+        : undefined
+
+    // 規格名と両側の値は、すべての判定結果で同じ形で表示用に添える
+    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [
+        {
+            label: rule.actualLabel,
+            status,
+            specificationKey: rule.actualSpecificationKey,
+            candidateValue: candidateIsRange ? undefined : actualValueText,
+            selectedValue: candidateIsRange ? actualValueText : undefined,
+        },
+        {
+            label: rule.label,
+            status,
+            candidateValue: candidateIsRange ? rangeText : undefined,
+            selectedValue: candidateIsRange ? undefined : rangeText,
+        },
+    ]
+
+    // 実値が未登録
+    if (!actualValueText) {
+        return createMissingResult(rule.missingBehavior, rule.actualLabel, createDetails)
+    }
+
+    // 対応範囲の下限・上限がそろっていない
+    if (!minValueText || !maxValueText) {
+        return createMissingResult(rule.missingBehavior, rule.label, createDetails)
+    }
+
+    // 対応範囲と実値の数値
+    const minValue = Number(minValueText)
+    const maxValue = Number(maxValueText)
+    const actualValue = Number(actualValueText)
+
+    // 対応範囲か実値が数値でない
+    if (
+        !Number.isFinite(minValue) ||
+        !Number.isFinite(maxValue) ||
+        !Number.isFinite(actualValue)
+    ) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.label}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 実値が対応範囲の外
+    // 推奨範囲は目安で、実使用できる場合があるため非互換にはせず注意として示す
+    if (actualValue < minValue || actualValue > maxValue) {
+        return {
+            status: "unknown",
+            reasons: [
+                `${rule.actualLabel}${actualValue}${rule.unit}は${rule.label}${minValue}〜${maxValue}${rule.unit}の推奨範囲外です`,
+            ],
+            details: createDetails("unknown"),
+        }
+    }
+
+    return {
+        status: "compatible",
+        reasons: [
+            `${rule.actualLabel}${actualValue}${rule.unit}は${rule.label}${minValue}〜${maxValue}${rule.unit}の範囲内です`,
+        ],
+        details: createDetails("compatible"),
+    }
+}
+
+// 非互換の組み合わせ1件分の判定。どちらの規格も未登録ならnullを返す
+function compareByIncompatibilityRule(
+    rule: IncompatibilityRule,
+    candidate: CompatibilityInput,
+    candidateCategory: string,
+    selected: CompatibilityInput,
+): PairCompatibilityResult | null {
+    // 候補側が1つ目の値を持つか（持たなければ選択済み側が1つ目の値を持つ）
+    const candidateIsFirst = candidateCategory === rule.firstCategory
+    // 1つ目の値を持つパーツ
+    const firstPart = candidateIsFirst ? candidate : selected
+    // 2つ目の値を持つパーツ
+    const secondPart = candidateIsFirst ? selected : candidate
+    // 1つ目の規格値
+    const firstValueText = getSpecification(firstPart, rule.firstSpecificationKey)
+    // 2つ目の規格値
+    const secondValueText = getSpecification(secondPart, rule.secondSpecificationKey)
+
+    // どちらの規格も未登録
+    if (!firstValueText && !secondValueText) {
+        return null
+    }
+
+    // 規格名と両側の値は、すべての判定結果で同じ形で表示用に添える
+    const createDetails = (status: CompatibilityStatus): CompatibilityDetail[] => [
+        {
+            label: rule.firstLabel,
+            status,
+            specificationKey: rule.firstSpecificationKey,
+            candidateValue: candidateIsFirst ? firstValueText : undefined,
+            selectedValue: candidateIsFirst ? undefined : firstValueText,
+        },
+        {
+            label: rule.secondLabel,
+            status,
+            specificationKey: rule.secondSpecificationKey,
+            candidateValue: candidateIsFirst ? undefined : secondValueText,
+            selectedValue: candidateIsFirst ? secondValueText : undefined,
+        },
+    ]
+
+    // 1つ目の規格が未登録
+    if (!firstValueText) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.firstLabel}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 2つ目の規格が未登録
+    if (!secondValueText) {
+        return {
+            status: "unknown",
+            reasons: [`${rule.secondLabel}が未確認です`],
+            details: createDetails("unknown"),
+        }
+    }
+
+    // 非互換になる値の組み合わせ（2つ目の規格はカンマ区切りで複数指定できる）
+    if (
+        firstValueText === rule.firstValue &&
+        rule.secondValue.split(",").map((value) => value.trim())
+            .includes(secondValueText)
+    ) {
+        return {
+            status: "incompatible",
+            reasons: [rule.reason],
+            details: createDetails("incompatible"),
+        }
+    }
+
+    // 装着できる組み合わせは、この規格では判定しない（他のルールに委ねる）
+    if (rule.skipWhenNotMatched) {
+        return null
+    }
+
+    // 非互換の組み合わせ以外は適合
+    return {
+        status: "compatible",
+        reasons: [`${rule.firstLabel}と${rule.secondLabel}が適合します`],
+        details: createDetails("compatible"),
     }
 }
 
@@ -1117,6 +1552,48 @@ export function compareParts(
 
         // 上限ルール1件分の判定結果
         const result = compareByLimitRule(
+            rule,
+            candidate,
+            candidateCategory,
+            selected,
+        )
+
+        // 評価した結果を配列へ追加
+        if (result) {
+            ruleResults.push(result)
+        }
+    }
+
+    // 該当する範囲ルールをすべて評価し、一致ルールの結果へまとめる
+    for (const rule of RANGE_RULES) {
+        // 対象外の組み合わせ
+        if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
+            continue
+        }
+
+        // 範囲ルール1件分の判定結果
+        const result = compareByRangeRule(
+            rule,
+            candidate,
+            candidateCategory,
+            selected,
+        )
+
+        // 評価した結果を配列へ追加
+        if (result) {
+            ruleResults.push(result)
+        }
+    }
+
+    // 該当する非互換ルールをすべて評価し、一致ルールの結果へまとめる
+    for (const rule of INCOMPATIBILITY_RULES) {
+        // 対象外の組み合わせ
+        if (!hasCategoryPair(candidateCategory, selectedCategory, rule.categories)) {
+            continue
+        }
+
+        // 非互換ルール1件分の判定結果
+        const result = compareByIncompatibilityRule(
             rule,
             candidate,
             candidateCategory,
